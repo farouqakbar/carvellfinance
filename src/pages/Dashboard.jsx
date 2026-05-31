@@ -42,7 +42,7 @@ export default function Dashboard() {
       const startDate = `${month}-01`
       const endDate = `${month}-31`
       const [salaryRes, txRes, catRes, savingsRes] = await Promise.all([
-        supabase.from('salaries').select('*').eq('user_id', user.id).eq('month', month).single(),
+        supabase.from('salaries').select('*').eq('user_id', user.id).eq('month', month).maybeSingle(),
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
         supabase.from('savings').select('*').eq('user_id', user.id),

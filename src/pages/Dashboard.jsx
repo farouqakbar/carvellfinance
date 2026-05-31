@@ -53,7 +53,7 @@ export default function Dashboard() {
         supabase.from('savings_log').select('*').eq('user_id', user.id).eq('month', month),
         supabase.from('transactions').select('amount').eq('user_id', user.id).eq('date', today).eq('type', 'expense'),
         supabase.from('category_budgets').select('*').eq('user_id', user.id).eq('month', month),
-        supabase.from('savings_log').select('amount').eq('user_id', user.id),  // semua bulan
+        supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month),
       ])
       const txs = txRes.data || []
       // Poin 2: per-bulan budget override
@@ -88,8 +88,13 @@ export default function Dashboard() {
         savings: savingsRes.data || [],
         savingsLogs: logsRes.data || [],
         todayExpense: (todayRes.data || []).reduce((s, t) => s + Number(t.amount), 0),
-        // Poin 1: total tabungan = sum semua savings_log semua bulan
-        totalTabungan: (allLogsRes.data || []).reduce((s, l) => s + Number(l.amount), 0),
+        // Poin 1: total tabungan = sum "Tabungan Bulanan" dari category_budgets semua bulan
+        totalTabungan: (allLogsRes.data || [])
+          .filter(cb => {
+            const c = cats.find(cat => cat.id === cb.category_id)
+            return c && c.name === 'Tabungan Bulanan'
+          })
+          .reduce((s, cb) => s + Number(cb.budget_limit), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
       })
       // Auto-set 15% untuk mandatory categories yang belum punya budget
@@ -215,14 +220,12 @@ export default function Dashboard() {
                     <span className="hero-chip-val tabular">{formatCurrency(data.salary)}</span>
                   </div>
                 )}
-                {data.totalTabungan > 0 && (
-                  <div className="hero-chip">
-                    <span className="hero-chip-label">Total Tabungan</span>
-                    <span className="hero-chip-val tabular" style={{ color: 'var(--success)' }}>
-                      {formatCurrency(data.totalTabungan)}
-                    </span>
-                  </div>
-                )}
+                <div className="hero-chip">
+                  <span className="hero-chip-label">Total Tabungan</span>
+                  <span className="hero-chip-val tabular" style={{ color: data.totalTabungan > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {formatCurrency(data.totalTabungan)}
+                  </span>
+                </div>
               </div>
             </div>
 

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LogoWordmark, LogoMark } from './Logo'
@@ -22,6 +23,19 @@ export default function Navbar({ darkMode, setDarkMode }) {
   const name = user?.full_name || user?.username || 'User'
   const initial = name.charAt(0).toUpperCase()
 
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const dateStr = now.toLocaleDateString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'short', year: 'numeric',
+  })
+  const timeStr = now.toLocaleTimeString('id-ID', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  })
+
   return (
     <>
       <nav className="sidebar">
@@ -43,13 +57,19 @@ export default function Navbar({ darkMode, setDarkMode }) {
         </div>
 
         <div className="sidebar-bottom">
-          <button
-            className="theme-toggle"
-            onClick={() => setDarkMode(!darkMode)}
-            title={darkMode ? 'Mode terang' : 'Mode gelap'}
-          >
-            {darkMode ? '☀' : '◑'}
-          </button>
+          <div className="datetime-card">
+            <div className="datetime-row">
+              <span className="datetime-date">{dateStr}</span>
+              <button
+                className="theme-toggle"
+                onClick={() => setDarkMode(!darkMode)}
+                title={darkMode ? 'Mode terang' : 'Mode gelap'}
+              >
+                {darkMode ? '☀' : '◑'}
+              </button>
+            </div>
+            <div className="datetime-time">{timeStr}</div>
+          </div>
 
           <div className="user-chip">
             <div className="user-avatar">{initial}</div>
@@ -139,26 +159,55 @@ export default function Navbar({ darkMode, setDarkMode }) {
         .sidebar-bottom {
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          padding-top: 16px;
+          gap: 8px;
+          padding-top: 14px;
           border-top: 1px solid var(--border);
+        }
+
+        .datetime-card {
+          background: var(--bg-input);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          padding: 9px 11px 8px;
+        }
+        .datetime-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 3px;
+        }
+        .datetime-date {
+          font-size: 0.62rem;
+          font-weight: 600;
+          color: var(--text-muted);
+          letter-spacing: 0.01em;
+          text-transform: capitalize;
+          line-height: 1;
+        }
+        .datetime-time {
+          font-size: 1.05rem;
+          font-weight: 700;
+          font-variant-numeric: tabular-nums;
+          letter-spacing: -0.03em;
+          color: var(--text-primary);
+          line-height: 1;
         }
 
         .theme-toggle {
           background: none;
           border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 7px;
+          border-radius: 4px;
+          padding: 0;
           cursor: pointer;
           color: var(--text-muted);
-          font-size: 0.875rem;
+          font-size: 0.72rem;
           transition: all 0.15s;
-          width: 34px;
-          height: 34px;
+          width: 22px;
+          height: 22px;
           display: flex;
           align-items: center;
           justify-content: center;
-          align-self: flex-start;
+          flex-shrink: 0;
         }
         .theme-toggle:hover {
           color: var(--accent);

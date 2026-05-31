@@ -111,13 +111,13 @@ Sistem menggunakan **custom username/password** stored di Supabase:
 
 ## 📊 Database Schema
 
-| Table | Deskripsi |
-|-------|-----------|
+| Table           | Deskripsi                     |
+| --------------- | ----------------------------- |
 | `user_profiles` | Store user account & password |
-| `categories` | Kategori pengeluaran |
-| `transactions` | Riwayat transaksi |
-| `salaries` | Pendapatan bulanan |
-| `savings` | Target tabungan |
+| `categories`    | Kategori pengeluaran          |
+| `transactions`  | Riwayat transaksi             |
+| `salaries`      | Pendapatan bulanan            |
+| `savings`       | Target tabungan               |
 
 ## 🐛 Troubleshooting
 

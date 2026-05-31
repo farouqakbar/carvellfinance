@@ -77,6 +77,18 @@ CREATE TABLE IF NOT EXISTS savings_log (
   UNIQUE(savings_id, month)
 );
 
+-- 6. PLANS (rencana pembelian)
+CREATE TABLE IF NOT EXISTS plans (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+  target_month TEXT NOT NULL,           -- format: YYYY-MM
+  notes TEXT DEFAULT '',
+  done BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ============================================
 -- MATIKAN RLS
 -- ============================================
@@ -87,6 +99,7 @@ ALTER TABLE transactions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE savings DISABLE ROW LEVEL SECURITY;
 ALTER TABLE category_budgets DISABLE ROW LEVEL SECURITY;
 ALTER TABLE savings_log DISABLE ROW LEVEL SECURITY;
+ALTER TABLE plans DISABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- INDEXES
@@ -98,3 +111,5 @@ CREATE INDEX IF NOT EXISTS idx_savings_user_id ON savings(user_id);
 CREATE INDEX IF NOT EXISTS idx_cat_budgets_user_month ON category_budgets(user_id, month);
 CREATE INDEX IF NOT EXISTS idx_savings_log_user_month ON savings_log(user_id, month);
 CREATE INDEX IF NOT EXISTS idx_savings_log_savings_month ON savings_log(savings_id, month);
+CREATE INDEX IF NOT EXISTS idx_plans_user_id ON plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_plans_user_month ON plans(user_id, target_month);

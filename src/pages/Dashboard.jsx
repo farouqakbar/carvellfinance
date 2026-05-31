@@ -56,12 +56,12 @@ export default function Dashboard() {
         supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month),
       ])
       const txs = txRes.data || []
-      // Poin 2: per-bulan budget override
+      // Budget murni per-bulan: tidak fallback ke global
       const catBudgetMap = {}
       ;(catBudgetsRes.data || []).forEach(cb => { catBudgetMap[cb.category_id] = Number(cb.budget_limit) })
       const cats = (catRes.data || []).map(cat => ({
         ...cat,
-        budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : Number(cat.budget_limit),
+        budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : 0,
       }))
       const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
       const totalIncome = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
@@ -100,11 +100,14 @@ export default function Dashboard() {
       // Auto-set 15% untuk mandatory categories yang belum punya budget
       const sal = salaryRes.data?.amount || 0
       if (sal > 0) {
-        const unset = (catRes.data || []).filter(c => isMandatory(c) && !(Number(c.budget_limit) > 0))
+        const unset = cats.filter(c => isMandatory(c) && !(Number(c.budget_limit) > 0))
         if (unset.length > 0) {
           const def = Math.round(Number(sal) * 0.15)
           await Promise.all(unset.map(c =>
-            supabase.from('categories').update({ budget_limit: def }).eq('id', c.id)
+            supabase.from('category_budgets').upsert(
+              { user_id: user.id, category_id: c.id, month, budget_limit: def },
+              { onConflict: 'category_id,month' }
+            )
           ))
           // Reload categories dengan budget yang sudah diupdate
           const { data: catRefresh } = await supabase.from('categories').select('*').eq('user_id', user.id).order('name')
@@ -124,7 +127,10 @@ export default function Dashboard() {
     if (unsetMandatory.length > 0) {
       const defaultBudget = Math.round(amount * 0.15)
       await Promise.all(unsetMandatory.map(c =>
-        supabase.from('categories').update({ budget_limit: defaultBudget }).eq('id', c.id)
+        supabase.from('category_budgets').upsert(
+          { user_id: user.id, category_id: c.id, month, budget_limit: defaultBudget },
+          { onConflict: 'category_id,month' }
+        )
       ))
     }
 

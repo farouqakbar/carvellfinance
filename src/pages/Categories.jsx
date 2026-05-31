@@ -39,10 +39,10 @@ export default function Categories() {
     ;(txRes.data || []).forEach(tx => {
       if (tx.category_id) spend[tx.category_id] = (spend[tx.category_id] || 0) + Number(tx.amount)
     })
-    // Merge: pakai per-bulan budget jika ada, fallback ke global
+    // Budget murni per-bulan: tidak fallback ke global
     const cats = (catRes.data || []).map(cat => ({
       ...cat,
-      budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : Number(cat.budget_limit),
+      budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : 0,
     }))
     setCategories(cats)
     setSpendMap(spend)
@@ -79,14 +79,11 @@ export default function Categories() {
 
   const saveBudget = async () => {
     const amount = parseFloat(budgetEdit.nominal) || 0
-    // Simpan ke category_budgets per bulan (dan update global sebagai default)
-    await Promise.all([
-      supabase.from('category_budgets').upsert(
-        { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
-        { onConflict: 'category_id,month' }
-      ),
-      supabase.from('categories').update({ budget_limit: amount }).eq('id', budgetEdit.id),
-    ])
+    // Simpan ke category_budgets per bulan saja (tidak update global)
+    await supabase.from('category_budgets').upsert(
+      { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
+      { onConflict: 'category_id,month' }
+    )
     toast('Budget bulan ini disimpan', 'success')
     setBudgetEdit(null)
     fetchAll()

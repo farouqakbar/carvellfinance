@@ -405,8 +405,8 @@ export default function Dashboard() {
 
         /* ── Hero ─────────────────────────────── */
         .hero-card {
-          background: var(--bg-card);
-          border: 1px solid var(--border);
+          background: linear-gradient(135deg, #12122a 0%, #0f0f17 60%);
+          border: 1px solid #252540;
           border-radius: var(--radius-lg);
           padding: 22px 24px;
           position: relative; overflow: hidden;

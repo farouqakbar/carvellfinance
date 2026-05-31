@@ -1,16 +1,16 @@
 :root {
   /* Background */
-  --bg: #0b0b0f;
-  --bg-card: #111118;
-  --bg-card-hover: #16161e;
-  --bg-input: #181820;
-  --border: #1f1f2c;
-  --border-light: #2b2b3a;
+  --bg: #08080d;
+  --bg-card: #0f0f17;
+  --bg-card-hover: #141420;
+  --bg-input: #161621;
+  --border: #1e1e2e;
+  --border-light: #2a2a3e;
 
   /* Text */
-  --text-primary: #f0f0f8;
-  --text-secondary: #7070a0;
-  --text-muted: #44445e;
+  --text-primary: #f2f2fa;
+  --text-secondary: #6e6e98;
+  --text-muted: #42425a;
 
   /* Accent — indigo */
   --accent: #6366f1;

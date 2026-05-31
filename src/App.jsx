@@ -40,7 +40,7 @@ function AppRoutes() {
   }, [darkMode])
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/carvellfinance">
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />

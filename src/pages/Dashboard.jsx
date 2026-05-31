@@ -730,7 +730,6 @@ export default function Dashboard() {
           align-items: flex-start; margin-bottom: 14px;
         }
         .hero-left {}
-        /* hero card selalu dark bg — semua text hardcoded light agar tidak terpengaruh light mode */
         .hero-date {
           font-size: 0.72rem; font-weight: 600; color: rgba(255,255,255,0.38);
           display: block; margin-bottom: 10px; letter-spacing: 0.01em;
@@ -790,6 +789,25 @@ export default function Dashboard() {
         .salary-cta-hint {
           font-size: 0.72rem; color: rgba(255,255,255,0.35); font-weight: 500;
         }
+
+        /* ── Hero: light mode overrides ─────── */
+        [data-theme="light"] .hero-card {
+          background: var(--bg-card);
+          border-color: var(--border);
+        }
+        [data-theme="light"] .hero-card::after { display: none; }
+        [data-theme="light"] .hero-date { color: var(--text-muted); }
+        [data-theme="light"] .hero-eyebrow { color: var(--text-muted); }
+        [data-theme="light"] .hero-balance { color: var(--text-primary); }
+        [data-theme="light"] .hero-balance.neg { color: var(--danger); }
+        [data-theme="light"] .hero-chip { background: var(--bg-input); border-color: var(--border); }
+        [data-theme="light"] .hero-chip-label { color: var(--text-muted); }
+        [data-theme="light"] .hero-chip-val { color: var(--text-secondary); }
+        [data-theme="light"] .hero-bar-track { background: var(--border); }
+        [data-theme="light"] .hero-bar-labels { color: var(--text-muted); }
+        [data-theme="light"] .salary-cta { background: var(--accent-dim); border-color: rgba(79,70,229,0.35); color: var(--accent); }
+        [data-theme="light"] .salary-cta:hover { background: rgba(79,70,229,0.15); }
+        [data-theme="light"] .salary-cta-hint { color: var(--text-muted); }
 
         /* ── Stats strip ──────────────────────── */
         .stats-strip {

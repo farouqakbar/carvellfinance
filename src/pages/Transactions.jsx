@@ -47,7 +47,7 @@ export default function Transactions() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'transaksi-finora.csv'
+    a.download = 'transaksi-cashvell.csv'
     a.click()
     URL.revokeObjectURL(url)
     toast('File CSV diunduh', 'success')

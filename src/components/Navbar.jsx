@@ -1,35 +1,39 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useState } from 'react'
+
+const BASE = import.meta.env.BASE_URL
 
 const navItems = [
   { to: '/dashboard', icon: '⬡', label: 'Dashboard' },
   { to: '/transactions', icon: '↕', label: 'Transaksi' },
   { to: '/categories', icon: '◈', label: 'Kategori' },
   { to: '/savings', icon: '◎', label: 'Tabungan' },
+  { to: '/report', icon: '▤', label: 'Laporan' },
 ]
+
+const mobileNavItems = navItems.slice(0, 4)
 
 export default function Navbar({ darkMode, setDarkMode }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [menuOpen, setMenuOpen] = useState(false)
 
   const handleSignOut = async () => {
     await signOut()
     navigate('/login')
   }
 
-  const avatarUrl = user?.user_metadata?.avatar_url
-  const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
+  const name = user?.full_name || user?.username || 'User'
   const initial = name.charAt(0).toUpperCase()
+
+  const navLogo = darkMode
+    ? `${BASE}logo/logonavdark.svg`
+    : `${BASE}logo/logonavlight.svg`
 
   return (
     <>
-      {/* Desktop Sidebar */}
       <nav className="sidebar">
         <div className="sidebar-logo">
-          <span className="logo-mark">◈</span>
-          <span className="logo-text">Finora</span>
+          <img src={navLogo} alt="Cashvell" height="36" style={{ maxWidth: 160 }} />
         </div>
 
         <div className="sidebar-nav">
@@ -49,16 +53,13 @@ export default function Navbar({ darkMode, setDarkMode }) {
           <button
             className="theme-toggle"
             onClick={() => setDarkMode(!darkMode)}
-            title="Toggle theme"
+            title="Toggle tema"
           >
             {darkMode ? '☀' : '◑'}
           </button>
 
           <div className="user-info">
-            {avatarUrl
-              ? <img src={avatarUrl} alt={name} className="avatar" />
-              : <div className="avatar avatar-fallback">{initial}</div>
-            }
+            <div className="avatar avatar-fallback">{initial}</div>
             <div className="user-detail">
               <div className="user-name truncate">{name}</div>
               <button className="sign-out-btn" onClick={handleSignOut}>Keluar</button>
@@ -67,9 +68,8 @@ export default function Navbar({ darkMode, setDarkMode }) {
         </div>
       </nav>
 
-      {/* Mobile Bottom Nav */}
       <nav className="mobile-nav">
-        {navItems.map(item => (
+        {mobileNavItems.map(item => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -97,23 +97,10 @@ export default function Navbar({ darkMode, setDarkMode }) {
         }
 
         .sidebar-logo {
-          display: flex;
-          align-items: center;
-          gap: 10px;
           padding: 0 8px;
           margin-bottom: 32px;
-        }
-
-        .logo-mark {
-          font-size: 1.4rem;
-          color: var(--accent);
-        }
-
-        .logo-text {
-          font-family: var(--font-serif);
-          font-size: 1.3rem;
-          font-style: italic;
-          color: var(--text-primary);
+          display: flex;
+          align-items: center;
         }
 
         .sidebar-nav {
@@ -150,6 +137,7 @@ export default function Navbar({ darkMode, setDarkMode }) {
           font-size: 1rem;
           width: 20px;
           text-align: center;
+          flex-shrink: 0;
         }
 
         .sidebar-bottom {
@@ -204,7 +192,6 @@ export default function Navbar({ darkMode, setDarkMode }) {
           justify-content: center;
           font-weight: 600;
           font-size: 0.875rem;
-          flex-shrink: 0;
         }
 
         .user-detail { flex: 1; min-width: 0; }
@@ -228,7 +215,6 @@ export default function Navbar({ darkMode, setDarkMode }) {
 
         .sign-out-btn:hover { color: var(--danger); }
 
-        /* Mobile Nav */
         .mobile-nav {
           display: none;
           position: fixed;
@@ -239,10 +225,6 @@ export default function Navbar({ darkMode, setDarkMode }) {
           border-top: 1px solid var(--border);
           z-index: 100;
           padding: 8px 0 max(8px, env(safe-area-inset-bottom));
-        }
-
-        .mobile-nav {
-          display: none;
           grid-template-columns: repeat(4, 1fr);
         }
 

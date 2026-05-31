@@ -1,11 +1,11 @@
 -- ============================================
--- CARVELL FINANCE — Supabase Schema v2
+-- CASHVELL — Supabase Schema v3
 -- Jalankan file ini di Supabase SQL Editor
 -- Copy paste semua ke SQL Editor lalu Run
 -- ============================================
 
--- 0. USER PROFILES TABLE (untuk store username)
-CREATE TABLE user_profiles (
+-- 0. USER PROFILES TABLE
+CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   username TEXT UNIQUE NOT NULL,
   full_name TEXT DEFAULT '',
@@ -15,16 +15,17 @@ CREATE TABLE user_profiles (
 );
 
 -- 1. SALARIES TABLE
-CREATE TABLE salaries (
+CREATE TABLE IF NOT EXISTS salaries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   amount NUMERIC(15,2) NOT NULL,
   month TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, month)
 );
 
 -- 2. CATEGORIES TABLE
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
@@ -35,7 +36,7 @@ CREATE TABLE categories (
 );
 
 -- 3. TRANSACTIONS TABLE
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
@@ -47,7 +48,7 @@ CREATE TABLE transactions (
 );
 
 -- 4. SAVINGS TABLE
-CREATE TABLE savings (
+CREATE TABLE IF NOT EXISTS savings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL DEFAULT 'Target Tabungan',
@@ -68,39 +69,43 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE savings ENABLE ROW LEVEL SECURITY;
 
 -- User Profiles RLS
-CREATE POLICY "Users can view own profile" ON user_profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON user_profiles FOR UPDATE USING (auth.uid() = id);
+-- INSERT: user bisa buat profil sendiri saat signup
+CREATE POLICY "Users can insert own profile" ON user_profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can view own profile" ON user_profiles
+  FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON user_profiles
+  FOR UPDATE USING (auth.uid() = id);
 
 -- Salaries RLS
-CREATE POLICY "Users can view own salaries" ON salaries FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own salaries" ON salaries FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own salaries" ON salaries FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own salaries" ON salaries FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own salaries" ON salaries
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Categories RLS
-CREATE POLICY "Users can view own categories" ON categories FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own categories" ON categories FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own categories" ON categories FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own categories" ON categories FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own categories" ON categories
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Transactions RLS
-CREATE POLICY "Users can view own transactions" ON transactions FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own transactions" ON transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own transactions" ON transactions FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own transactions" ON transactions FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own transactions" ON transactions
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Savings RLS
-CREATE POLICY "Users can view own savings" ON savings FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own savings" ON savings FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own savings" ON savings FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own savings" ON savings FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own savings" ON savings
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- ============================================
 -- INDEXES (untuk performa)
 -- ============================================
-CREATE INDEX idx_salaries_user_id ON salaries(user_id);
-CREATE INDEX idx_categories_user_id ON categories(user_id);
-CREATE INDEX idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX idx_transactions_category_id ON transactions(category_id);
-CREATE INDEX idx_transactions_date ON transactions(date);
-CREATE INDEX idx_savings_user_id ON savings(user_id);
+CREATE INDEX IF NOT EXISTS idx_salaries_user_month ON salaries(user_id, month);
+CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_savings_user_id ON savings(user_id);
+
+-- ============================================
+-- CATATAN PENTING
+-- ============================================
+-- Setelah menjalankan schema ini, lakukan di Supabase Dashboard:
+-- 1. Authentication > Settings > "Enable email confirmations" → MATIKAN
+--    (karena app pakai username, bukan email asli)
+-- 2. Authentication > Settings > "Enable sign ups" → AKTIFKAN

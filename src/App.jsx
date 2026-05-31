@@ -10,6 +10,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Transactions = lazy(() => import('./pages/Transactions'))
 const Categories = lazy(() => import('./pages/Categories'))
 const Savings = lazy(() => import('./pages/Savings'))
+const Report = lazy(() => import('./pages/Report'))
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -54,6 +55,7 @@ function AppRoutes() {
                     <Route path="/transactions" element={<Transactions />} />
                     <Route path="/categories" element={<Categories />} />
                     <Route path="/savings" element={<Savings />} />
+                    <Route path="/report" element={<Report />} />
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>

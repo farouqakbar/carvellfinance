@@ -431,6 +431,7 @@ tr:hover td { background: var(--bg-input); }
 .font-semibold { font-weight: 600; }
 
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.align-center { align-items: center; }
 
 .empty-state {
   text-align: center;

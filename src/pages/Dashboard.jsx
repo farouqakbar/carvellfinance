@@ -153,14 +153,22 @@ export default function Dashboard() {
                   {formatCurrency(Math.abs(balance))}
                 </div>
               </div>
-              {data.salary > 0 && (
-                <div className="hero-right">
-                  <div className="hero-salary-chip">
-                    <span className="hero-salary-label">Gaji</span>
-                    <span className="hero-salary-val tabular">{formatCurrency(data.salary)}</span>
+              <div className="hero-right">
+                {data.salary > 0 && (
+                  <div className="hero-chip">
+                    <span className="hero-chip-label">Gaji</span>
+                    <span className="hero-chip-val tabular">{formatCurrency(data.salary)}</span>
                   </div>
-                </div>
-              )}
+                )}
+                {data.savings.length > 0 && (
+                  <div className="hero-chip">
+                    <span className="hero-chip-label">Total Tabungan</span>
+                    <span className="hero-chip-val tabular" style={{ color: 'var(--success)' }}>
+                      {formatCurrency(data.savings.reduce((s, sv) => s + Number(sv.current_amount), 0))}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {data.salary > 0 ? (
@@ -469,17 +477,18 @@ export default function Dashboard() {
         .hero-balance.neg { color: var(--danger); }
         .hero-neg-sign { font-size: 0.7em; vertical-align: 0.05em; margin-right: 1px; }
 
-        .hero-salary-chip {
-          display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+        .hero-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+        .hero-chip {
+          display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
           background: var(--bg-input); border: 1px solid var(--border);
-          border-radius: var(--radius-sm); padding: 8px 12px;
+          border-radius: var(--radius-sm); padding: 8px 12px; min-width: 130px;
         }
-        .hero-salary-label {
+        .hero-chip-label {
           font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.07em;
           color: var(--text-muted); font-weight: 600;
         }
-        .hero-salary-val {
-          font-size: 0.875rem; font-weight: 700;
+        .hero-chip-val {
+          font-size: 0.9rem; font-weight: 700;
           color: var(--text-secondary); letter-spacing: -0.02em;
         }
 

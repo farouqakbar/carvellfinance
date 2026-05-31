@@ -55,7 +55,18 @@ CREATE TABLE IF NOT EXISTS savings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. SAVINGS LOG (realisasi tabungan per bulan) ← BARU
+-- 5. CATEGORY BUDGETS per bulan (override global budget_limit) ← BARU
+CREATE TABLE IF NOT EXISTS category_budgets (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE NOT NULL,
+  category_id UUID REFERENCES categories(id) ON DELETE CASCADE NOT NULL,
+  month TEXT NOT NULL,
+  budget_limit NUMERIC(15,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(category_id, month)
+);
+
+-- 6. SAVINGS LOG (realisasi tabungan per bulan) ← BARU
 CREATE TABLE IF NOT EXISTS savings_log (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   savings_id UUID REFERENCES savings(id) ON DELETE CASCADE NOT NULL,
@@ -74,6 +85,7 @@ ALTER TABLE salaries DISABLE ROW LEVEL SECURITY;
 ALTER TABLE categories DISABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE savings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE category_budgets DISABLE ROW LEVEL SECURITY;
 ALTER TABLE savings_log DISABLE ROW LEVEL SECURITY;
 
 -- ============================================
@@ -83,5 +95,6 @@ CREATE INDEX IF NOT EXISTS idx_salaries_user_month ON salaries(user_id, month);
 CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_savings_user_id ON savings(user_id);
+CREATE INDEX IF NOT EXISTS idx_cat_budgets_user_month ON category_budgets(user_id, month);
 CREATE INDEX IF NOT EXISTS idx_savings_log_user_month ON savings_log(user_id, month);
 CREATE INDEX IF NOT EXISTS idx_savings_log_savings_month ON savings_log(savings_id, month);

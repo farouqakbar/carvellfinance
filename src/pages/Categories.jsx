@@ -27,16 +27,24 @@ export default function Categories() {
     setLoading(true)
     const startDate = `${month}-01`
     const endDate = `${month}-31`
-    const [catRes, txRes, salRes] = await Promise.all([
+    const [catRes, txRes, salRes, catBudgetsRes] = await Promise.all([
       supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
       supabase.from('transactions').select('category_id, amount').eq('user_id', user.id).eq('type', 'expense').gte('date', startDate).lte('date', endDate),
       supabase.from('salaries').select('amount').eq('user_id', user.id).eq('month', month).maybeSingle(),
+      supabase.from('category_budgets').select('*').eq('user_id', user.id).eq('month', month),
     ])
+    const catBudgetMap = {}
+    ;(catBudgetsRes.data || []).forEach(cb => { catBudgetMap[cb.category_id] = Number(cb.budget_limit) })
     const spend = {}
     ;(txRes.data || []).forEach(tx => {
       if (tx.category_id) spend[tx.category_id] = (spend[tx.category_id] || 0) + Number(tx.amount)
     })
-    setCategories(catRes.data || [])
+    // Merge: pakai per-bulan budget jika ada, fallback ke global
+    const cats = (catRes.data || []).map(cat => ({
+      ...cat,
+      budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : Number(cat.budget_limit),
+    }))
+    setCategories(cats)
     setSpendMap(spend)
     setSalary(Number(salRes.data?.amount || 0))
     setLoading(false)
@@ -71,8 +79,15 @@ export default function Categories() {
 
   const saveBudget = async () => {
     const amount = parseFloat(budgetEdit.nominal) || 0
-    await supabase.from('categories').update({ budget_limit: amount }).eq('id', budgetEdit.id)
-    toast('Budget disimpan', 'success')
+    // Simpan ke category_budgets per bulan (dan update global sebagai default)
+    await Promise.all([
+      supabase.from('category_budgets').upsert(
+        { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
+        { onConflict: 'category_id,month' }
+      ),
+      supabase.from('categories').update({ budget_limit: amount }).eq('id', budgetEdit.id),
+    ])
+    toast('Budget bulan ini disimpan', 'success')
     setBudgetEdit(null)
     fetchAll()
   }

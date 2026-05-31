@@ -23,7 +23,8 @@ export default function Dashboard() {
   const { user } = useAuth()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
+  // Poin 4: selalu mulai dari bulan sekarang saat buka app
+  const [month, setMonth] = useState(getCurrentMonth())
   const [data, setData] = useState({
     salary: 0, totalExpense: 0, totalIncome: 0,
     categories: [], transactions: [], savings: [], savingsLogs: [], categorySpend: [],
@@ -44,16 +45,24 @@ export default function Dashboard() {
       const startDate = `${month}-01`
       const endDate = `${month}-31`
       const today = new Date().toISOString().split('T')[0]
-      const [salaryRes, txRes, catRes, savingsRes, logsRes, todayRes] = await Promise.all([
+      const [salaryRes, txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes] = await Promise.all([
         supabase.from('salaries').select('*').eq('user_id', user.id).eq('month', month).maybeSingle(),
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
         supabase.from('savings').select('*').eq('user_id', user.id),
         supabase.from('savings_log').select('*').eq('user_id', user.id).eq('month', month),
         supabase.from('transactions').select('amount').eq('user_id', user.id).eq('date', today).eq('type', 'expense'),
+        supabase.from('category_budgets').select('*').eq('user_id', user.id).eq('month', month),
+        supabase.from('savings_log').select('amount').eq('user_id', user.id),  // semua bulan
       ])
       const txs = txRes.data || []
-      const cats = catRes.data || []
+      // Poin 2: per-bulan budget override
+      const catBudgetMap = {}
+      ;(catBudgetsRes.data || []).forEach(cb => { catBudgetMap[cb.category_id] = Number(cb.budget_limit) })
+      const cats = (catRes.data || []).map(cat => ({
+        ...cat,
+        budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : Number(cat.budget_limit),
+      }))
       const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
       const totalIncome = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
       const catSpendMap = {}
@@ -79,7 +88,8 @@ export default function Dashboard() {
         savings: savingsRes.data || [],
         savingsLogs: logsRes.data || [],
         todayExpense: (todayRes.data || []).reduce((s, t) => s + Number(t.amount), 0),
-        totalTabungan: (savingsRes.data || []).reduce((s, sv) => s + Number(sv.current_amount), 0),
+        // Poin 1: total tabungan = sum semua savings_log semua bulan
+        totalTabungan: (allLogsRes.data || []).reduce((s, l) => s + Number(l.amount), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
       })
       // Auto-set 15% untuk mandatory categories yang belum punya budget
@@ -191,7 +201,8 @@ export default function Dashboard() {
           <>
             <div className="hero-top">
               <div className="hero-left">
-                <span className="hero-eyebrow">Saldo Bersih {getMonthLabel(month)}</span>
+                <span className="hero-date">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+        <span className="hero-eyebrow">Saldo Bersih {getMonthLabel(month)}</span>
                 <div className={`hero-balance ${balance < 0 ? 'neg' : ''}`}>
                   {balance < 0 && <span className="hero-neg-sign">-</span>}
                   {formatCurrency(Math.abs(balance))}
@@ -484,6 +495,11 @@ export default function Dashboard() {
           align-items: flex-start; margin-bottom: 14px;
         }
         .hero-left {}
+        .hero-date {
+          font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
+          display: block; margin-bottom: 10px; letter-spacing: 0.01em;
+          text-transform: capitalize;
+        }
         .hero-eyebrow {
           font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.09em;
           color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 5px;

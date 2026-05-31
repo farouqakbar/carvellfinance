@@ -104,10 +104,10 @@ export default function Dashboard() {
           .reduce((s, cb) => s + Number(cb.budget_limit), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
       })
-      // Auto-set 15% untuk mandatory categories yang belum punya budget
+      // Auto-set 15% untuk mandatory categories yang belum pernah punya record (bukan yang di-set 0)
       const sal = salaryRes.data?.amount || 0
       if (sal > 0) {
-        const unset = cats.filter(c => isMandatory(c) && !(Number(c.budget_limit) > 0))
+        const unset = cats.filter(c => isMandatory(c) && catBudgetMap[c.id] === undefined)
         if (unset.length > 0) {
           const def = Math.round(Number(sal) * 0.15)
           await Promise.all(unset.map(c =>
@@ -129,8 +129,12 @@ export default function Dashboard() {
     if (!amount) return
     await supabase.from('salaries').upsert({ user_id: user.id, month, amount }, { onConflict: 'user_id,month' })
 
-    // Auto-set budget 15% untuk kategori wajib yang belum diset
-    const unsetMandatory = data.categories.filter(c => isMandatory(c) && !(Number(c.budget_limit) > 0))
+    // Auto-set 15% hanya untuk mandatory yang belum punya record sama sekali
+    const { data: existingBudgets } = await supabase
+      .from('category_budgets').select('category_id')
+      .eq('user_id', user.id).eq('month', month)
+    const existingIds = new Set((existingBudgets || []).map(cb => cb.category_id))
+    const unsetMandatory = data.categories.filter(c => isMandatory(c) && !existingIds.has(c.id))
     if (unsetMandatory.length > 0) {
       const defaultBudget = Math.round(amount * 0.15)
       await Promise.all(unsetMandatory.map(c =>

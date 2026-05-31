@@ -11,9 +11,7 @@ export default function Report() {
   const [months, setMonths] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchReport()
-  }, [])
+  useEffect(() => { fetchReport() }, [])
 
   const fetchReport = async () => {
     setLoading(true)
@@ -21,10 +19,8 @@ export default function Report() {
       supabase.from('transactions').select('amount, type, date').eq('user_id', user.id).order('date'),
       supabase.from('salaries').select('amount, month').eq('user_id', user.id),
     ])
-
     const salaryMap = {}
     ;(salaryRes.data || []).forEach(s => { salaryMap[s.month] = Number(s.amount) })
-
     const monthMap = {}
     ;(txRes.data || []).forEach(tx => {
       const m = tx.date.substring(0, 7)
@@ -32,11 +28,9 @@ export default function Report() {
       if (tx.type === 'income') monthMap[m].income += Number(tx.amount)
       else monthMap[m].expense += Number(tx.amount)
     })
-
     Object.keys(salaryMap).forEach(m => {
       if (!monthMap[m]) monthMap[m] = { income: 0, expense: 0 }
     })
-
     const result = Object.keys(monthMap).sort().reverse().map(m => ({
       month: m,
       label: getMonthLabel(m),
@@ -46,7 +40,6 @@ export default function Report() {
       salary: salaryMap[m] || 0,
       net: monthMap[m].income - monthMap[m].expense,
     }))
-
     setMonths(result)
     setLoading(false)
   }
@@ -57,199 +50,265 @@ export default function Report() {
 
   return (
     <div className="animate-in">
-      <div className="flex-between mb-16">
-        <div>
-          <h1 className="page-title">Laporan</h1>
-          <p className="page-subtitle" style={{ margin: 0 }}>Rekap keuangan per bulan</p>
-        </div>
+      <div className="mb-20">
+        <h1 className="page-title">Laporan</h1>
+        <p className="page-subtitle" style={{ margin: 0 }}>Rekap keuangan per bulan</p>
       </div>
 
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 80 }} />)}
+          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 76 }} />)}
         </div>
       ) : months.length === 0 ? (
         <div className="card">
           <div className="empty-state">
-            <div className="empty-state-icon">📊</div>
+            <div className="empty-state-icon">▤</div>
             <strong>Belum ada data</strong>
             <p>Mulai catat transaksi untuk melihat laporan bulanan</p>
           </div>
         </div>
       ) : (
         <>
-          {/* Summary total */}
-          <div className="grid-2 mb-24">
-            <div className="card report-summary-card">
-              <div className="text-xs text-muted mb-8" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Total Pemasukan ({months.length} bulan)
-              </div>
-              <div className="report-summary-value text-success">{formatCurrency(totalIncome)}</div>
+          {/* Summary */}
+          <div className="rpt-summary mb-20">
+            <div className="card rpt-sum-card">
+              <span className="rpt-sum-label">Total Pemasukan ({months.length} bln)</span>
+              <span className="rpt-sum-val text-success tabular">{formatCurrency(totalIncome)}</span>
             </div>
-            <div className="card report-summary-card">
-              <div className="text-xs text-muted mb-8" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Total Pengeluaran ({months.length} bulan)
-              </div>
-              <div className="report-summary-value text-danger">{formatCurrency(totalExpense)}</div>
+            <div className="card rpt-sum-card">
+              <span className="rpt-sum-label">Total Pengeluaran ({months.length} bln)</span>
+              <span className="rpt-sum-val text-danger tabular">{formatCurrency(totalExpense)}</span>
+            </div>
+            <div className="card rpt-sum-card">
+              <span className="rpt-sum-label">Selisih bersih</span>
+              <span className={`rpt-sum-val tabular ${totalIncome - totalExpense >= 0 ? 'text-success' : 'text-danger'}`}>
+                {totalIncome - totalExpense >= 0 ? '+' : ''}{formatCurrency(totalIncome - totalExpense)}
+              </span>
             </div>
           </div>
 
-          {/* Chart */}
+          {/* Bar chart */}
           {chartData.length > 1 && (
-            <div className="card mb-24">
-              <h3 className="font-serif font-italic mb-16" style={{ fontSize: '1.1rem' }}>
-                Tren 6 Bulan Terakhir
-              </h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} barCategoryGap="30%">
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis
-                    dataKey="shortLabel"
-                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
-                    tickFormatter={v => v >= 1e6 ? `${(v / 1e6).toFixed(1)}jt` : `${(v / 1e3).toFixed(0)}rb`}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    formatter={v => formatCurrency(v)}
-                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                  />
-                  <Bar dataKey="income" name="Pemasukan" fill="var(--success)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expense" name="Pengeluaran" fill="var(--danger)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="card mb-20">
+              <h3 className="rpt-chart-title">Tren 6 Bulan Terakhir</h3>
+              <div className="rpt-chart-wrap">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} barCategoryGap="30%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis
+                      dataKey="shortLabel"
+                      tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                      tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(0)}jt` : v >= 1e3 ? `${(v/1e3).toFixed(0)}rb` : v}
+                      axisLine={false} tickLine={false} width={38}
+                    />
+                    <Tooltip
+                      formatter={v => [formatCurrency(v)]}
+                      contentStyle={{
+                        background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
+                      }}
+                      cursor={{ fill: 'var(--bg-input)' }}
+                    />
+                    <Bar dataKey="income" name="Pemasukan" fill="var(--success)" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="expense" name="Pengeluaran" fill="var(--danger)" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           )}
 
           {/* Month list */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {months.map(m => (
-              <div
-                key={m.month}
-                className="month-row"
-                onClick={() => navigate(`/dashboard?month=${m.month}`)}
-                title="Lihat detail di Dashboard"
-              >
-                <div className="month-header">
-                  <span className="month-name">{m.label}</span>
-                  {m.salary > 0 && (
-                    <span className="text-xs text-muted">Gaji {formatCurrency(m.salary)}</span>
-                  )}
-                </div>
+          <div className="rpt-month-list">
+            {months.map(m => {
+              const usedPct = m.salary > 0 ? Math.min((m.expense / m.salary) * 100, 100) : m.income > 0 ? Math.min((m.expense / m.income) * 100, 100) : 0
+              return (
+                <div key={m.month} className="rpt-month-row" onClick={() => navigate(`/dashboard?month=${m.month}`)}>
+                  <div className="rpt-month-left">
+                    <span className="rpt-month-name">{m.label}</span>
+                    {m.salary > 0 && (
+                      <span className="rpt-month-salary tabular">Gaji {formatCurrency(m.salary)}</span>
+                    )}
+                  </div>
 
-                <div className="month-stats">
-                  <div className="month-stat">
-                    <span className="text-xs text-muted">Pemasukan</span>
-                    <span className="text-success font-medium text-sm">{formatCurrency(m.income)}</span>
+                  <div className="rpt-month-stats">
+                    <div className="rpt-stat">
+                      <span className="rpt-stat-label">Keluar</span>
+                      <span className="rpt-stat-val text-danger tabular">{formatCurrency(m.expense)}</span>
+                    </div>
+                    <div className="rpt-stat">
+                      <span className="rpt-stat-label">Masuk</span>
+                      <span className="rpt-stat-val text-success tabular">{formatCurrency(m.income)}</span>
+                    </div>
+                    <div className="rpt-stat rpt-stat-net">
+                      <span className="rpt-stat-label">Selisih</span>
+                      <span className={`rpt-stat-val tabular ${m.net >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {m.net >= 0 ? '+' : ''}{formatCurrency(m.net)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="month-stat">
-                    <span className="text-xs text-muted">Pengeluaran</span>
-                    <span className="text-danger font-medium text-sm">{formatCurrency(m.expense)}</span>
-                  </div>
-                  <div className="month-stat">
-                    <span className="text-xs text-muted">Selisih</span>
-                    <span className={`font-medium text-sm ${m.net >= 0 ? 'text-success' : 'text-danger'}`}>
-                      {m.net >= 0 ? '+' : ''}{formatCurrency(m.net)}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="month-net-bar">
-                  <div
-                    className="month-net-fill"
-                    style={{
-                      width: m.income > 0 ? `${Math.min((m.expense / m.income) * 100, 100)}%` : '0%',
+                  <div className="rpt-month-bar">
+                    <div className="rpt-month-bar-fill" style={{
+                      width: `${usedPct}%`,
                       background: m.net >= 0 ? 'var(--success)' : 'var(--danger)',
-                    }}
-                  />
-                </div>
+                    }} />
+                  </div>
 
-                <span className="text-xs text-accent month-arrow">→</span>
-              </div>
-            ))}
+                  <span className="rpt-arrow">→</span>
+                </div>
+              )
+            })}
           </div>
         </>
       )}
 
       <style>{`
-        .report-summary-card { padding: 16px 20px; }
-        .report-summary-value {
-          font-size: 1.4rem;
+        /* Summary cards */
+        .rpt-summary {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+        .rpt-sum-card {
+          padding: 16px 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .rpt-sum-label {
+          font-size: 0.68rem;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--text-muted);
+          font-weight: 600;
+        }
+        .rpt-sum-val {
+          font-size: 1.2rem;
           font-weight: 800;
           letter-spacing: -0.03em;
+          line-height: 1.1;
         }
 
-        .month-row {
+        /* Chart */
+        .rpt-chart-title {
+          font-size: 0.8125rem;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+          color: var(--text-primary);
+          margin-bottom: 16px;
+        }
+        .rpt-chart-wrap {
+          height: 200px;
+        }
+
+        /* Month list */
+        .rpt-month-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .rpt-month-row {
           background: var(--bg-card);
           border: 1px solid var(--border);
           border-radius: var(--radius-lg);
-          padding: 16px 18px;
+          padding: 15px 18px;
           display: flex;
           align-items: center;
-          gap: 16px;
-          flex-wrap: wrap;
+          gap: 14px;
           cursor: pointer;
-          transition: border-color 0.2s, transform 0.15s;
-          text-decoration: none;
+          transition: border-color 0.2s, background 0.15s;
+          user-select: none;
         }
-        .month-row:hover {
+        .rpt-month-row:hover {
           border-color: var(--border-light);
-          transform: translateX(2px);
+          background: var(--bg-card-hover);
         }
+        .rpt-month-row:active { transform: scale(0.995); }
 
-        .month-header {
+        .rpt-month-left {
           display: flex;
           flex-direction: column;
-          gap: 3px;
+          gap: 2px;
           min-width: 110px;
+          flex-shrink: 0;
         }
-        .month-name {
-          font-size: 0.9rem;
+        .rpt-month-name {
+          font-size: 0.875rem;
           font-weight: 700;
           letter-spacing: -0.02em;
           color: var(--text-primary);
         }
-
-        .month-stats {
-          display: flex;
-          gap: 20px;
-          flex: 1;
-          flex-wrap: wrap;
+        .rpt-month-salary {
+          font-size: 0.68rem;
+          color: var(--text-muted);
+          font-weight: 500;
         }
-        .month-stat { display: flex; flex-direction: column; gap: 2px; }
 
-        .month-net-bar {
-          width: 80px;
-          height: 6px;
+        .rpt-month-stats {
+          display: flex;
+          gap: 18px;
+          flex: 1;
+        }
+        .rpt-stat {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 72px;
+        }
+        .rpt-stat-net { min-width: 80px; }
+        .rpt-stat-label {
+          font-size: 0.62rem;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--text-muted);
+          font-weight: 600;
+        }
+        .rpt-stat-val {
+          font-size: 0.8125rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+        }
+
+        .rpt-month-bar {
+          width: 72px;
+          height: 5px;
           background: var(--border);
           border-radius: 99px;
           overflow: hidden;
           flex-shrink: 0;
         }
-        .month-net-fill {
+        .rpt-month-bar-fill {
           height: 100%;
           border-radius: 99px;
           transition: width 0.6s ease;
         }
+        .rpt-arrow {
+          font-size: 0.8rem;
+          color: var(--text-muted);
+          flex-shrink: 0;
+        }
 
-        .month-arrow { flex-shrink: 0; }
-
+        /* Mobile */
         @media (max-width: 768px) {
-          .month-row { padding: 14px 16px; gap: 12px; }
-          .month-stats { gap: 14px; flex-wrap: wrap; }
-          .month-stat { min-width: 70px; }
-          .month-net-bar { display: none; }
-          .report-summary-value { font-size: 1.1rem; }
-          .grid-2 { grid-template-columns: 1fr 1fr; gap: 10px; }
+          .rpt-summary { grid-template-columns: 1fr 1fr; }
+          .rpt-sum-card { padding: 13px 14px; }
+          .rpt-sum-val { font-size: 1rem; }
+          .rpt-month-row { padding: 13px 14px; gap: 10px; flex-wrap: wrap; }
+          .rpt-month-left { min-width: 0; flex: 1; }
+          .rpt-month-stats { width: 100%; gap: 8px; }
+          .rpt-stat { min-width: 60px; flex: 1; }
+          .rpt-stat-net { min-width: 60px; }
+          .rpt-month-bar { display: none; }
+          .rpt-arrow { display: none; }
+          .rpt-chart-wrap { height: 160px; }
         }
         @media (max-width: 480px) {
-          .month-stats { gap: 10px; }
-          .month-stat span { font-size: 0.72rem; }
+          .rpt-summary { grid-template-columns: 1fr; }
+          .rpt-sum-val { font-size: 1.1rem; }
         }
       `}</style>
     </div>

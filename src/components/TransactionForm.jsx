@@ -86,6 +86,7 @@ export default function TransactionForm({ onSuccess, onClose, editData }) {
         variant="large"
         value={form.amount}
         onChange={raw => setForm(f => ({ ...f, amount: raw }))}
+        inputColor={isExpense ? 'var(--danger)' : 'var(--success)'}
         autoFocus
         style={{ marginBottom: 18 }}
       />

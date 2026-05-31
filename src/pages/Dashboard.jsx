@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
 import TransactionForm from '../components/TransactionForm'
 import CategoryForm from '../components/CategoryForm'
+import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
 import { isMandatory } from '../constants/mandatoryCategories'
@@ -41,6 +42,7 @@ export default function Dashboard() {
   const [budgetEdit, setBudgetEdit] = useState(null)
   const [showCatForm, setShowCatForm] = useState(false)
   const [editCatData, setEditCatData] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null) // { id, name }
 
   useEffect(() => { fetchDashboard() }, [month])
 
@@ -183,10 +185,10 @@ export default function Dashboard() {
     fetchDashboard()
   }
 
-  const handleDeleteCat = async (id) => {
-    if (!confirm('Hapus kategori ini?')) return
-    await supabase.from('categories').delete().eq('id', id)
+  const doDeleteCat = async () => {
+    await supabase.from('categories').delete().eq('id', confirmDel.id)
     toast('Kategori dihapus', 'success')
+    setConfirmDel(null)
     fetchDashboard()
   }
 
@@ -509,7 +511,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Category Manager Modal ───────────── */}
-      {showCatManager && (
+      {showCatManager && !budgetEdit && !showCatForm && (
         <div className="modal-overlay" onClick={() => setShowCatManager(false)}>
           <div className="modal cat-manager-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -575,7 +577,7 @@ export default function Dashboard() {
                             {budget > 0 ? 'Set' : '+ Budget'}
                           </button>
                           <button className="btn btn-ghost btn-sm" onClick={() => { setEditCatData(cat); setShowCatForm(true) }}>✎</button>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteCat(cat.id)}>✕</button>
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel({ id: cat.id, name: cat.name })}>✕</button>
                         </div>
                       </div>
                     )
@@ -652,6 +654,17 @@ export default function Dashboard() {
           </div>
         )
       })()}
+
+      {/* ── Confirm Delete Category ─────────── */}
+      {confirmDel && (
+        <ConfirmModal
+          title="Hapus Kategori"
+          message={`Hapus kategori "${confirmDel.name}"? Transaksi yang terhubung tidak akan ikut terhapus.`}
+          confirmLabel="Hapus"
+          onConfirm={doDeleteCat}
+          onCancel={() => setConfirmDel(null)}
+        />
+      )}
 
       {/* ── Category Add/Edit Form Modal ─────── */}
       {showCatForm && (

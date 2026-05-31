@@ -359,7 +359,7 @@ export default function Plans() {
           <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Tandai Selesai</h2>
-              <button className="btn btn-ghost" onClick={() => setDoneModal(null)} disabled={confirming}>✕</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setDoneModal(null)} disabled={confirming}>✕</button>
             </div>
 
             {/* Info plan */}
@@ -376,6 +376,7 @@ export default function Plans() {
             {/* Toggle source */}
             <div className="done-source-toggle">
               <button
+                type="button"
                 className={`done-src-btn ${doneSource === 'gaji' ? 'active' : ''}`}
                 onClick={() => setDoneSource('gaji')}
               >
@@ -384,6 +385,7 @@ export default function Plans() {
                 <span className="done-src-sub">Dicatat sebagai pengeluaran</span>
               </button>
               <button
+                type="button"
                 className={`done-src-btn ${doneSource === 'tabungan' ? 'active' : ''}`}
                 onClick={() => setDoneSource('tabungan')}
               >
@@ -468,10 +470,11 @@ export default function Plans() {
             )}
 
             <div className="flex gap-8 mt-16">
-              <button className="btn btn-secondary" onClick={() => setDoneModal(null)} disabled={confirming}>
+              <button type="button" className="btn btn-secondary" onClick={() => setDoneModal(null)} disabled={confirming}>
                 Batal
               </button>
               <button
+                type="button"
                 className="btn btn-primary"
                 style={{ flex: 1 }}
                 onClick={confirmDone}

@@ -4,6 +4,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
 import TransactionForm from '../components/TransactionForm'
+import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 
 function prevMonth(m) {
@@ -27,6 +28,7 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editData, setEditData] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null) // tx id
   const [filter, setFilter] = useState({ category: '', type: '', search: '' })
 
   const isCurrentMonth = month === getCurrentMonth()
@@ -51,10 +53,10 @@ export default function Transactions() {
     setLoading(false)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Hapus transaksi ini?')) return
-    await supabase.from('transactions').delete().eq('id', id)
+  const doDelete = async () => {
+    await supabase.from('transactions').delete().eq('id', confirmDel)
     toast('Transaksi dihapus', 'success')
+    setConfirmDel(null)
     fetchAll()
   }
 
@@ -246,7 +248,7 @@ export default function Transactions() {
                         </span>
                         <div className="tri-actions">
                           <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(tx); setShowForm(true) }}>✎</button>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(tx.id)}>✕</button>
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel(tx.id)}>✕</button>
                         </div>
                       </div>
                     </div>
@@ -256,6 +258,17 @@ export default function Transactions() {
             )
           })}
         </div>
+      )}
+
+      {/* Confirm delete */}
+      {confirmDel && (
+        <ConfirmModal
+          title="Hapus Transaksi"
+          message="Transaksi ini akan dihapus permanen dan tidak bisa dikembalikan."
+          confirmLabel="Hapus"
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDel(null)}
+        />
       )}
 
       {/* Modal */}

@@ -3,6 +3,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth } from '../utils/formatCurrency'
 import CategoryForm from '../components/CategoryForm'
+import ConfirmModal from '../components/ConfirmModal'
 import CurrencyInput from '../components/CurrencyInput'
 import { useToast } from '../components/Toast'
 import { MANDATORY_NAMES, isMandatory } from '../constants/mandatoryCategories'
@@ -19,6 +20,7 @@ export default function Categories() {
   const [showForm, setShowForm] = useState(false)
   const [editData, setEditData] = useState(null)
   const [budgetEdit, setBudgetEdit] = useState(null) // {id, nominal, pct}
+  const [confirmDel, setConfirmDel] = useState(null) // { id, name }
   const month = getCurrentMonth()
 
   useEffect(() => { fetchAll() }, [])
@@ -50,10 +52,10 @@ export default function Categories() {
     setLoading(false)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Hapus kategori ini?')) return
-    await supabase.from('categories').delete().eq('id', id)
+  const doDelete = async () => {
+    await supabase.from('categories').delete().eq('id', confirmDel.id)
     toast('Kategori dihapus', 'success')
+    setConfirmDel(null)
     fetchAll()
   }
 
@@ -147,7 +149,7 @@ export default function Categories() {
             <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
               {budget > 0 ? 'Set' : '+ Budget'}
             </button>
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(cat.id)}>✕</button>
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel({ id: cat.id, name: cat.name })}>✕</button>
           </div>
         </div>
 
@@ -243,8 +245,19 @@ export default function Categories() {
         )}
       </div>
 
+      {/* Confirm delete */}
+      {confirmDel && (
+        <ConfirmModal
+          title="Hapus Kategori"
+          message={`Hapus kategori "${confirmDel.name}"? Transaksi yang terhubung tidak akan ikut terhapus.`}
+          confirmLabel="Hapus"
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDel(null)}
+        />
+      )}
+
       {/* Form tambah/edit kategori */}
-      {showForm && (
+      {showForm && !budgetEdit && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">

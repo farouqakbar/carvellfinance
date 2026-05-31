@@ -246,15 +246,19 @@ export default function Dashboard() {
         ) : (
           <div className="budget-rows">
             {data.categories.filter(c => c.budget_limit > 0).map(cat => {
-              const pct = Math.min((cat.spent / cat.budget_limit) * 100, 100)
-              const barColor = cat.overBudget ? 'var(--danger)' : pct >= 80 ? 'var(--warning)' : cat.color
+              const rawPct = cat.budget_limit > 0 ? (cat.spent / cat.budget_limit) * 100 : 0
+              const pct = Math.min(rawPct, 100)
+              const isFull = !cat.overBudget && rawPct >= 100
+              const isNear = !cat.overBudget && rawPct >= 80 && rawPct < 100
+              const barColor = cat.overBudget ? 'var(--danger)' : isFull ? 'var(--success)' : isNear ? 'var(--warning)' : cat.color
               return (
                 <div key={cat.id} className="brow">
                   <div className="brow-left">
                     <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
                     <span className="brow-name">{cat.name}</span>
-                    {cat.overBudget && <span className="badge badge-danger" style={{ fontSize: '0.58rem', padding: '1px 6px' }}>Over</span>}
-                    {!cat.overBudget && pct >= 80 && <span className="badge badge-warning" style={{ fontSize: '0.58rem', padding: '1px 6px' }}>Hampir</span>}
+                    {cat.overBudget && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Over</span>}
+                    {isFull && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Penuh</span>}
+                    {isNear && <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Hampir</span>}
                   </div>
                   <div className="brow-bar-wrap">
                     <div className="brow-bar">
@@ -581,20 +585,20 @@ export default function Dashboard() {
         .budget-rows { display: flex; flex-direction: column; }
         .brow {
           display: grid;
-          grid-template-columns: minmax(120px, 1.4fr) 1fr 140px 38px;
-          align-items: center; gap: 12px; padding: 10px 0;
+          grid-template-columns: minmax(140px, 1.6fr) 1fr 110px 36px;
+          align-items: center; gap: 14px; padding: 12px 0;
           border-bottom: 1px solid var(--border);
         }
         .brow:last-child { border-bottom: none; }
         .brow.no-limit { grid-template-columns: 1fr auto; }
         .brow-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
         .brow-icon {
-          width: 26px; height: 26px; border-radius: 6px;
+          width: 28px; height: 28px; border-radius: 7px;
           display: flex; align-items: center; justify-content: center;
-          font-size: 0.8rem; flex-shrink: 0;
+          font-size: 0.85rem; flex-shrink: 0;
         }
         .brow-name {
-          font-size: 0.8rem; font-weight: 600; color: var(--text-primary);
+          font-size: 0.8125rem; font-weight: 600; color: var(--text-primary);
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
         .brow-no-limit-tag {
@@ -604,12 +608,12 @@ export default function Dashboard() {
           flex-shrink: 0;
         }
         .brow-bar-wrap { display: flex; align-items: center; }
-        .brow-bar { height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; width: 100%; }
+        .brow-bar { height: 7px; background: var(--border); border-radius: 99px; overflow: hidden; width: 100%; }
         .brow-bar-fill { height: 100%; border-radius: 99px; transition: width 0.7s cubic-bezier(0.4,0,0.2,1); }
-        .brow-right { display: flex; align-items: baseline; gap: 2px; justify-content: flex-end; }
-        .brow-spent { font-size: 0.78rem; font-weight: 700; letter-spacing: -0.01em; }
-        .brow-limit { font-size: 0.68rem; color: var(--text-muted); font-weight: 500; }
-        .brow-pct { font-size: 0.68rem; font-weight: 700; text-align: right; min-width: 30px; }
+        .brow-right { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; justify-content: center; }
+        .brow-spent { font-size: 0.8rem; font-weight: 700; letter-spacing: -0.01em; }
+        .brow-limit { font-size: 0.65rem; color: var(--text-muted); font-weight: 500; }
+        .brow-pct { font-size: 0.72rem; font-weight: 700; text-align: right; min-width: 30px; }
 
         /* ── Savings grid ─────────────────────── */
         .savings-grid {

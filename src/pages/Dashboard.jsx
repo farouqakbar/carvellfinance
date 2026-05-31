@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
   const [data, setData] = useState({
     salary: 0, totalExpense: 0, totalIncome: 0,
-    categories: [], transactions: [], savings: [], categorySpend: [],
+    categories: [], transactions: [], savings: [], savingsLogs: [], categorySpend: [],
   })
   const [loading, setLoading] = useState(true)
   const [showSalaryForm, setShowSalaryForm] = useState(false)
@@ -41,11 +41,12 @@ export default function Dashboard() {
     try {
       const startDate = `${month}-01`
       const endDate = `${month}-31`
-      const [salaryRes, txRes, catRes, savingsRes] = await Promise.all([
+      const [salaryRes, txRes, catRes, savingsRes, logsRes] = await Promise.all([
         supabase.from('salaries').select('*').eq('user_id', user.id).eq('month', month).maybeSingle(),
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
         supabase.from('savings').select('*').eq('user_id', user.id),
+        supabase.from('savings_log').select('*').eq('user_id', user.id).eq('month', month),
       ])
       const txs = txRes.data || []
       const cats = catRes.data || []
@@ -72,6 +73,7 @@ export default function Dashboard() {
         categories: catsWithStatus,
         transactions: txs.slice(0, 6),
         savings: savingsRes.data || [],
+        savingsLogs: logsRes.data || [],
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
       })
     } finally { setLoading(false) }
@@ -155,9 +157,9 @@ export default function Dashboard() {
                 )}
                 {data.savings.length > 0 && (
                   <div className="hero-chip">
-                    <span className="hero-chip-label">Total Tabungan</span>
+                    <span className="hero-chip-label">Ditabung {getMonthLabel(month).split(' ')[0]}</span>
                     <span className="hero-chip-val tabular" style={{ color: 'var(--success)' }}>
-                      {formatCurrency(data.savings.reduce((s, sv) => s + Number(sv.current_amount), 0))}
+                      {formatCurrency(data.savingsLogs.reduce((s, l) => s + Number(l.amount), 0))}
                     </span>
                   </div>
                 )}

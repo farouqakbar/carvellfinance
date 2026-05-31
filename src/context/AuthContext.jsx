@@ -2,82 +2,71 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../services/supabaseClient";
 
 const AuthContext = createContext({});
+const STORAGE_KEY = "cashvell_user";
+
+async function hashPassword(password) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        loadProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_, session) => {
-      if (session?.user) {
-        await loadProfile(session.user.id);
-      } else {
-        setUser(null);
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch { localStorage.removeItem(STORAGE_KEY); }
+    }
+    setLoading(false);
   }, []);
 
-  const loadProfile = async (userId) => {
-    const { data } = await supabase
-      .from("user_profiles")
-      .select("id, username, full_name, avatar_url")
-      .eq("id", userId)
-      .single();
-    setUser(data || { id: userId, username: "", full_name: "" });
-    setLoading(false);
-  };
-
   const signIn = async (username, password) => {
-    // Lookup email dari username via RPC (bypasses RLS, no session needed)
-    const { data: email, error: rpcErr } = await supabase.rpc("get_email_by_username", {
-      uname: username.toLowerCase(),
-    });
-    if (rpcErr || !email) throw new Error("Username tidak ditemukan");
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("id, username, full_name, password_hash")
+      .eq("username", username.toLowerCase())
+      .single();
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error("Username atau password salah");
+    if (error || !data) throw new Error("Username atau password salah");
+
+    const hash = await hashPassword(password);
+    if (hash !== data.password_hash) throw new Error("Username atau password salah");
+
+    const userData = { id: data.id, username: data.username, full_name: data.full_name };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    setUser(userData);
   };
 
-  const signUp = async (username, email, password) => {
-    // Cek username unik via RPC sebelum daftar
-    const { data: existingEmail } = await supabase.rpc("get_email_by_username", {
-      uname: username.toLowerCase(),
-    });
-    if (existingEmail) throw new Error("Username sudah digunakan");
+  const signUp = async (username, password) => {
+    // Cek username sudah ada
+    const { data: existing } = await supabase
+      .from("user_profiles")
+      .select("id")
+      .eq("username", username.toLowerCase())
+      .single();
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (existing) throw new Error("Username sudah digunakan");
+
+    const password_hash = await hashPassword(password);
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .insert({ username: username.toLowerCase(), password_hash, full_name: username })
+      .select("id, username, full_name")
+      .single();
+
     if (error) {
-      if (error.message.toLowerCase().includes("already registered")) {
-        throw new Error("Email sudah terdaftar");
-      }
-      throw new Error(error.message || "Pendaftaran gagal");
+      if (error.code === "23505") throw new Error("Username sudah digunakan");
+      throw new Error("Pendaftaran gagal: " + error.message);
     }
 
-    if (data.user) {
-      const { error: profileErr } = await supabase.from("user_profiles").insert({
-        id: data.user.id,
-        username: username.toLowerCase(),
-        email: email.toLowerCase(),
-        full_name: username,
-      });
-      if (profileErr?.code === "23505") throw new Error("Username sudah digunakan");
-      if (profileErr) throw new Error("Gagal membuat profil: " + profileErr.message);
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setUser(data);
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signOut = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setUser(null);
   };
 
   return (

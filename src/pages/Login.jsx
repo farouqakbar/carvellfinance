@@ -8,7 +8,7 @@ export default function Login() {
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '' })
+  const [form, setForm] = useState({ username: '', password: '', confirmPassword: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -19,7 +19,6 @@ export default function Login() {
     if (mode === 'register') {
       if (form.username.length < 3) return setError('Username minimal 3 karakter')
       if (!/^[a-zA-Z0-9_]+$/.test(form.username)) return setError('Username hanya boleh huruf, angka, dan underscore')
-      if (!form.email.includes('@')) return setError('Email tidak valid')
       if (form.password.length < 6) return setError('Password minimal 6 karakter')
       if (form.password !== form.confirmPassword) return setError('Password tidak cocok')
     }
@@ -28,13 +27,10 @@ export default function Login() {
     try {
       if (mode === 'login') {
         await signIn(form.username, form.password)
-        navigate('/dashboard')
       } else {
-        await signUp(form.username, form.email, form.password)
-        // Setelah daftar, auto login
-        await signIn(form.username, form.password)
-        navigate('/dashboard')
+        await signUp(form.username, form.password)
       }
+      navigate('/dashboard')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -45,7 +41,7 @@ export default function Login() {
   const switchMode = (m) => {
     setMode(m)
     setError('')
-    setForm({ username: '', email: '', password: '', confirmPassword: '' })
+    setForm({ username: '', password: '', confirmPassword: '' })
   }
 
   const isDark = localStorage.getItem('theme') !== 'light'
@@ -88,9 +84,7 @@ export default function Login() {
               {mode === 'login' ? 'Selamat datang kembali' : 'Buat akun baru'}
             </h2>
             <p className="login-sub">
-              {mode === 'login'
-                ? 'Login dengan username dan password kamu'
-                : 'Daftar dengan username dan email kamu'}
+              {mode === 'login' ? 'Masukkan username dan password kamu' : 'Pilih username dan password'}
             </p>
           </div>
 
@@ -114,22 +108,6 @@ export default function Login() {
                 <p className="form-hint">Hanya huruf, angka, dan underscore. Min. 3 karakter.</p>
               )}
             </div>
-
-            {mode === 'register' && (
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input
-                  className="form-input"
-                  type="email"
-                  placeholder="kamu@gmail.com"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value.toLowerCase() }))}
-                  required
-                  autoComplete="email"
-                />
-                <p className="form-hint">Dipakai untuk reset password, tidak ditampilkan di app.</p>
-              </div>
-            )}
 
             <div className="form-group">
               <label className="form-label">Password</label>
@@ -177,11 +155,7 @@ export default function Login() {
       </div>
 
       <style>{`
-        .login-page {
-          min-height: 100vh;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-        }
+        .login-page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
 
         .login-left {
           background: linear-gradient(135deg, #0a0a10 0%, #13131a 100%);
@@ -193,7 +167,6 @@ export default function Login() {
           position: relative;
           overflow: hidden;
         }
-
         .login-left::before {
           content: '';
           position: absolute;
@@ -202,7 +175,6 @@ export default function Login() {
           background: radial-gradient(circle, rgba(96,165,250,0.08) 0%, transparent 70%);
           pointer-events: none;
         }
-
         .login-left::after {
           content: '';
           position: absolute;
@@ -213,99 +185,32 @@ export default function Login() {
         }
 
         .login-brand { display: flex; align-items: center; gap: 12px; }
+        .login-logo-text { font-family: var(--font-serif); font-size: 1.4rem; font-style: italic; color: #f1f5f9; }
 
-        .login-logo-text {
-          font-family: var(--font-serif);
-          font-size: 1.4rem;
-          font-style: italic;
-          color: #f1f5f9;
-        }
-
-        .login-tagline h1 {
-          font-family: var(--font-serif);
-          font-size: 2.8rem;
-          line-height: 1.15;
-          color: #f1f5f9;
-          margin-bottom: 16px;
-        }
-
+        .login-tagline h1 { font-family: var(--font-serif); font-size: 2.8rem; line-height: 1.15; color: #f1f5f9; margin-bottom: 16px; }
         .login-tagline p { color: #94a3b8; font-size: 1rem; line-height: 1.6; max-width: 380px; }
 
         .login-features { display: flex; flex-direction: column; gap: 12px; }
         .feature-item { display: flex; align-items: center; gap: 12px; color: #94a3b8; font-size: 0.9rem; }
         .feature-check { color: #60a5fa; font-weight: 700; width: 20px; text-align: center; flex-shrink: 0; }
 
-        .login-right {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 48px;
-          background: var(--bg);
-        }
-
+        .login-right { display: flex; align-items: center; justify-content: center; padding: 48px; background: var(--bg); }
         .login-card { width: 100%; max-width: 400px; }
         .login-header { margin-bottom: 28px; }
 
-        .login-logo-sm {
-          display: none;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 20px;
-        }
-
-        .login-title {
-          font-family: var(--font-serif);
-          font-size: 1.6rem;
-          font-style: italic;
-          color: var(--text-primary);
-          margin-bottom: 6px;
-        }
-
+        .login-logo-sm { display: none; align-items: center; gap: 8px; margin-bottom: 20px; }
+        .login-title { font-family: var(--font-serif); font-size: 1.6rem; font-style: italic; color: var(--text-primary); margin-bottom: 6px; }
         .login-sub { color: var(--text-secondary); font-size: 0.875rem; }
 
         .input-wrap { position: relative; }
-        .input-prefix {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: var(--text-muted);
-          font-size: 0.9rem;
-          pointer-events: none;
-        }
+        .input-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem; pointer-events: none; }
         .input-with-prefix { padding-left: 28px !important; }
-
         .form-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; }
 
-        .auth-error {
-          background: var(--danger-dim);
-          color: var(--danger);
-          border-radius: var(--radius-sm);
-          padding: 10px 14px;
-          font-size: 0.85rem;
-          margin-bottom: 16px;
-        }
+        .auth-error { background: var(--danger-dim); color: var(--danger); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.85rem; margin-bottom: 16px; }
 
-        .login-switch {
-          text-align: center;
-          margin-top: 20px;
-          font-size: 0.875rem;
-          color: var(--text-secondary);
-        }
-
-        .login-switch button {
-          background: none;
-          border: none;
-          color: #60a5fa;
-          cursor: pointer;
-          font-family: var(--font-sans);
-          font-size: 0.875rem;
-          font-weight: 500;
-          padding: 0;
-          text-decoration: underline;
-          text-underline-offset: 3px;
-        }
-
+        .login-switch { text-align: center; margin-top: 20px; font-size: 0.875rem; color: var(--text-secondary); }
+        .login-switch button { background: none; border: none; color: #60a5fa; cursor: pointer; font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
         .login-switch button:hover { opacity: 0.8; }
 
         @media (max-width: 768px) {

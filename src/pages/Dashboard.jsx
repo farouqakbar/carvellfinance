@@ -123,8 +123,11 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Sections ─────────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
       {/* ── Hero Saldo ───────────────────────── */}
-      <div className="hero-card mb-12">
+      <div className="hero-card">
         {loading ? (
           <div className="skeleton" style={{ height: 88, borderRadius: 8 }} />
         ) : (
@@ -170,7 +173,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Stats strip ──────────────────────── */}
-      <div className="stats-strip mb-20">
+      <div className="stats-strip">
         {[
           { label: 'Pemasukan', val: data.totalIncome, color: 'var(--success)', sign: '+' },
           { label: 'Pengeluaran', val: data.totalExpense, color: 'var(--danger)', sign: '-' },
@@ -186,7 +189,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Budget per Kategori ──────────────── */}
-      <div className="card mb-16">
+      <div className="card">
         <div className="sect-head">
           <div>
             <h3 className="sect-title">Budget Kategori</h3>
@@ -252,7 +255,7 @@ export default function Dashboard() {
 
       {/* ── Tabungan ─────────────────────────── */}
       {(loading || data.savings.length > 0) && (
-        <div className="card mb-16">
+        <div className="card">
           <div className="sect-head">
             <div>
               <h3 className="sect-title">Tabungan</h3>
@@ -338,6 +341,8 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      </div>{/* end sections gap wrapper */}
 
       {/* ── Modals ───────────────────────────── */}
       {showSalaryForm && (

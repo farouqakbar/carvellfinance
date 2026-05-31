@@ -5,6 +5,7 @@ Panduan lengkap untuk deploy React/Vite app ke GitHub Pages GRATIS!
 ## ✅ Step 1: Update Vite Config (SUDAH DONE ✓)
 
 File `vite.config.js` sudah di-update dengan:
+
 ```javascript
 base: '/carvellfinance/', // GitHub Pages base URL
 ```
@@ -24,17 +25,21 @@ File `.github/workflows/deploy.yml` sudah di-setup untuk auto-deploy setiap ada 
 4. **New repository secret** (2x)
 
    **Secret 1:**
+
    ```
    Name: VITE_SUPABASE_URL
    Value: https://ourualaimpjurwpyajab.supabase.co
    ```
+
    Click **"Add secret"**
 
    **Secret 2:**
+
    ```
    Name: VITE_SUPABASE_ANON_KEY
    Value: [PASTE API KEY DARI .env ANDA]
    ```
+
    Click **"Add secret"**
 
 ## ⏭️ Step 4: Push Changes ke GitHub
@@ -78,11 +83,13 @@ git push origin main
 ## 🔄 How It Works (Auto-Deploy)
 
 Setiap kali Anda:
+
 ```bash
 git push origin main
 ```
 
 GitHub Actions **otomatis**:
+
 1. Build project (`npm run build`)
 2. Deploy ke `gh-pages` branch
 3. GitHub Pages host folder `dist/`
@@ -94,16 +101,20 @@ GitHub Actions **otomatis**:
 ## ⚠️ Important Notes
 
 ### `.env` Security
+
 - ✅ `.env` sudah ada di `.gitignore` (tidak akan push)
 - ✅ Secrets di-set di GitHub Settings (aman)
 - ❌ **JANGAN** manually add `.env` ke GitHub
 
 ### Build Time
+
 - Build memakan waktu ~1-2 menit
 - Cek progress di: https://github.com/farouqakbar/carvellfinance/actions
 
 ### Custom Domain (Optional)
+
 Jika punya domain sendiri (e.g., `carvellfinance.com`):
+
 1. Settings → **Pages**
 2. Custom domain: masukkan domain
 3. Update DNS pointing ke GitHub Pages
@@ -113,22 +124,29 @@ Jika punya domain sendiri (e.g., `carvellfinance.com`):
 ## 🆘 Troubleshooting
 
 ### "Actions permissions denied"
+
 **Fix**: Settings → Actions → General → Workflow permissions → Read and write
 
 ### Build failed / Error in actions
+
 **Check**:
+
 1. GitHub Actions log (tab Actions di repo)
 2. Pastikan Supabase secrets sudah di-add dengan benar
 3. `vite.config.js` sudah ada `base: '/carvellfinance/'`
 
 ### Website blank/white screen
+
 **Fix**:
+
 - Clear browser cache (Ctrl+Shift+Delete)
 - Check console (F12) untuk error message
 - Pastikan Supabase URL & key benar di GitHub Secrets
 
 ### "Supabase connection error"
+
 **Check**:
+
 - Verifikasi `VITE_SUPABASE_URL` & `VITE_SUPABASE_ANON_KEY` di GitHub Secrets
 - Buka Supabase → Project Settings → API untuk verify keys
 
@@ -137,6 +155,7 @@ Jika punya domain sendiri (e.g., `carvellfinance.com`):
 ## 📊 Setelah Deployment
 
 **Website live di:**
+
 ```
 https://farouqakbar.github.io/carvellfinance/
 ```

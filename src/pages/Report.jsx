@@ -3,134 +3,313 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getMonthLabel } from '../utils/formatCurrency'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  BarChart, Bar, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
+
+const fmt = v =>
+  v >= 1e9 ? `${(v / 1e9).toFixed(1)}M` :
+  v >= 1e6 ? `${(v / 1e6).toFixed(0)}jt` :
+  v >= 1e3 ? `${(v / 1e3).toFixed(0)}rb` : String(v)
 
 export default function Report() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [months, setMonths] = useState([])
+  const [categories, setCategories] = useState([])   // [{ name, color, icon, total }]
+  const [chartData, setChartData] = useState([])     // stacked bar data
+  const [trendData, setTrendData] = useState([])     // area chart data
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('kategori')         // 'kategori' | 'tren'
 
   useEffect(() => { fetchReport() }, [])
 
   const fetchReport = async () => {
     setLoading(true)
     const [txRes, salaryRes] = await Promise.all([
-      supabase.from('transactions').select('amount, type, date').eq('user_id', user.id).order('date'),
+      supabase.from('transactions')
+        .select('amount, type, date, category_id, categories(name, color, icon)')
+        .eq('user_id', user.id)
+        .order('date'),
       supabase.from('salaries').select('amount, month').eq('user_id', user.id),
     ])
+
     const salaryMap = {}
     ;(salaryRes.data || []).forEach(s => { salaryMap[s.month] = Number(s.amount) })
+
     const monthMap = {}
+    const monthCatMap = {}
+    const catTotals = {}
+
     ;(txRes.data || []).forEach(tx => {
       const m = tx.date.substring(0, 7)
       if (!monthMap[m]) monthMap[m] = { income: 0, expense: 0 }
-      if (tx.type === 'income') monthMap[m].income += Number(tx.amount)
-      else monthMap[m].expense += Number(tx.amount)
+      if (!monthCatMap[m]) monthCatMap[m] = {}
+
+      if (tx.type === 'income') {
+        monthMap[m].income += Number(tx.amount)
+      } else {
+        monthMap[m].expense += Number(tx.amount)
+        const name = tx.categories?.name || 'Lainnya'
+        const color = tx.categories?.color || '#6e6e98'
+        const icon = tx.categories?.icon || '💰'
+        monthCatMap[m][name] = (monthCatMap[m][name] || 0) + Number(tx.amount)
+        if (!catTotals[name]) catTotals[name] = { total: 0, color, icon }
+        catTotals[name].total += Number(tx.amount)
+      }
     })
+
+    // Include salary-only months
     Object.keys(salaryMap).forEach(m => {
       if (!monthMap[m]) monthMap[m] = { income: 0, expense: 0 }
     })
-    const result = Object.keys(monthMap).sort().reverse().map(m => ({
+
+    const sortedMonths = Object.keys(monthMap).sort().reverse().map(m => ({
       month: m,
       label: getMonthLabel(m),
-      shortLabel: new Intl.DateTimeFormat('id-ID', { month: 'short' }).format(new Date(m + '-01')),
+      shortLabel: new Intl.DateTimeFormat('id-ID', { month: 'short', year: '2-digit' }).format(new Date(m + '-01')),
       income: monthMap[m].income,
       expense: monthMap[m].expense,
       salary: salaryMap[m] || 0,
       net: monthMap[m].income - monthMap[m].expense,
+      catBreakdown: monthCatMap[m] || {},
     }))
-    setMonths(result)
+
+    const cats = Object.entries(catTotals)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([name, info]) => ({ name, ...info }))
+
+    // Chart: last 6 months ascending
+    const chart6 = [...sortedMonths].reverse().slice(-6)
+    const chartRows = chart6.map(m => {
+      const row = { label: m.shortLabel }
+      cats.forEach(c => { row[c.name] = m.catBreakdown[c.name] || 0 })
+      return row
+    })
+
+    // Trend: all months ascending
+    const trendRows = [...sortedMonths].reverse().map(m => ({
+      label: m.shortLabel,
+      Pemasukan: m.income,
+      Pengeluaran: m.expense,
+    }))
+
+    setMonths(sortedMonths)
+    setCategories(cats)
+    setChartData(chartRows)
+    setTrendData(trendRows)
     setLoading(false)
   }
 
-  const chartData = [...months].reverse().slice(-6)
   const totalIncome = months.reduce((s, m) => s + m.income, 0)
   const totalExpense = months.reduce((s, m) => s + m.expense, 0)
+  const net = totalIncome - totalExpense
+  const avgExpense = months.length ? Math.round(totalExpense / months.length) : 0
+
+  // top category for overview
+  const topCat = categories[0]
 
   return (
     <div className="animate-in">
-      <div className="mb-20">
+      <div style={{ marginBottom: 20 }}>
         <h1 className="page-title">Laporan</h1>
-        <p className="page-subtitle" style={{ margin: 0 }}>Rekap keuangan per bulan</p>
+        <p className="page-subtitle" style={{ marginBottom: 0 }}>Statistik keuangan lengkap</p>
       </div>
 
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 76 }} />)}
+          {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 10 }} />)}
         </div>
       ) : months.length === 0 ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon">▤</div>
             <strong>Belum ada data</strong>
-            <p>Mulai catat transaksi untuk melihat laporan bulanan</p>
+            <p>Mulai catat transaksi untuk melihat statistik keuangan</p>
           </div>
         </div>
       ) : (
         <>
-          {/* Summary */}
-          <div className="rpt-summary mb-20">
-            <div className="card rpt-sum-card">
-              <span className="rpt-sum-label">Total Pemasukan ({months.length} bln)</span>
+          {/* ── Summary ──────────────────────────── */}
+          <div className="rpt-summary">
+            <div className="rpt-sum-card">
+              <span className="rpt-sum-label">Pemasukan</span>
               <span className="rpt-sum-val text-success tabular">{formatCurrency(totalIncome)}</span>
+              <span className="rpt-sum-sub">{months.length} bulan</span>
             </div>
-            <div className="card rpt-sum-card">
-              <span className="rpt-sum-label">Total Pengeluaran ({months.length} bln)</span>
+            <div className="rpt-sum-card">
+              <span className="rpt-sum-label">Pengeluaran</span>
               <span className="rpt-sum-val text-danger tabular">{formatCurrency(totalExpense)}</span>
+              <span className="rpt-sum-sub">rata-rata {formatCurrency(avgExpense)}/bln</span>
             </div>
-            <div className="card rpt-sum-card">
-              <span className="rpt-sum-label">Selisih bersih</span>
-              <span className={`rpt-sum-val tabular ${totalIncome - totalExpense >= 0 ? 'text-success' : 'text-danger'}`}>
-                {totalIncome - totalExpense >= 0 ? '+' : ''}{formatCurrency(totalIncome - totalExpense)}
+            <div className="rpt-sum-card">
+              <span className="rpt-sum-label">Selisih Bersih</span>
+              <span className={`rpt-sum-val tabular ${net >= 0 ? 'text-success' : 'text-danger'}`}>
+                {net >= 0 ? '+' : ''}{formatCurrency(net)}
               </span>
+              {topCat && <span className="rpt-sum-sub">terbesar: {topCat.icon} {topCat.name}</span>}
             </div>
           </div>
 
-          {/* Bar chart */}
-          {chartData.length > 1 && (
-            <div className="card mb-20">
-              <h3 className="rpt-chart-title">Tren 6 Bulan Terakhir</h3>
-              <div className="rpt-chart-wrap">
+          {/* ── Chart ───────────────────────────── */}
+          <div className="card rpt-chart-card">
+            <div className="rpt-chart-head">
+              <div>
+                <h3 className="rpt-chart-title">
+                  {tab === 'kategori' ? 'Pengeluaran per Bulan per Kategori' : 'Tren Pemasukan vs Pengeluaran'}
+                </h3>
+                <p className="rpt-chart-sub">6 bulan terakhir</p>
+              </div>
+              <div className="rpt-tabs">
+                <button className={`rpt-tab ${tab === 'kategori' ? 'active' : ''}`} onClick={() => setTab('kategori')}>
+                  Kategori
+                </button>
+                <button className={`rpt-tab ${tab === 'tren' ? 'active' : ''}`} onClick={() => setTab('tren')}>
+                  Tren
+                </button>
+              </div>
+            </div>
+
+            <div className="rpt-chart-wrap">
+              {tab === 'kategori' ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barCategoryGap="30%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <BarChart data={chartData} barCategoryGap="28%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis
-                      dataKey="shortLabel"
+                    <XAxis dataKey="label"
                       tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
                       axisLine={false} tickLine={false}
                     />
                     <YAxis
+                      tickFormatter={fmt}
                       tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-                      tickFormatter={v => v >= 1e6 ? `${(v/1e6).toFixed(0)}jt` : v >= 1e3 ? `${(v/1e3).toFixed(0)}rb` : v}
-                      axisLine={false} tickLine={false} width={38}
+                      axisLine={false} tickLine={false} width={40}
                     />
                     <Tooltip
-                      formatter={v => [formatCurrency(v)]}
+                      formatter={(v, name) => [formatCurrency(v), name]}
                       contentStyle={{
                         background: 'var(--bg-card)', border: '1px solid var(--border)',
                         borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
                       }}
                       cursor={{ fill: 'var(--bg-input)' }}
                     />
-                    <Bar dataKey="income" name="Pemasukan" fill="var(--success)" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="expense" name="Pengeluaran" fill="var(--danger)" radius={[3, 3, 0, 0]} />
+                    {categories.slice(0, 8).map((cat, i) => (
+                      <Bar
+                        key={cat.name}
+                        dataKey={cat.name}
+                        stackId="a"
+                        fill={cat.color}
+                        radius={i === Math.min(categories.length, 8) - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                      />
+                    ))}
                   </BarChart>
                 </ResponsiveContainer>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#34d399" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="label"
+                      tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                      axisLine={false} tickLine={false}
+                    />
+                    <YAxis
+                      tickFormatter={fmt}
+                      tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                      axisLine={false} tickLine={false} width={40}
+                    />
+                    <Tooltip
+                      formatter={(v, name) => [formatCurrency(v), name]}
+                      contentStyle={{
+                        background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
+                      }}
+                    />
+                    <Area type="monotone" dataKey="Pemasukan" stroke="#34d399" strokeWidth={2} fill="url(#gInc)" dot={{ r: 3, fill: '#34d399' }} />
+                    <Area type="monotone" dataKey="Pengeluaran" stroke="#f87171" strokeWidth={2} fill="url(#gExp)" dot={{ r: 3, fill: '#f87171' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Legend kategori */}
+            {tab === 'kategori' && categories.length > 0 && (
+              <div className="rpt-legend">
+                {categories.slice(0, 8).map(cat => (
+                  <div key={cat.name} className="rpt-legend-item">
+                    <span className="rpt-legend-dot" style={{ background: cat.color }} />
+                    <span className="rpt-legend-name">{cat.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Kategori Breakdown ───────────────── */}
+          {categories.length > 0 && (
+            <div className="card rpt-cat-card">
+              <h3 className="rpt-chart-title">Pengeluaran per Kategori</h3>
+              <div className="rpt-cat-list">
+                {categories.slice(0, 10).map((cat, i) => {
+                  const pct = totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0
+                  return (
+                    <div key={cat.name} className="rpt-cat-row">
+                      <div className="rpt-cat-left">
+                        <span className="rpt-cat-rank">{i + 1}</span>
+                        <span className="rpt-cat-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                        <span className="rpt-cat-name">{cat.name}</span>
+                      </div>
+                      <div className="rpt-cat-mid">
+                        <div className="rpt-cat-bar">
+                          <div className="rpt-cat-fill" style={{ width: `${pct}%`, background: cat.color }} />
+                        </div>
+                        <span className="rpt-cat-pct">{pct.toFixed(1)}%</span>
+                      </div>
+                      <span className="rpt-cat-amount tabular">{formatCurrency(cat.total)}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* Month list */}
+          {/* ── Monthly list ─────────────────────── */}
           <div className="rpt-month-list">
             {months.map(m => {
-              const usedPct = m.salary > 0 ? Math.min((m.expense / m.salary) * 100, 100) : m.income > 0 ? Math.min((m.expense / m.income) * 100, 100) : 0
+              const usedPct = m.salary > 0
+                ? Math.min((m.expense / m.salary) * 100, 100)
+                : m.income > 0 ? Math.min((m.expense / m.income) * 100, 100) : 0
+              const topCats = Object.entries(m.catBreakdown)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
               return (
                 <div key={m.month} className="rpt-month-row" onClick={() => navigate(`/dashboard?month=${m.month}`)}>
                   <div className="rpt-month-left">
                     <span className="rpt-month-name">{m.label}</span>
                     {m.salary > 0 && (
                       <span className="rpt-month-salary tabular">Gaji {formatCurrency(m.salary)}</span>
+                    )}
+                    {topCats.length > 0 && (
+                      <div className="rpt-month-cats">
+                        {topCats.map(([name, amt]) => {
+                          const c = categories.find(c => c.name === name)
+                          return (
+                            <span key={name} className="rpt-month-cat-chip" style={{ background: `${c?.color || '#6366f1'}18`, color: c?.color || '#6366f1' }}>
+                              {c?.icon} {formatCurrency(amt)}
+                            </span>
+                          )
+                        })}
+                      </div>
                     )}
                   </div>
 
@@ -143,7 +322,7 @@ export default function Report() {
                       <span className="rpt-stat-label">Masuk</span>
                       <span className="rpt-stat-val text-success tabular">{formatCurrency(m.income)}</span>
                     </div>
-                    <div className="rpt-stat rpt-stat-net">
+                    <div className="rpt-stat">
                       <span className="rpt-stat-label">Selisih</span>
                       <span className={`rpt-stat-val tabular ${m.net >= 0 ? 'text-success' : 'text-danger'}`}>
                         {m.net >= 0 ? '+' : ''}{formatCurrency(m.net)}
@@ -151,14 +330,15 @@ export default function Report() {
                     </div>
                   </div>
 
-                  <div className="rpt-month-bar">
-                    <div className="rpt-month-bar-fill" style={{
-                      width: `${usedPct}%`,
-                      background: m.net >= 0 ? 'var(--success)' : 'var(--danger)',
-                    }} />
+                  <div className="rpt-month-right">
+                    <div className="rpt-month-bar">
+                      <div className="rpt-month-fill" style={{
+                        width: `${usedPct}%`,
+                        background: m.net >= 0 ? 'var(--success)' : 'var(--danger)',
+                      }} />
+                    </div>
+                    <span className="rpt-arrow">→</span>
                   </div>
-
-                  <span className="rpt-arrow">→</span>
                 </div>
               )
             })}
@@ -167,45 +347,209 @@ export default function Report() {
       )}
 
       <style>{`
-        /* Summary cards */
+        /* Summary */
         .rpt-summary {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 12px;
+          margin-bottom: 16px;
         }
         .rpt-sum-card {
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
           padding: 16px 18px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 3px;
         }
         .rpt-sum-label {
-          font-size: 0.68rem;
+          font-size: 0.65rem;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.07em;
           color: var(--text-muted);
-          font-weight: 600;
+          font-weight: 700;
         }
         .rpt-sum-val {
-          font-size: 1.2rem;
+          font-size: 1.25rem;
           font-weight: 800;
-          letter-spacing: -0.03em;
+          letter-spacing: -0.035em;
           line-height: 1.1;
+          margin: 2px 0;
+        }
+        .rpt-sum-sub {
+          font-size: 0.68rem;
+          color: var(--text-muted);
+          font-weight: 500;
         }
 
-        /* Chart */
+        /* Chart card */
+        .rpt-chart-card {
+          margin-bottom: 16px;
+        }
+        .rpt-chart-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 16px;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
         .rpt-chart-title {
           font-size: 0.8125rem;
           font-weight: 700;
-          letter-spacing: -0.01em;
           color: var(--text-primary);
-          margin-bottom: 16px;
+          letter-spacing: -0.01em;
+          margin: 0;
+        }
+        .rpt-chart-sub {
+          font-size: 0.68rem;
+          color: var(--text-muted);
+          font-weight: 500;
+          margin-top: 2px;
+        }
+        .rpt-tabs {
+          display: flex;
+          gap: 4px;
+          background: var(--bg-input);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          padding: 3px;
+          flex-shrink: 0;
+        }
+        .rpt-tab {
+          padding: 4px 12px;
+          border: none;
+          border-radius: 4px;
+          background: transparent;
+          color: var(--text-muted);
+          font-family: var(--font-sans);
+          font-size: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .rpt-tab.active {
+          background: var(--bg-card);
+          color: var(--text-primary);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
         .rpt-chart-wrap {
-          height: 200px;
+          height: 240px;
+        }
+        .rpt-legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 16px;
+          margin-top: 14px;
+          padding-top: 12px;
+          border-top: 1px solid var(--border);
+        }
+        .rpt-legend-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .rpt-legend-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 2px;
+          flex-shrink: 0;
+        }
+        .rpt-legend-name {
+          font-size: 0.72rem;
+          color: var(--text-secondary);
+          font-weight: 500;
         }
 
-        /* Month list */
+        /* Category breakdown */
+        .rpt-cat-card {
+          margin-bottom: 16px;
+        }
+        .rpt-cat-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+          margin-top: 12px;
+        }
+        .rpt-cat-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 9px 0;
+          border-bottom: 1px solid var(--border);
+        }
+        .rpt-cat-row:last-child { border-bottom: none; }
+        .rpt-cat-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 160px;
+          flex-shrink: 0;
+        }
+        .rpt-cat-rank {
+          font-size: 0.65rem;
+          font-weight: 700;
+          color: var(--text-muted);
+          width: 14px;
+          text-align: right;
+          flex-shrink: 0;
+        }
+        .rpt-cat-icon {
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.8rem;
+          flex-shrink: 0;
+        }
+        .rpt-cat-name {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: var(--text-primary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .rpt-cat-mid {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .rpt-cat-bar {
+          flex: 1;
+          height: 6px;
+          background: var(--border);
+          border-radius: 99px;
+          overflow: hidden;
+        }
+        .rpt-cat-fill {
+          height: 100%;
+          border-radius: 99px;
+          transition: width 0.6s ease;
+        }
+        .rpt-cat-pct {
+          font-size: 0.68rem;
+          color: var(--text-muted);
+          font-weight: 600;
+          width: 36px;
+          text-align: right;
+          flex-shrink: 0;
+        }
+        .rpt-cat-amount {
+          font-size: 0.8125rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          letter-spacing: -0.02em;
+          width: 100px;
+          text-align: right;
+          flex-shrink: 0;
+        }
+
+        /* Monthly list */
         .rpt-month-list {
           display: flex;
           flex-direction: column;
@@ -215,25 +559,19 @@ export default function Report() {
           background: var(--bg-card);
           border: 1px solid var(--border);
           border-radius: var(--radius-lg);
-          padding: 15px 18px;
+          padding: 14px 18px;
           display: flex;
-          align-items: center;
-          gap: 14px;
+          align-items: flex-start;
+          gap: 16px;
           cursor: pointer;
-          transition: border-color 0.2s, background 0.15s;
-          user-select: none;
+          transition: border-color 0.15s, background 0.15s;
         }
-        .rpt-month-row:hover {
-          border-color: var(--border-light);
-          background: var(--bg-card-hover);
-        }
-        .rpt-month-row:active { transform: scale(0.995); }
-
+        .rpt-month-row:hover { border-color: var(--border-light); background: var(--bg-card-hover); }
         .rpt-month-left {
           display: flex;
           flex-direction: column;
-          gap: 2px;
-          min-width: 110px;
+          gap: 4px;
+          min-width: 140px;
           flex-shrink: 0;
         }
         .rpt-month-name {
@@ -247,11 +585,24 @@ export default function Report() {
           color: var(--text-muted);
           font-weight: 500;
         }
-
+        .rpt-month-cats {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+          margin-top: 2px;
+        }
+        .rpt-month-cat-chip {
+          font-size: 0.62rem;
+          font-weight: 600;
+          padding: 2px 7px;
+          border-radius: 99px;
+          white-space: nowrap;
+        }
         .rpt-month-stats {
           display: flex;
-          gap: 18px;
+          gap: 16px;
           flex: 1;
+          align-items: flex-start;
         }
         .rpt-stat {
           display: flex;
@@ -259,9 +610,8 @@ export default function Report() {
           gap: 2px;
           min-width: 72px;
         }
-        .rpt-stat-net { min-width: 80px; }
         .rpt-stat-label {
-          font-size: 0.62rem;
+          font-size: 0.6rem;
           text-transform: uppercase;
           letter-spacing: 0.06em;
           color: var(--text-muted);
@@ -272,43 +622,45 @@ export default function Report() {
           font-weight: 700;
           letter-spacing: -0.02em;
         }
-
+        .rpt-month-right {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 6px;
+          flex-shrink: 0;
+        }
         .rpt-month-bar {
           width: 72px;
-          height: 5px;
+          height: 4px;
           background: var(--border);
           border-radius: 99px;
           overflow: hidden;
-          flex-shrink: 0;
         }
-        .rpt-month-bar-fill {
+        .rpt-month-fill {
           height: 100%;
           border-radius: 99px;
           transition: width 0.6s ease;
         }
         .rpt-arrow {
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           color: var(--text-muted);
-          flex-shrink: 0;
         }
 
         /* Mobile */
         @media (max-width: 768px) {
           .rpt-summary { grid-template-columns: 1fr 1fr; }
-          .rpt-sum-card { padding: 13px 14px; }
           .rpt-sum-val { font-size: 1rem; }
-          .rpt-month-row { padding: 13px 14px; gap: 10px; flex-wrap: wrap; }
+          .rpt-chart-wrap { height: 200px; }
+          .rpt-cat-left { width: 120px; }
+          .rpt-cat-amount { width: 80px; font-size: 0.75rem; }
+          .rpt-month-row { padding: 12px 14px; flex-wrap: wrap; gap: 10px; }
           .rpt-month-left { min-width: 0; flex: 1; }
-          .rpt-month-stats { width: 100%; gap: 8px; }
-          .rpt-stat { min-width: 60px; flex: 1; }
-          .rpt-stat-net { min-width: 60px; }
-          .rpt-month-bar { display: none; }
-          .rpt-arrow { display: none; }
-          .rpt-chart-wrap { height: 160px; }
+          .rpt-month-stats { width: 100%; }
+          .rpt-month-right { display: none; }
         }
         @media (max-width: 480px) {
           .rpt-summary { grid-template-columns: 1fr; }
-          .rpt-sum-val { font-size: 1.1rem; }
+          .rpt-cat-mid { display: none; }
         }
       `}</style>
     </div>

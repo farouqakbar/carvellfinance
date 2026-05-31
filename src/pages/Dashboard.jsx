@@ -90,10 +90,23 @@ export default function Dashboard() {
   const totalBudget = data.categories.filter(c => c.budget_limit > 0).reduce((s, c) => s + c.budget_limit, 0)
   const balance = data.salary + data.totalIncome - data.totalExpense
   const budgetUsed = data.salary > 0 ? (data.totalExpense / data.salary) * 100 : 0
-  const potentialSave = data.salary + data.totalIncome - data.totalExpense
   const isCurrentMonth = month === getCurrentMonth()
   const overBudgetCats = data.categories.filter(c => c.overBudget)
   const heroBarColor = budgetUsed > 90 ? 'var(--danger)' : budgetUsed > 70 ? 'var(--warning)' : 'var(--accent)'
+
+  // Hitung alokasi tabungan bulanan dari semua goal yang punya deadline
+  const now = new Date()
+  const monthlyTabungan = data.savings
+    .filter(sv => sv.deadline && Number(sv.current_amount) < Number(sv.target_amount))
+    .reduce((sum, sv) => {
+      const sisa = Number(sv.target_amount) - Number(sv.current_amount)
+      const bulanSisa = Math.max(1, Math.ceil((new Date(sv.deadline) - now) / (1000 * 60 * 60 * 24 * 30)))
+      return sum + sisa / bulanSisa
+    }, 0)
+
+  const batasBelanja = data.salary > 0 ? data.salary - monthlyTabungan : 0
+  const sisaBelanja = batasBelanja - data.totalExpense
+  const overBatasBelanja = data.salary > 0 && monthlyTabungan > 0 && data.totalExpense > batasBelanja
 
   return (
     <div className="animate-in">
@@ -174,18 +187,35 @@ export default function Dashboard() {
 
       {/* ── Stats strip ──────────────────────── */}
       <div className="stats-strip">
-        {[
-          { label: 'Pemasukan', val: data.totalIncome, color: 'var(--success)', sign: '+' },
-          { label: 'Pengeluaran', val: data.totalExpense, color: 'var(--danger)', sign: '-' },
-          { label: potentialSave >= 0 ? 'Bisa ditabung' : 'Defisit', val: Math.abs(potentialSave), color: potentialSave >= 0 ? 'var(--accent)' : 'var(--danger)', sign: potentialSave >= 0 ? '' : '-' },
-        ].map((s, i, arr) => (
-          <div key={s.label} className="stat-col">
-            <span className="stat-col-label">{s.label}</span>
-            <span className="stat-col-val tabular" style={{ color: s.color }}>
-              {s.sign}{formatCurrency(s.val)}
+        <div className="stat-col">
+          <span className="stat-col-label">Pemasukan</span>
+          <span className="stat-col-val tabular" style={{ color: 'var(--success)' }}>+{formatCurrency(data.totalIncome)}</span>
+        </div>
+        <div className="stat-col">
+          <span className="stat-col-label">Pengeluaran</span>
+          <span className="stat-col-val tabular" style={{ color: overBatasBelanja ? 'var(--danger)' : 'var(--text-primary)' }}>
+            -{formatCurrency(data.totalExpense)}
+          </span>
+          {data.salary > 0 && monthlyTabungan > 0 && (
+            <span className="stat-col-sub" style={{ color: overBatasBelanja ? 'var(--danger)' : 'var(--text-muted)' }}>
+              {overBatasBelanja ? '⚠ ' : ''}Batas {formatCurrency(batasBelanja)}
             </span>
-          </div>
-        ))}
+          )}
+        </div>
+        <div className="stat-col">
+          <span className="stat-col-label">
+            {data.salary > 0 && monthlyTabungan > 0 ? 'Sisa belanja' : 'Bisa ditabung'}
+          </span>
+          <span className="stat-col-val tabular" style={{ color: sisaBelanja >= 0 ? 'var(--accent)' : 'var(--danger)' }}>
+            {data.salary > 0 && monthlyTabungan > 0
+              ? formatCurrency(Math.max(0, sisaBelanja))
+              : formatCurrency(Math.max(0, balance))
+            }
+          </span>
+          {data.salary > 0 && monthlyTabungan > 0 && (
+            <span className="stat-col-sub">Tabungan {formatCurrency(monthlyTabungan)}/bln</span>
+          )}
+        </div>
       </div>
 
       {/* ── Budget per Kategori ──────────────── */}
@@ -499,6 +529,9 @@ export default function Dashboard() {
         }
         .stat-col-val {
           font-size: 1.1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1;
+        }
+        .stat-col-sub {
+          font-size: 0.68rem; color: var(--text-muted); font-weight: 500; margin-top: 2px;
         }
 
         /* ── Section head ─────────────────────── */

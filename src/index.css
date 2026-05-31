@@ -1,11 +1,11 @@
 :root {
   /* Background */
-  --bg: #08080d;
-  --bg-card: #0f0f17;
-  --bg-card-hover: #141420;
-  --bg-input: #161621;
-  --border: #1e1e2e;
-  --border-light: #2a2a3e;
+  --bg: #070710;
+  --bg-card: #0e0e1a;
+  --bg-card-hover: #131325;
+  --bg-input: #13131f;
+  --border: #202035;
+  --border-light: #2c2c48;
 
   /* Text */
   --text-primary: #f2f2fa;
@@ -184,6 +184,7 @@ h1, h2, h3, h4 {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 22px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
 
 /* ========================

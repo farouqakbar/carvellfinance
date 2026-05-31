@@ -479,20 +479,21 @@ export default function Dashboard() {
         /* ── Stats strip ──────────────────────── */
         .stats-strip {
           display: grid; grid-template-columns: repeat(3, 1fr);
-          background: var(--bg-card); border: 1px solid var(--border);
+          background: #13131f;
+          border: 1px solid #252538;
           border-radius: var(--radius-lg); overflow: hidden;
         }
         .stat-col {
-          padding: 14px 18px; display: flex; flex-direction: column; gap: 5px;
-          border-right: 1px solid var(--border); position: relative;
+          padding: 16px 20px; display: flex; flex-direction: column; gap: 6px;
+          border-right: 1px solid #252538;
         }
         .stat-col:last-child { border-right: none; }
         .stat-col-label {
-          font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.07em;
-          color: var(--text-muted); font-weight: 600;
+          font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+          color: var(--text-muted); font-weight: 700;
         }
         .stat-col-val {
-          font-size: 1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1;
+          font-size: 1.1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1;
         }
 
         /* ── Section head ─────────────────────── */

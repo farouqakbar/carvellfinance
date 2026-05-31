@@ -5,24 +5,47 @@ import { useAuth } from '../context/AuthContext'
 const BASE = import.meta.env.BASE_URL
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
-  const [form, setForm] = useState({ username: '', password: '' })
+  const [mode, setMode] = useState('login')
+  const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    if (mode === 'register') {
+      if (form.username.length < 3) return setError('Username minimal 3 karakter')
+      if (!/^[a-zA-Z0-9_]+$/.test(form.username)) return setError('Username hanya boleh huruf, angka, dan underscore')
+      if (!form.email.includes('@')) return setError('Email tidak valid')
+      if (form.password.length < 6) return setError('Password minimal 6 karakter')
+      if (form.password !== form.confirmPassword) return setError('Password tidak cocok')
+    }
+
     setLoading(true)
     try {
-      await signIn(form.username, form.password)
-      navigate('/dashboard')
+      if (mode === 'login') {
+        await signIn(form.username, form.password)
+        navigate('/dashboard')
+      } else {
+        await signUp(form.username, form.email, form.password)
+        // Setelah daftar, auto login
+        await signIn(form.username, form.password)
+        navigate('/dashboard')
+      }
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
+  }
+
+  const switchMode = (m) => {
+    setMode(m)
+    setError('')
+    setForm({ username: '', email: '', password: '', confirmPassword: '' })
   }
 
   const isDark = localStorage.getItem('theme') !== 'light'
@@ -61,8 +84,14 @@ export default function Login() {
               <img src={loginIcon} alt="Cashvell" width="32" height="32" />
               <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: '1.2rem' }}>Cashvell</span>
             </div>
-            <h2 className="login-title">Selamat datang kembali</h2>
-            <p className="login-sub">Masukkan username dan password kamu</p>
+            <h2 className="login-title">
+              {mode === 'login' ? 'Selamat datang kembali' : 'Buat akun baru'}
+            </h2>
+            <p className="login-sub">
+              {mode === 'login'
+                ? 'Login dengan username dan password kamu'
+                : 'Daftar dengan username dan email kamu'}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -81,27 +110,69 @@ export default function Login() {
                   autoFocus
                 />
               </div>
+              {mode === 'register' && (
+                <p className="form-hint">Hanya huruf, angka, dan underscore. Min. 3 karakter.</p>
+              )}
             </div>
+
+            {mode === 'register' && (
+              <div className="form-group">
+                <label className="form-label">Email</label>
+                <input
+                  className="form-input"
+                  type="email"
+                  placeholder="kamu@gmail.com"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value.toLowerCase() }))}
+                  required
+                  autoComplete="email"
+                />
+                <p className="form-hint">Dipakai untuk reset password, tidak ditampilkan di app.</p>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Password</label>
               <input
                 className="form-input"
                 type="password"
-                placeholder="••••••••"
+                placeholder={mode === 'register' ? 'Minimal 6 karakter' : '••••••••'}
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required
-                autoComplete="current-password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
             </div>
+
+            {mode === 'register' && (
+              <div className="form-group">
+                <label className="form-label">Konfirmasi Password</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  placeholder="Ulangi password"
+                  value={form.confirmPassword}
+                  onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+            )}
 
             {error && <div className="auth-error">{error}</div>}
 
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading}>
-              {loading ? 'Memproses...' : 'Masuk'}
+              {loading ? 'Memproses...' : mode === 'login' ? 'Masuk' : 'Buat Akun'}
             </button>
           </form>
+
+          <div className="login-switch">
+            {mode === 'login' ? (
+              <>Belum punya akun? <button onClick={() => switchMode('register')}>Daftar</button></>
+            ) : (
+              <>Sudah punya akun? <button onClick={() => switchMode('login')}>Masuk</button></>
+            )}
+          </div>
         </div>
       </div>
 
@@ -158,12 +229,7 @@ export default function Login() {
           margin-bottom: 16px;
         }
 
-        .login-tagline p {
-          color: #94a3b8;
-          font-size: 1rem;
-          line-height: 1.6;
-          max-width: 380px;
-        }
+        .login-tagline p { color: #94a3b8; font-size: 1rem; line-height: 1.6; max-width: 380px; }
 
         .login-features { display: flex; flex-direction: column; gap: 12px; }
         .feature-item { display: flex; align-items: center; gap: 12px; color: #94a3b8; font-size: 0.9rem; }
@@ -209,6 +275,8 @@ export default function Login() {
         }
         .input-with-prefix { padding-left: 28px !important; }
 
+        .form-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; }
+
         .auth-error {
           background: var(--danger-dim);
           color: var(--danger);
@@ -217,6 +285,28 @@ export default function Login() {
           font-size: 0.85rem;
           margin-bottom: 16px;
         }
+
+        .login-switch {
+          text-align: center;
+          margin-top: 20px;
+          font-size: 0.875rem;
+          color: var(--text-secondary);
+        }
+
+        .login-switch button {
+          background: none;
+          border: none;
+          color: #60a5fa;
+          cursor: pointer;
+          font-family: var(--font-sans);
+          font-size: 0.875rem;
+          font-weight: 500;
+          padding: 0;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        .login-switch button:hover { opacity: 0.8; }
 
         @media (max-width: 768px) {
           .login-page { grid-template-columns: 1fr; }

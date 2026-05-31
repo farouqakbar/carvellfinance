@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../services/supabaseClient";
 
 const AuthContext = createContext({});
-const EMAIL_DOMAIN = "@cashvell.app";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -40,20 +39,27 @@ export function AuthProvider({ children }) {
   };
 
   const signIn = async (username, password) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: username.toLowerCase() + EMAIL_DOMAIN,
-      password,
+    // Lookup email dari username via RPC (bypasses RLS, no session needed)
+    const { data: email, error: rpcErr } = await supabase.rpc("get_email_by_username", {
+      uname: username.toLowerCase(),
     });
+    if (rpcErr || !email) throw new Error("Username tidak ditemukan");
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error("Username atau password salah");
   };
 
-  const signUp = async (username, password) => {
-    const email = username.toLowerCase() + EMAIL_DOMAIN;
+  const signUp = async (username, email, password) => {
+    // Cek username unik via RPC sebelum daftar
+    const { data: existingEmail } = await supabase.rpc("get_email_by_username", {
+      uname: username.toLowerCase(),
+    });
+    if (existingEmail) throw new Error("Username sudah digunakan");
 
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       if (error.message.toLowerCase().includes("already registered")) {
-        throw new Error("Username sudah digunakan");
+        throw new Error("Email sudah terdaftar");
       }
       throw new Error(error.message || "Pendaftaran gagal");
     }
@@ -62,14 +68,11 @@ export function AuthProvider({ children }) {
       const { error: profileErr } = await supabase.from("user_profiles").insert({
         id: data.user.id,
         username: username.toLowerCase(),
+        email: email.toLowerCase(),
         full_name: username,
       });
-      if (profileErr?.code === "23505") {
-        throw new Error("Username sudah digunakan");
-      }
-      if (profileErr) {
-        throw new Error("Gagal membuat profil: " + profileErr.message);
-      }
+      if (profileErr?.code === "23505") throw new Error("Username sudah digunakan");
+      if (profileErr) throw new Error("Gagal membuat profil: " + profileErr.message);
     }
   };
 

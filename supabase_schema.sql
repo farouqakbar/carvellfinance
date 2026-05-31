@@ -8,11 +8,22 @@
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   username TEXT UNIQUE NOT NULL,
+  email TEXT NOT NULL DEFAULT '',
   full_name TEXT DEFAULT '',
   avatar_url TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Fungsi publik: cari email dari username (untuk login by username)
+-- SECURITY DEFINER agar bisa diakses tanpa auth session
+CREATE OR REPLACE FUNCTION get_email_by_username(uname text)
+RETURNS text
+LANGUAGE sql SECURITY DEFINER
+AS $$
+  SELECT email FROM user_profiles WHERE username = lower(uname) LIMIT 1;
+$$;
+GRANT EXECUTE ON FUNCTION get_email_by_username TO anon, authenticated;
 
 -- 1. SALARIES TABLE
 CREATE TABLE IF NOT EXISTS salaries (

@@ -105,14 +105,15 @@ export default function Navbar({ darkMode, setDarkMode }) {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 9px 10px;
+          padding: 9px 12px;
           border-radius: var(--radius-sm);
           text-decoration: none;
-          color: var(--text-secondary);
+          color: var(--text-muted);
           font-size: 0.8125rem;
           font-weight: 600;
           transition: all 0.15s;
           letter-spacing: -0.01em;
+          position: relative;
         }
         .nav-item:hover {
           color: var(--text-primary);
@@ -122,14 +123,20 @@ export default function Navbar({ darkMode, setDarkMode }) {
           color: var(--accent);
           background: var(--accent-dim);
         }
+        .nav-item.active::before {
+          content: '';
+          position: absolute;
+          left: 0; top: 20%; bottom: 20%;
+          width: 3px;
+          background: var(--accent);
+          border-radius: 0 3px 3px 0;
+        }
         .nav-icon {
           font-size: 0.95rem;
           width: 18px;
           text-align: center;
           flex-shrink: 0;
-          opacity: 0.8;
         }
-        .nav-item.active .nav-icon { opacity: 1; }
 
         .sidebar-bottom {
           display: flex;

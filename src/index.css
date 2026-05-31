@@ -38,6 +38,17 @@
   /* Shadow */
   --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.2);
   --shadow-lg: 0 4px 8px rgba(0,0,0,0.4), 0 20px 48px rgba(0,0,0,0.3);
+
+  /* Hero card */
+  --hero-bg: linear-gradient(135deg, #12122a 0%, #0f0f17 60%);
+  --hero-border: #252540;
+  --hero-text: #f2f2fa;
+  --hero-muted: rgba(255,255,255,0.38);
+  --hero-chip-bg: rgba(255,255,255,0.07);
+  --hero-chip-border: rgba(255,255,255,0.1);
+  --hero-chip-val: rgba(255,255,255,0.85);
+  --hero-track: rgba(255,255,255,0.1);
+  --hero-bar-label: rgba(255,255,255,0.35);
 }
 
 [data-theme="light"] {
@@ -67,6 +78,17 @@
 
   --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);
   --shadow-lg: 0 4px 8px rgba(0,0,0,0.06), 0 20px 48px rgba(0,0,0,0.08);
+
+  /* Hero card — light mode */
+  --hero-bg: var(--bg-card);
+  --hero-border: var(--border);
+  --hero-text: var(--text-primary);
+  --hero-muted: var(--text-muted);
+  --hero-chip-bg: var(--bg-input);
+  --hero-chip-border: var(--border);
+  --hero-chip-val: var(--text-secondary);
+  --hero-track: var(--border);
+  --hero-bar-label: var(--text-muted);
 }
 
 /* ========================

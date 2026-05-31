@@ -713,8 +713,8 @@ export default function Dashboard() {
 
         /* ── Hero ─────────────────────────────── */
         .hero-card {
-          background: linear-gradient(135deg, #12122a 0%, #0f0f17 60%);
-          border: 1px solid #252540;
+          background: var(--hero-bg);
+          border: 1px solid var(--hero-border);
           border-radius: var(--radius-lg);
           padding: 22px 24px;
           position: relative; overflow: hidden;
@@ -731,45 +731,45 @@ export default function Dashboard() {
         }
         .hero-left {}
         .hero-date {
-          font-size: 0.72rem; font-weight: 600; color: rgba(255,255,255,0.38);
+          font-size: 0.72rem; font-weight: 600; color: var(--hero-muted);
           display: block; margin-bottom: 10px; letter-spacing: 0.01em;
           text-transform: capitalize;
         }
         .hero-eyebrow {
           font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.09em;
-          color: rgba(255,255,255,0.38); font-weight: 600; display: block; margin-bottom: 5px;
+          color: var(--hero-muted); font-weight: 600; display: block; margin-bottom: 5px;
         }
         .hero-balance {
           font-size: clamp(1.75rem, 5vw, 2.5rem);
           font-weight: 800; letter-spacing: -0.04em;
-          color: #f2f2fa; font-variant-numeric: tabular-nums; line-height: 1;
+          color: var(--hero-text); font-variant-numeric: tabular-nums; line-height: 1;
         }
-        .hero-balance.neg { color: #f87171; }
+        .hero-balance.neg { color: var(--danger); }
         .hero-neg-sign { font-size: 0.7em; vertical-align: 0.05em; margin-right: 1px; }
 
         .hero-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
         .hero-chip {
           display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
-          background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+          background: var(--hero-chip-bg); border: 1px solid var(--hero-chip-border);
           border-radius: var(--radius-sm); padding: 8px 12px; min-width: 130px;
         }
         .hero-chip-label {
           font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.07em;
-          color: rgba(255,255,255,0.38); font-weight: 600;
+          color: var(--hero-muted); font-weight: 600;
         }
         .hero-chip-val {
           font-size: 0.9rem; font-weight: 700;
-          color: rgba(255,255,255,0.85); letter-spacing: -0.02em;
+          color: var(--hero-chip-val); letter-spacing: -0.02em;
         }
 
         .hero-bar-section {}
         .hero-bar-track {
-          height: 5px; background: rgba(255,255,255,0.1); border-radius: 99px; overflow: hidden; margin-bottom: 7px;
+          height: 5px; background: var(--hero-track); border-radius: 99px; overflow: hidden; margin-bottom: 7px;
         }
         .hero-bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
         .hero-bar-labels {
           display: flex; justify-content: space-between;
-          font-size: 0.68rem; color: rgba(255,255,255,0.35); font-weight: 500;
+          font-size: 0.68rem; color: var(--hero-bar-label); font-weight: 500;
         }
 
         .hero-no-salary {
@@ -777,37 +777,18 @@ export default function Dashboard() {
         }
         .salary-cta {
           display: inline-flex; align-items: center; gap: 5px;
-          background: rgba(99,102,241,0.25);
-          border: 1px solid rgba(99,102,241,0.45);
+          background: var(--accent-dim);
+          border: 1px solid rgba(99,102,241,0.35);
           border-radius: var(--radius-sm);
           padding: 7px 13px;
-          color: #a5b4fc; font-size: 0.78rem; font-weight: 700;
+          color: var(--accent); font-size: 0.78rem; font-weight: 700;
           cursor: pointer; font-family: var(--font-sans);
           transition: all 0.15s; letter-spacing: -0.01em; white-space: nowrap;
         }
-        .salary-cta:hover { background: rgba(99,102,241,0.35); transform: translateY(-1px); }
+        .salary-cta:hover { background: rgba(99,102,241,0.2); transform: translateY(-1px); }
         .salary-cta-hint {
-          font-size: 0.72rem; color: rgba(255,255,255,0.35); font-weight: 500;
+          font-size: 0.72rem; color: var(--hero-muted); font-weight: 500;
         }
-
-        /* ── Hero: light mode overrides ─────── */
-        [data-theme="light"] .hero-card {
-          background: var(--bg-card);
-          border-color: var(--border);
-        }
-        [data-theme="light"] .hero-card::after { display: none; }
-        [data-theme="light"] .hero-date { color: var(--text-muted); }
-        [data-theme="light"] .hero-eyebrow { color: var(--text-muted); }
-        [data-theme="light"] .hero-balance { color: var(--text-primary); }
-        [data-theme="light"] .hero-balance.neg { color: var(--danger); }
-        [data-theme="light"] .hero-chip { background: var(--bg-input); border-color: var(--border); }
-        [data-theme="light"] .hero-chip-label { color: var(--text-muted); }
-        [data-theme="light"] .hero-chip-val { color: var(--text-secondary); }
-        [data-theme="light"] .hero-bar-track { background: var(--border); }
-        [data-theme="light"] .hero-bar-labels { color: var(--text-muted); }
-        [data-theme="light"] .salary-cta { background: var(--accent-dim); border-color: rgba(79,70,229,0.35); color: var(--accent); }
-        [data-theme="light"] .salary-cta:hover { background: rgba(79,70,229,0.15); }
-        [data-theme="light"] .salary-cta-hint { color: var(--text-muted); }
 
         /* ── Stats strip ──────────────────────── */
         .stats-strip {

@@ -32,7 +32,7 @@ export default function Dashboard() {
   const [data, setData] = useState({
     salary: 0, totalExpense: 0, totalIncome: 0,
     categories: [], transactions: [], savings: [], savingsLogs: [], categorySpend: [],
-    todayExpense: 0, totalTabungan: 0,
+    todayExpense: 0, totalTabungan: 0, nextMonthPlans: [],
   })
   const [loading, setLoading] = useState(true)
   const [showSalaryForm, setShowSalaryForm] = useState(false)
@@ -54,7 +54,8 @@ export default function Dashboard() {
       const startDate = `${month}-01`
       const endDate = `${month}-31`
       const today = new Date().toISOString().split('T')[0]
-      const [salaryRes, txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes] = await Promise.all([
+      const nmStr = nextMonth(month)
+      const [salaryRes, txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes] = await Promise.all([
         supabase.from('salaries').select('*').eq('user_id', user.id).eq('month', month).maybeSingle(),
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
@@ -63,6 +64,7 @@ export default function Dashboard() {
         supabase.from('transactions').select('amount').eq('user_id', user.id).eq('date', today).eq('type', 'expense'),
         supabase.from('category_budgets').select('*').eq('user_id', user.id).eq('month', month),
         supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month),
+        supabase.from('plans').select('*').eq('user_id', user.id).eq('target_month', nmStr).eq('done', false).order('created_at', { ascending: true }),
       ])
       const txs = txRes.data || []
       // Budget murni per-bulan: tidak fallback ke global
@@ -106,6 +108,7 @@ export default function Dashboard() {
           })
           .reduce((s, cb) => s + Number(cb.budget_limit), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
+        nextMonthPlans: plansRes.data || [],
       })
       // Auto-set 15% untuk mandatory categories yang belum pernah punya record (bukan yang di-set 0)
       const sal = salaryRes.data?.amount || 0
@@ -425,15 +428,48 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Rencana bulan depan preview ─────── */}
-      <div className="card" style={{ borderStyle: 'dashed' }}>
+      {/* ── Rencana bulan depan ─────────────── */}
+      <div className="card">
         <div className="sect-head">
-          <h3 className="sect-title">Rencana Bulan Depan</h3>
-          <Link to="/savings" className="pill-link">Atur →</Link>
+          <div>
+            <h3 className="sect-title">Rencana {getMonthLabel(nextMonth(month))}</h3>
+            {data.nextMonthPlans.length > 0 && (
+              <p className="sect-sub">
+                {data.nextMonthPlans.length} item ·{' '}
+                {formatCurrency(data.nextMonthPlans.reduce((s, p) => s + Number(p.amount), 0))}
+              </p>
+            )}
+          </div>
+          <Link to="/savings" className="pill-link">Kelola →</Link>
         </div>
-        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
-          Rencanakan pengeluaran bulan depan secara rinci di halaman Rencana.
-        </p>
+
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 36 }} />)}
+          </div>
+        ) : data.nextMonthPlans.length === 0 ? (
+          <div className="empty-hint">
+            <span className="empty-hint-icon">📋</span>
+            <span>Belum ada rencana untuk {getMonthLabel(nextMonth(month))}.</span>
+            <Link to="/savings" className="empty-hint-link">Tambah →</Link>
+          </div>
+        ) : (
+          <div className="plan-preview-list">
+            {data.nextMonthPlans.slice(0, 4).map(plan => (
+              <div key={plan.id} className="plan-preview-row">
+                <span className="plan-preview-icon">🛒</span>
+                <span className="plan-preview-name">{plan.name}</span>
+                <span className="plan-preview-amount tabular">{formatCurrency(plan.amount)}</span>
+              </div>
+            ))}
+            {data.nextMonthPlans.length > 4 && (
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                +{data.nextMonthPlans.length - 4} rencana lainnya —{' '}
+                <Link to="/savings" style={{ color: 'var(--accent)', fontWeight: 600 }}>lihat semua</Link>
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Transaksi terakhir ───────────────── */}
@@ -924,6 +960,24 @@ export default function Dashboard() {
         .sv-chip-bar { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
         .sv-chip-fill { height: 100%; border-radius: 99px; transition: width 0.7s cubic-bezier(0.4,0,0.2,1); }
         .sv-chip-deadline { font-size: 0.65rem; color: var(--warning); font-weight: 600; margin-top: 5px; display: block; }
+
+        /* ── Plan preview ────────────────────── */
+        .plan-preview-list { display: flex; flex-direction: column; }
+        .plan-preview-row {
+          display: flex; align-items: center; gap: 10px;
+          padding: 9px 0; border-bottom: 1px solid var(--border);
+        }
+        .plan-preview-row:last-child { border-bottom: none; }
+        .plan-preview-icon { font-size: 0.85rem; flex-shrink: 0; opacity: 0.7; }
+        .plan-preview-name {
+          flex: 1; font-size: 0.8rem; font-weight: 600;
+          color: var(--text-primary);
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .plan-preview-amount {
+          font-size: 0.8rem; font-weight: 700;
+          color: var(--text-secondary); letter-spacing: -0.01em; flex-shrink: 0;
+        }
 
         /* ── Transactions ─────────────────────── */
         .tx-list { display: flex; flex-direction: column; margin-top: 4px; }

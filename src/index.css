@@ -415,7 +415,7 @@ tr:hover td { background: var(--bg-input); }
 
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes pulse {
@@ -429,7 +429,7 @@ tr:hover td { background: var(--bg-input); }
 }
 
 .animate-in {
-  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* ========================

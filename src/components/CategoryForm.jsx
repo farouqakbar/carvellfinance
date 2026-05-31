@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
+import CurrencyInput from './CurrencyInput'
 
 const ICONS = ['🍜','🚗','🛍️','🎮','💊','📱','✈️','📚','🏠','⚡','💰','🎓','🏋️','🎬','☕','🍔','🎁','💇','🐾','🌱']
 const COLORS = ['#6366f1','#3b82f6','#06b6d4','#10b981','#84cc16','#f59e0b','#f97316','#ef4444','#ec4899','#a855f7']
@@ -76,14 +77,10 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Budget per Bulan (Rp) <span style={{ color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>(opsional)</span></label>
-        <input
-          className="form-input"
-          type="number"
-          placeholder="0 = tanpa batas"
+        <label className="form-label">Budget per Bulan <span style={{ color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>(opsional, 0 = tanpa batas)</span></label>
+        <CurrencyInput
           value={form.budget_limit}
-          onChange={e => setForm(f => ({ ...f, budget_limit: e.target.value }))}
-          min="0"
+          onChange={raw => setForm(f => ({ ...f, budget_limit: raw }))}
         />
       </div>
 

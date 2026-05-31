@@ -3,6 +3,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency } from '../utils/formatCurrency'
 import { useToast } from '../components/Toast'
+import CurrencyInput from '../components/CurrencyInput'
 
 export default function Savings() {
   const { user } = useAuth()
@@ -213,14 +214,11 @@ export default function Savings() {
               <div className="update-section">
                 <label className="form-label">Tambah nominal</label>
                 <div className="flex gap-8">
-                  <input
-                    className="form-input"
-                    type="number"
-                    placeholder="Jumlah yang ditambahkan..."
+                  <CurrencyInput
                     value={addAmount}
-                    onChange={e => setAddAmount(e.target.value)}
-                    min="1"
+                    onChange={raw => setAddAmount(raw)}
                     autoFocus
+                    style={{ flex: 1 }}
                   />
                   <button className="btn btn-primary" onClick={handleAddAmount} disabled={!addAmount}>
                     +
@@ -231,13 +229,10 @@ export default function Savings() {
               <div className="update-section">
                 <label className="form-label">Set total saldo</label>
                 <div className="flex gap-8">
-                  <input
-                    className="form-input"
-                    type="number"
-                    placeholder="Total saldo saat ini..."
+                  <CurrencyInput
                     value={updateAmount}
-                    onChange={e => setUpdateAmount(e.target.value)}
-                    min="0"
+                    onChange={raw => setUpdateAmount(raw)}
+                    style={{ flex: 1 }}
                   />
                   <button className="btn btn-secondary" onClick={handleSetAmount} disabled={!updateAmount}>
                     Set
@@ -443,16 +438,12 @@ function SavingsFormModal({ editData, onSave, onClose }) {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Target Nominal (Rp)</label>
-            <input
-              className="form-input"
-              type="number"
-              placeholder="0"
+            <label className="form-label">Target Nominal</label>
+            <CurrencyInput
               value={form.target_amount}
-              onChange={e => setForm(f => ({ ...f, target_amount: e.target.value }))}
+              onChange={raw => setForm(f => ({ ...f, target_amount: raw }))}
               required
               min="1"
-              style={{ fontSize: '1.05rem', fontWeight: 600 }}
             />
           </div>
           <div className="form-group">

@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
+import CurrencyInput from './CurrencyInput'
 
 export default function TransactionForm({ onSuccess, onClose, editData }) {
   const { user } = useAuth()
   const toast = useToast()
-  const amountRef = useRef(null)
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
@@ -20,7 +20,6 @@ export default function TransactionForm({ onSuccess, onClose, editData }) {
 
   useEffect(() => {
     fetchCategories()
-    setTimeout(() => amountRef.current?.focus(), 80)
   }, [])
 
   const fetchCategories = async () => {
@@ -83,20 +82,15 @@ export default function TransactionForm({ onSuccess, onClose, editData }) {
       </div>
 
       {/* Amount — prominent */}
-      <div className="tf-amount-group">
-        <span className="tf-currency">Rp</span>
-        <input
-          ref={amountRef}
-          className="tf-amount-input"
-          type="number"
-          placeholder="0"
-          value={form.amount}
-          onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-          required
-          min="1"
-          style={{ color: isExpense ? 'var(--danger)' : 'var(--success)' }}
-        />
-      </div>
+      <CurrencyInput
+        variant="large"
+        value={form.amount}
+        onChange={raw => setForm(f => ({ ...f, amount: raw }))}
+        autoFocus
+        style={{ marginBottom: 18 }}
+      />
+      {/* hidden required field agar form validation tetap jalan */}
+      <input type="hidden" value={form.amount} required />
 
       {/* Fields */}
       <div className="form-group">
@@ -188,46 +182,6 @@ export default function TransactionForm({ onSuccess, onClose, editData }) {
           color: var(--success);
         }
         .tf-type-icon { font-size: 0.9rem; }
-
-        .tf-amount-group {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          background: var(--bg-input);
-          border: 1.5px solid var(--border-light);
-          border-radius: var(--radius-sm);
-          padding: 0 16px;
-          margin-bottom: 18px;
-          transition: border-color 0.15s;
-        }
-        .tf-amount-group:focus-within {
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px var(--accent-dim);
-        }
-        .tf-currency {
-          font-size: 1rem;
-          font-weight: 700;
-          color: var(--text-muted);
-          flex-shrink: 0;
-          padding-right: 4px;
-        }
-        .tf-amount-input {
-          flex: 1;
-          border: none;
-          background: transparent;
-          font-family: var(--font-sans);
-          font-size: 1.75rem;
-          font-weight: 800;
-          letter-spacing: -0.04em;
-          font-variant-numeric: tabular-nums;
-          padding: 14px 0;
-          outline: none;
-          width: 100%;
-          min-width: 0;
-        }
-        .tf-amount-input::placeholder { color: var(--border-light); }
-        .tf-amount-input::-webkit-inner-spin-button,
-        .tf-amount-input::-webkit-outer-spin-button { -webkit-appearance: none; }
 
         .tf-row-2 {
           display: flex;

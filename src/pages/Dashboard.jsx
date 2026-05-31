@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
 import TransactionForm from '../components/TransactionForm'
 import { useToast } from '../components/Toast'
+import CurrencyInput from '../components/CurrencyInput'
 
 function prevMonth(m) {
   const [y, mo] = m.split('-').map(Number)
@@ -347,10 +348,11 @@ export default function Dashboard() {
               <button className="btn btn-ghost" onClick={() => setShowSalaryForm(false)}>✕</button>
             </div>
             <div className="form-group">
-              <label className="form-label">Nominal (Rp)</label>
-              <input className="form-input" type="number" placeholder="0" value={salaryInput}
-                onChange={e => setSalaryInput(e.target.value)} autoFocus
-                style={{ fontSize: '1.1rem', fontWeight: 700, letterSpacing: '-0.02em' }}
+              <label className="form-label">Gaji Bulan Ini</label>
+              <CurrencyInput
+                value={salaryInput}
+                onChange={raw => setSalaryInput(raw)}
+                autoFocus
               />
             </div>
             <div className="flex gap-8">

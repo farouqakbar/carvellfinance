@@ -13,6 +13,7 @@ export default function Savings() {
   const [editData, setEditData] = useState(null)
   const [updateModal, setUpdateModal] = useState(null)
   const [updateAmount, setUpdateAmount] = useState('')
+  const [addAmount, setAddAmount] = useState('')
 
   useEffect(() => { fetchSavings() }, [])
 
@@ -40,7 +41,7 @@ export default function Savings() {
           current_amount: 0,
           deadline: form.deadline || null,
         })
-        toast('Target tabungan ditambahkan', 'success')
+        toast('Target tabungan dibuat', 'success')
       }
       setShowForm(false)
       fetchSavings()
@@ -49,13 +50,25 @@ export default function Savings() {
     }
   }
 
-  const handleUpdateAmount = async () => {
+  const handleSetAmount = async () => {
     if (!updateAmount) return
     const newAmount = Math.max(0, parseFloat(updateAmount))
     await supabase.from('savings').update({ current_amount: newAmount }).eq('id', updateModal.id)
-    toast('Saldo tabungan diperbarui', 'success')
+    toast('Saldo diperbarui', 'success')
     setUpdateModal(null)
     setUpdateAmount('')
+    fetchSavings()
+  }
+
+  const handleAddAmount = async () => {
+    if (!addAmount) return
+    const add = parseFloat(addAmount)
+    if (isNaN(add) || add <= 0) return
+    const current = Number(updateModal.current_amount)
+    await supabase.from('savings').update({ current_amount: current + add }).eq('id', updateModal.id)
+    toast(`+${formatCurrency(add)} ditambahkan`, 'success')
+    setUpdateModal(null)
+    setAddAmount('')
     fetchSavings()
   }
 
@@ -68,6 +81,7 @@ export default function Savings() {
 
   const totalSaved = savings.reduce((s, sv) => s + Number(sv.current_amount), 0)
   const totalTarget = savings.reduce((s, sv) => s + Number(sv.target_amount), 0)
+  const done = savings.filter(s => Number(s.current_amount) >= Number(s.target_amount)).length
 
   return (
     <div className="animate-in">
@@ -75,8 +89,9 @@ export default function Savings() {
         <div>
           <h1 className="page-title">Tabungan</h1>
           <p className="page-subtitle" style={{ margin: 0 }}>
-            Total tersimpan: <strong style={{ color: 'var(--success)' }}>{formatCurrency(totalSaved)}</strong>
-            {totalTarget > 0 && ` dari ${formatCurrency(totalTarget)}`}
+            {savings.length} target · {done > 0 && `${done} tercapai · `}
+            <span style={{ color: 'var(--success)', fontWeight: 700 }}>{formatCurrency(totalSaved)}</span>
+            {totalTarget > 0 && <span style={{ color: 'var(--text-muted)' }}> / {formatCurrency(totalTarget)}</span>}
           </p>
         </div>
         <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
@@ -84,8 +99,28 @@ export default function Savings() {
         </button>
       </div>
 
+      {/* Overall progress */}
+      {totalTarget > 0 && (
+        <div className="card mb-20">
+          <div className="flex-between mb-10">
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Total progress tabungan
+            </span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--success)' }}>
+              {((totalSaved / totalTarget) * 100).toFixed(1)}%
+            </span>
+          </div>
+          <div className="progress-bar" style={{ height: 7 }}>
+            <div className="progress-fill" style={{
+              width: `${Math.min((totalSaved / totalTarget) * 100, 100)}%`,
+              background: 'linear-gradient(90deg, var(--accent), var(--success))',
+            }} />
+          </div>
+        </div>
+      )}
+
       {loading ? (
-        <div className="grid-2">
+        <div className="sv-grid">
           {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 180 }} />)}
         </div>
       ) : savings.length === 0 ? (
@@ -93,65 +128,64 @@ export default function Savings() {
           <div className="empty-state">
             <div className="empty-state-icon">◎</div>
             <strong>Belum ada target tabungan</strong>
-            <p>Mulai atur target untuk mencapai tujuan finansial kamu</p>
-            <button className="btn btn-primary mt-16" onClick={() => setShowForm(true)}>+ Buat Target</button>
+            <p>Mulai atur target untuk mencapai tujuan finansialmu</p>
+            <button className="btn btn-primary mt-16" onClick={() => setShowForm(true)}>Buat Target Pertama</button>
           </div>
         </div>
       ) : (
-        <div className="grid-2">
+        <div className="sv-grid">
           {savings.map(sv => {
             const pct = sv.target_amount > 0 ? Math.min((sv.current_amount / sv.target_amount) * 100, 100) : 0
             const isDone = pct >= 100
             const remaining = Math.max(0, sv.target_amount - sv.current_amount)
             const daysLeft = sv.deadline ? Math.ceil((new Date(sv.deadline) - new Date()) / 86400000) : null
+            const isOverdue = daysLeft !== null && daysLeft < 0 && !isDone
+            const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft < 30 && !isDone
+            const urgencyColor = isDone ? 'var(--success)' : isOverdue ? 'var(--danger)' : isUrgent ? 'var(--warning)' : 'var(--accent)'
 
             return (
-              <div key={sv.id} className={`savings-card ${isDone ? 'done' : ''}`}>
-                <div className="flex-between mb-16">
-                  <div>
-                    <div className="savings-name">{sv.name}</div>
+              <div key={sv.id} className={`sv-card ${isDone ? 'sv-done' : ''}`} style={{ '--sv-color': urgencyColor }}>
+                <div className="sv-header">
+                  <div className="sv-title-wrap">
+                    <h3 className="sv-name">{sv.name}</h3>
                     {sv.deadline && (
-                      <div className={`text-xs mt-4 ${daysLeft < 30 ? 'text-warning' : 'text-muted'}`}>
-                        {daysLeft > 0 ? `${daysLeft} hari lagi` : 'Deadline terlewat'}
-                      </div>
+                      <span className={`sv-deadline ${isOverdue ? 'overdue' : isUrgent ? 'urgent' : ''}`}>
+                        {isDone ? '✓ Tercapai' : isOverdue ? 'Deadline lewat' : daysLeft === 0 ? 'Hari ini!' : `${daysLeft} hari lagi`}
+                      </span>
                     )}
                   </div>
-                  <div className="flex gap-4">
-                    {isDone && <span className="badge badge-success">✓ Tercapai</span>}
+                  <div className="sv-actions">
+                    {isDone && <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>✓ Done</span>}
                     <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(sv); setShowForm(true) }}>✎</button>
-                    <button className="btn btn-ghost btn-sm text-danger" onClick={() => handleDelete(sv.id)}>✕</button>
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(sv.id)}>✕</button>
                   </div>
                 </div>
 
-                <div className="savings-amounts">
+                <div className="sv-amounts">
                   <div>
-                    <div className="savings-current">{formatCurrency(sv.current_amount)}</div>
-                    <div className="text-xs text-muted mt-4">Terkumpul</div>
+                    <div className="sv-current tabular">{formatCurrency(sv.current_amount)}</div>
+                    <div className="sv-target-label">dari {formatCurrency(sv.target_amount)}</div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="savings-target">{formatCurrency(sv.target_amount)}</div>
-                    <div className="text-xs text-muted mt-4">Target</div>
+                  <div className="sv-pct-circle">
+                    <span className="sv-pct-num" style={{ color: urgencyColor }}>{pct.toFixed(0)}<span style={{ fontSize: '0.6em' }}>%</span></span>
                   </div>
                 </div>
 
-                <div className="progress-bar mt-12" style={{ height: 10 }}>
-                  <div
-                    className="progress-fill"
-                    style={{
+                <div className="sv-bar-wrap">
+                  <div className="progress-bar" style={{ height: 8 }}>
+                    <div className="progress-fill" style={{
                       width: `${pct}%`,
-                      background: isDone ? 'var(--success)' : `linear-gradient(90deg, var(--info), var(--success))`
-                    }}
-                  />
-                </div>
-
-                <div className="flex-between mt-8">
-                  <span className="text-xs text-muted">{pct.toFixed(1)}% tercapai</span>
-                  {!isDone && <span className="text-xs text-secondary">Sisa: {formatCurrency(remaining)}</span>}
+                      background: isDone ? 'var(--success)' : isOverdue ? 'var(--danger)' : isUrgent ? 'var(--warning)' : 'linear-gradient(90deg, var(--accent), var(--info))',
+                    }} />
+                  </div>
+                  {!isDone && remaining > 0 && (
+                    <span className="sv-remaining">Sisa {formatCurrency(remaining)}</span>
+                  )}
                 </div>
 
                 <button
-                  className="btn btn-secondary btn-sm btn-block mt-12"
-                  onClick={() => { setUpdateModal(sv); setUpdateAmount(String(sv.current_amount)) }}
+                  className="sv-update-btn"
+                  onClick={() => { setUpdateModal(sv); setUpdateAmount(String(sv.current_amount)); setAddAmount('') }}
                 >
                   Update Saldo
                 </button>
@@ -161,57 +195,205 @@ export default function Savings() {
         </div>
       )}
 
-      {/* Form Modal */}
+      {/* Form modal */}
       {showForm && (
-        <SavingsFormModal
-          editData={editData}
-          onSave={handleSave}
-          onClose={() => setShowForm(false)}
-        />
+        <SavingsFormModal editData={editData} onSave={handleSave} onClose={() => setShowForm(false)} />
       )}
 
-      {/* Update Amount Modal */}
+      {/* Update modal */}
       {updateModal && (
         <div className="modal-overlay" onClick={() => setUpdateModal(null)}>
-          <div className="modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">Update Saldo</h2>
+              <h2 className="modal-title">{updateModal.name}</h2>
               <button className="btn btn-ghost" onClick={() => setUpdateModal(null)}>✕</button>
             </div>
-            <p className="text-sm text-secondary mb-16">{updateModal.name}</p>
-            <div className="form-group">
-              <label className="form-label">Saldo Saat Ini (Rp)</label>
-              <input
-                className="form-input"
-                type="number"
-                value={updateAmount}
-                onChange={e => setUpdateAmount(e.target.value)}
-                min="0"
-                autoFocus
-              />
-            </div>
-            <div className="flex gap-8">
-              <button className="btn btn-secondary" onClick={() => setUpdateModal(null)}>Batal</button>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleUpdateAmount}>Simpan</button>
+
+            <div className="update-tabs">
+              <div className="update-section">
+                <label className="form-label">Tambah nominal</label>
+                <div className="flex gap-8">
+                  <input
+                    className="form-input"
+                    type="number"
+                    placeholder="Jumlah yang ditambahkan..."
+                    value={addAmount}
+                    onChange={e => setAddAmount(e.target.value)}
+                    min="1"
+                    autoFocus
+                  />
+                  <button className="btn btn-primary" onClick={handleAddAmount} disabled={!addAmount}>
+                    +
+                  </button>
+                </div>
+              </div>
+              <div className="update-divider">atau</div>
+              <div className="update-section">
+                <label className="form-label">Set total saldo</label>
+                <div className="flex gap-8">
+                  <input
+                    className="form-input"
+                    type="number"
+                    placeholder="Total saldo saat ini..."
+                    value={updateAmount}
+                    onChange={e => setUpdateAmount(e.target.value)}
+                    min="0"
+                  />
+                  <button className="btn btn-secondary" onClick={handleSetAmount} disabled={!updateAmount}>
+                    Set
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       <style>{`
-        .savings-card {
+        .sv-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+          gap: 14px;
+        }
+        .sv-card {
           background: var(--bg-card);
           border: 1px solid var(--border);
           border-radius: var(--radius-lg);
-          padding: 24px;
-          transition: all 0.2s;
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          transition: border-color 0.2s;
+          position: relative;
+          overflow: hidden;
         }
-        .savings-card:hover { border-color: var(--border-light); }
-        .savings-card.done { border-color: var(--success); background: var(--success-dim); }
-        .savings-name { font-weight: 600; font-size: 1rem; color: var(--text-primary); }
-        .savings-amounts { display: flex; justify-content: space-between; align-items: flex-end; }
-        .savings-current { font-family: var(--font-serif); font-size: 1.6rem; color: var(--text-primary); }
-        .savings-target { font-size: 1rem; color: var(--text-secondary); }
+        .sv-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 2px;
+          background: var(--sv-color);
+          opacity: 0.8;
+        }
+        .sv-card:hover { border-color: var(--border-light); }
+        .sv-card.sv-done { border-color: var(--success); }
+
+        .sv-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .sv-title-wrap { flex: 1; min-width: 0; }
+        .sv-name {
+          font-size: 0.9375rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          color: var(--text-primary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .sv-deadline {
+          font-size: 0.68rem;
+          font-weight: 600;
+          color: var(--text-muted);
+          margin-top: 3px;
+          display: block;
+        }
+        .sv-deadline.urgent { color: var(--warning); }
+        .sv-deadline.overdue { color: var(--danger); }
+
+        .sv-actions {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          flex-shrink: 0;
+        }
+
+        .sv-amounts {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .sv-current {
+          font-size: 1.5rem;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: var(--text-primary);
+          line-height: 1.1;
+        }
+        .sv-target-label {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          font-weight: 500;
+          margin-top: 2px;
+        }
+        .sv-pct-circle {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 52px;
+          height: 52px;
+          border-radius: 50%;
+          border: 2px solid var(--border-light);
+          background: var(--bg-input);
+        }
+        .sv-pct-num {
+          font-size: 1rem;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .sv-bar-wrap { display: flex; flex-direction: column; gap: 5px; }
+        .sv-remaining { font-size: 0.68rem; color: var(--text-muted); font-weight: 500; }
+
+        .sv-update-btn {
+          background: var(--bg-input);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          padding: 8px;
+          font-family: var(--font-sans);
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: var(--text-secondary);
+          cursor: pointer;
+          transition: all 0.15s;
+          width: 100%;
+          text-align: center;
+          letter-spacing: -0.01em;
+        }
+        .sv-update-btn:hover {
+          background: var(--accent-dim);
+          border-color: var(--accent);
+          color: var(--accent);
+        }
+
+        .update-tabs { display: flex; flex-direction: column; gap: 0; }
+        .update-section { padding: 4px 0; }
+        .update-divider {
+          text-align: center;
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          font-weight: 600;
+          padding: 10px 0;
+          position: relative;
+        }
+        .update-divider::before, .update-divider::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          width: 40%;
+          height: 1px;
+          background: var(--border);
+        }
+        .update-divider::before { left: 0; }
+        .update-divider::after { right: 0; }
+
+        @media (max-width: 640px) {
+          .sv-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
     </div>
   )
@@ -237,7 +419,7 @@ function SavingsFormModal({ editData, onSave, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">{editData?.id ? 'Edit Target' : 'Buat Target Tabungan'}</h2>
+          <h2 className="modal-title">{editData?.id ? 'Edit Target' : 'Target Tabungan Baru'}</h2>
           <button className="btn btn-ghost" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -246,10 +428,11 @@ function SavingsFormModal({ editData, onSave, onClose }) {
             <input
               className="form-input"
               type="text"
-              placeholder="Misal: Dana Darurat, Liburan Bali..."
+              placeholder="Contoh: Dana Darurat, Liburan, HP Baru..."
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               required
+              autoFocus
             />
           </div>
           <div className="form-group">
@@ -262,10 +445,11 @@ function SavingsFormModal({ editData, onSave, onClose }) {
               onChange={e => setForm(f => ({ ...f, target_amount: e.target.value }))}
               required
               min="1"
+              style={{ fontSize: '1.05rem', fontWeight: 600 }}
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Deadline (opsional)</label>
+            <label className="form-label">Deadline <span style={{ color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>(opsional)</span></label>
             <input
               className="form-input"
               type="date"

@@ -6,6 +6,7 @@ import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatC
 import TransactionForm from '../components/TransactionForm'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
+import { isMandatory } from '../constants/mandatoryCategories'
 
 function prevMonth(m) {
   const [y, mo] = m.split('-').map(Number)
@@ -237,7 +238,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 44 }} />)}
           </div>
-        ) : data.categories.filter(c => c.budget_limit > 0).length === 0 ? (
+        ) : data.categories.filter(c => c.budget_limit > 0 || isMandatory(c)).length === 0 ? (
           <div className="empty-hint">
             <span className="empty-hint-icon">◈</span>
             <span>Belum ada budget kategori. </span>
@@ -245,7 +246,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="budget-rows">
-            {data.categories.filter(c => c.budget_limit > 0).map(cat => {
+            {data.categories.filter(c => c.budget_limit > 0 || isMandatory(c)).map(cat => {
               const rawPct = cat.budget_limit > 0 ? (cat.spent / cat.budget_limit) * 100 : 0
               const pct = Math.min(rawPct, 100)
               const isFull = !cat.overBudget && rawPct >= 100

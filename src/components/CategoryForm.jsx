@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
 
 const ICONS = ['🍜','🚗','🛍️','🎮','💊','📱','✈️','📚','🏠','⚡','💰','🎓','🏋️','🎬','☕','🍔','🎁','💇','🐾','🌱']
-const COLORS = ['#f59e0b','#3b82f6','#ec4899','#8b5cf6','#10b981','#ef4444','#f97316','#06b6d4','#84cc16','#a855f7']
+const COLORS = ['#6366f1','#3b82f6','#06b6d4','#10b981','#84cc16','#f59e0b','#f97316','#ef4444','#ec4899','#a855f7']
 
 export default function CategoryForm({ onSuccess, onClose, editData }) {
   const { user } = useAuth()
@@ -15,14 +15,13 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
     budget_limit: '',
     color: '#6366f1',
     icon: '💰',
-    ...editData
+    ...editData,
   })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name) return
     setLoading(true)
-
     try {
       const payload = {
         user_id: user.id,
@@ -31,7 +30,6 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
         color: form.color,
         icon: form.icon,
       }
-
       if (editData?.id) {
         await supabase.from('categories').update(payload).eq('id', editData.id)
         toast('Kategori diperbarui', 'success')
@@ -39,7 +37,6 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
         await supabase.from('categories').insert(payload)
         toast('Kategori ditambahkan', 'success')
       }
-
       onSuccess?.()
       onClose?.()
     } catch (err) {
@@ -51,24 +48,39 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
 
   return (
     <form onSubmit={handleSubmit}>
+
+      {/* Preview */}
+      <div className="cf-preview">
+        <div className="cf-preview-icon" style={{ background: `${form.color}18`, color: form.color }}>
+          {form.icon}
+        </div>
+        <div className="cf-preview-info">
+          <span className="cf-preview-name">{form.name || 'Nama kategori'}</span>
+          {form.budget_limit && (
+            <span className="cf-preview-budget">Budget: Rp {Number(form.budget_limit).toLocaleString('id-ID')}/bulan</span>
+          )}
+        </div>
+      </div>
+
       <div className="form-group">
         <label className="form-label">Nama Kategori</label>
         <input
           className="form-input"
           type="text"
-          placeholder="Misal: Makan & Minum"
+          placeholder="Misal: Makan, Transportasi, Hiburan..."
           value={form.name}
           onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
           required
+          autoFocus
         />
       </div>
 
       <div className="form-group">
-        <label className="form-label">Batas Budget (Rp)</label>
+        <label className="form-label">Budget per Bulan (Rp) <span style={{ color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>(opsional)</span></label>
         <input
           className="form-input"
           type="number"
-          placeholder="0"
+          placeholder="0 = tanpa batas"
           value={form.budget_limit}
           onChange={e => setForm(f => ({ ...f, budget_limit: e.target.value }))}
           min="0"
@@ -77,12 +89,13 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
 
       <div className="form-group">
         <label className="form-label">Icon</label>
-        <div className="icon-grid">
+        <div className="cf-icon-grid">
           {ICONS.map(icon => (
             <button
               key={icon}
               type="button"
-              className={`icon-btn ${form.icon === icon ? 'selected' : ''}`}
+              className={`cf-icon-btn ${form.icon === icon ? 'active' : ''}`}
+              style={form.icon === icon ? { borderColor: form.color, background: `${form.color}15` } : {}}
               onClick={() => setForm(f => ({ ...f, icon }))}
             >
               {icon}
@@ -93,64 +106,94 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
 
       <div className="form-group">
         <label className="form-label">Warna</label>
-        <div className="color-grid">
+        <div className="cf-color-grid">
           {COLORS.map(color => (
             <button
               key={color}
               type="button"
-              className={`color-btn ${form.color === color ? 'selected' : ''}`}
+              className={`cf-color-btn ${form.color === color ? 'active' : ''}`}
               style={{ background: color }}
               onClick={() => setForm(f => ({ ...f, color }))}
+              title={color}
             />
           ))}
         </div>
       </div>
 
-      <div className="flex gap-8 mt-16">
+      <div className="flex gap-8" style={{ marginTop: 20 }}>
         <button type="button" className="btn btn-secondary" onClick={onClose}>Batal</button>
         <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
-          {loading ? 'Menyimpan...' : editData?.id ? 'Perbarui' : 'Simpan'}
+          {loading ? 'Menyimpan...' : editData?.id ? 'Perbarui' : 'Buat Kategori'}
         </button>
       </div>
 
       <style>{`
-        .icon-grid {
+        .cf-preview {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: var(--bg-input);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          padding: 12px 16px;
+          margin-bottom: 20px;
+        }
+        .cf-preview-icon {
+          width: 40px; height: 40px;
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.3rem; flex-shrink: 0;
+          transition: background 0.2s, color 0.2s;
+        }
+        .cf-preview-info { display: flex; flex-direction: column; gap: 2px; }
+        .cf-preview-name {
+          font-size: 0.875rem; font-weight: 700;
+          color: var(--text-primary); letter-spacing: -0.01em;
+        }
+        .cf-preview-budget { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
+
+        .cf-icon-grid {
           display: grid;
           grid-template-columns: repeat(10, 1fr);
           gap: 4px;
         }
-        .icon-btn {
+        .cf-icon-btn {
           background: var(--bg-input);
-          border: 2px solid transparent;
-          border-radius: 6px;
-          padding: 6px;
+          border: 1.5px solid transparent;
+          border-radius: 7px;
+          padding: 5px;
           cursor: pointer;
-          font-size: 1rem;
-          transition: all 0.15s;
+          font-size: 1.1rem;
+          transition: all 0.12s;
           aspect-ratio: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
         }
-        .icon-btn:hover { border-color: var(--border-light); }
-        .icon-btn.selected { border-color: var(--accent); background: var(--accent-dim); }
+        .cf-icon-btn:hover { border-color: var(--border-light); transform: scale(1.1); }
+        .cf-icon-btn:active { transform: scale(0.95); }
+        .cf-icon-btn.active { border-width: 1.5px; }
 
-        .color-grid {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
+        .cf-color-grid {
+          display: flex; gap: 8px; flex-wrap: wrap;
         }
-        .color-btn {
-          width: 28px;
-          height: 28px;
+        .cf-color-btn {
+          width: 32px; height: 32px;
           border-radius: 50%;
-          border: 3px solid transparent;
+          border: 2.5px solid transparent;
           cursor: pointer;
-          transition: all 0.15s;
-          outline-offset: 2px;
+          transition: all 0.12s;
+          outline: none;
+          position: relative;
         }
-        .color-btn:hover { transform: scale(1.1); }
-        .color-btn.selected { outline: 2px solid var(--text-primary); }
+        .cf-color-btn:hover { transform: scale(1.15); }
+        .cf-color-btn:active { transform: scale(0.95); }
+        .cf-color-btn.active {
+          box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px currentColor;
+          transform: scale(1.1);
+        }
+
+        @media (max-width: 480px) {
+          .cf-icon-grid { grid-template-columns: repeat(8, 1fr); }
+        }
       `}</style>
     </form>
   )

@@ -980,30 +980,39 @@ export default function Dashboard() {
         @media (max-width: 768px) {
           .dash-header { flex-wrap: wrap; row-gap: 8px; }
           .month-label-text { font-size: 0.875rem; min-width: 110px; }
-          .hero-card { padding: 16px; }
-          .hero-top { flex-direction: column; gap: 8px; margin-bottom: 12px; }
-          .hero-right { display: none; }
-          .hero-balance { font-size: 1.75rem; }
+          .hero-card { padding: 14px 16px; }
+          .hero-top { flex-direction: column; gap: 0; margin-bottom: 10px; }
+          /* Chips tampil sebagai row horizontal di bawah balance */
+          .hero-right {
+            display: flex; flex-direction: row; gap: 8px;
+            align-items: stretch; margin-top: 10px;
+          }
+          .hero-chip {
+            flex: 1; min-width: 0; align-items: flex-start;
+            padding: 7px 10px;
+          }
+          .hero-chip-val { font-size: 0.8rem; }
+          .hero-balance { font-size: 1.6rem; }
           .stats-strip { border-radius: var(--radius-sm); }
           .stat-col { padding: 12px 14px; }
           .stat-col-val { font-size: 0.875rem; }
           .brow {
             grid-template-columns: 1fr auto;
-            grid-template-rows: auto auto;
-            grid-template-areas: "left right" "bar bar";
+            grid-template-rows: auto auto auto;
+            grid-template-areas: "left right" "bar bar" "meta meta";
           }
           .brow-left { grid-area: left; }
-          .brow-bar-wrap { grid-area: bar; margin-top: 4px; }
+          .brow-bar-wrap { grid-area: bar; margin-top: 5px; }
           .brow-right { grid-area: right; align-self: start; }
-          .brow-pct { display: none; }
-          .brow-limit { display: none; }
+          .brow-pct { display: block; font-size: 0.68rem; grid-area: meta; }
+          .brow-limit { display: block; font-size: 0.65rem; }
           .savings-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 400px) {
           .stats-strip { grid-template-columns: 1fr; }
           .stat-col { border-right: none; border-bottom: 1px solid var(--border); flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 14px; }
           .stat-col:last-child { border-bottom: none; }
-          .hero-balance { font-size: 1.5rem; }
+          .hero-balance { font-size: 1.4rem; }
         }
       `}</style>
     </div>

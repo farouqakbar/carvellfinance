@@ -686,12 +686,16 @@ export default function Plans() {
         .plan-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
         @media (max-width: 640px) {
-          .plans-stat-bar { gap: 8px; padding: 12px 14px; }
-          .plans-stat { padding: 0 10px; }
+          .plans-stat-bar { gap: 6px; padding: 12px 14px; }
+          .plans-stat { padding: 0 8px; }
+          .plans-stat-val { font-size: 0.875rem; }
           .plans-form-grid { grid-template-columns: 1fr; }
           .plans-form-grid .form-group[style*="span 2"] { grid-column: span 1; }
-          .plan-card { padding: 12px 12px; gap: 10px; }
-          .plan-card-amount { display: none; }
+          .plan-card { padding: 12px; gap: 8px; flex-wrap: wrap; }
+          .plan-card-amount { display: block; font-size: 0.8rem; }
+          .plan-card-body { flex: 1; min-width: 140px; }
+          .plan-card-right { width: 100%; justify-content: space-between; }
+          .plan-card-actions { gap: 6px; }
         }
 
         /* ── Done modal ──────────────────────── */

@@ -666,16 +666,25 @@ export default function Report() {
           .rpt-summary { grid-template-columns: 1fr 1fr; }
           .rpt-sum-val { font-size: 1rem; }
           .rpt-chart-wrap { height: 200px; }
-          .rpt-cat-left { width: 120px; }
+          .rpt-cat-left { width: 110px; }
           .rpt-cat-amount { width: 80px; font-size: 0.75rem; }
-          .rpt-month-row { padding: 12px 14px; flex-wrap: wrap; gap: 10px; }
-          .rpt-month-left { min-width: 0; flex: 1; }
-          .rpt-month-stats { width: 100%; }
+          .rpt-cat-pct { width: 30px; font-size: 0.62rem; }
+          .rpt-month-row { padding: 12px 14px; flex-wrap: wrap; gap: 8px; }
+          .rpt-month-left { min-width: 0; flex: 1 1 100%; }
+          .rpt-month-stats { width: 100%; gap: 0; }
+          .rpt-stat { flex: 1; }
           .rpt-month-right { display: none; }
+          .rpt-legend { gap: 6px 12px; }
+          .rpt-legend-name { font-size: 0.68rem; }
         }
         @media (max-width: 480px) {
-          .rpt-summary { grid-template-columns: 1fr; }
-          .rpt-cat-mid { display: none; }
+          .rpt-summary { grid-template-columns: 1fr 1fr; }
+          .rpt-sum-val { font-size: 0.9rem; }
+          .rpt-cat-row { flex-wrap: wrap; gap: 6px; }
+          .rpt-cat-left { width: 100%; }
+          .rpt-cat-mid { display: flex; width: 100%; order: 3; }
+          .rpt-cat-amount { width: auto; margin-left: auto; }
+          .rpt-cat-rank { display: none; }
         }
       `}</style>
     </div>

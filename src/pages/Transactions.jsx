@@ -430,7 +430,9 @@ export default function Transactions() {
         }
 
         @media (max-width: 400px) {
-          .tx-summary-strip { display: none; }
+          .tx-summary-strip { padding: 8px 10px; }
+          .tss-val { font-size: 0.75rem; }
+          .tss-label { font-size: 0.6rem; }
           .tri-amount { font-size: 0.8rem; }
         }
       `}</style>

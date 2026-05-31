@@ -18,11 +18,15 @@ function getMonthOptions() {
 
 const MONTH_OPTS = getMonthOptions()
 
+const TODAY = new Date().toISOString().split('T')[0]
+
 export default function Plans() {
   const { user } = useAuth()
   const toast = useToast()
 
   const [plans, setPlans] = useState([])
+  const [savings, setSavings] = useState([])
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('aktif')
   const [showForm, setShowForm] = useState(false)
@@ -30,18 +34,40 @@ export default function Plans() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
-  useEffect(() => { fetchPlans() }, [])
+  // Modal ceklist selesai
+  const [doneModal, setDoneModal] = useState(null)   // plan object
+  const [doneSource, setDoneSource] = useState('gaji') // 'tabungan' | 'gaji'
+  const [doneSavingsId, setDoneSavingsId] = useState('')
+  const [doneCatId, setDoneCatId] = useState('')
+  const [doneDate, setDoneDate] = useState(TODAY)
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => { fetchAll() }, [])
+
+  const fetchAll = async () => {
+    setLoading(true)
+    const [plansRes, savingsRes, catsRes] = await Promise.all([
+      supabase.from('plans').select('*').eq('user_id', user.id)
+        .order('target_month', { ascending: true })
+        .order('created_at', { ascending: true }),
+      supabase.from('savings').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+    ])
+    setPlans(plansRes.data || [])
+    setSavings(savingsRes.data || [])
+    const cats = catsRes.data || []
+    setCategories(cats)
+    if (cats.length > 0) setDoneCatId(cats[0].id)
+    if ((savingsRes.data || []).length > 0) setDoneSavingsId(savingsRes.data[0].id)
+    setLoading(false)
+  }
 
   const fetchPlans = async () => {
-    setLoading(true)
     const { data } = await supabase
-      .from('plans')
-      .select('*')
-      .eq('user_id', user.id)
+      .from('plans').select('*').eq('user_id', user.id)
       .order('target_month', { ascending: true })
       .order('created_at', { ascending: true })
     setPlans(data || [])
-    setLoading(false)
   }
 
   const addPlan = async () => {
@@ -66,15 +92,55 @@ export default function Plans() {
     setSaving(false)
   }
 
-  const toggleDone = async (plan) => {
-    const { error } = await supabase
-      .from('plans')
-      .update({ done: !plan.done })
-      .eq('id', plan.id)
-    if (!error) {
-      setPlans(ps => ps.map(p => p.id === plan.id ? { ...p, done: !p.done } : p))
-      toast(plan.done ? 'Ditandai aktif' : 'Ditandai selesai', 'success')
+  const toggleDone = (plan) => {
+    if (plan.done) {
+      // Undo langsung tanpa modal
+      supabase.from('plans').update({ done: false }).eq('id', plan.id).then(({ error }) => {
+        if (!error) {
+          setPlans(ps => ps.map(p => p.id === plan.id ? { ...p, done: false } : p))
+          toast('Ditandai aktif kembali', 'success')
+        }
+      })
+      return
     }
+    // Buka modal pilih sumber uang
+    setDoneModal(plan)
+    setDoneSource('gaji')
+    setDoneDate(TODAY)
+  }
+
+  const confirmDone = async () => {
+    if (!doneModal) return
+    setConfirming(true)
+    const plan = doneModal
+
+    if (doneSource === 'tabungan') {
+      const sv = savings.find(s => s.id === doneSavingsId)
+      if (!sv) { toast('Pilih tabungan dulu', 'error'); setConfirming(false); return }
+      const newAmount = Math.max(0, Number(sv.current_amount) - Number(plan.amount))
+      const { error } = await supabase.from('savings').update({ current_amount: newAmount }).eq('id', doneSavingsId)
+      if (error) { toast('Gagal update tabungan', 'error'); setConfirming(false); return }
+      // Refresh savings list di state
+      setSavings(ss => ss.map(s => s.id === doneSavingsId ? { ...s, current_amount: newAmount } : s))
+    } else {
+      // Potongan gaji → insert expense transaction
+      const { error } = await supabase.from('transactions').insert({
+        user_id: user.id,
+        category_id: doneCatId || null,
+        amount: Number(plan.amount),
+        date: doneDate,
+        description: `Beli: ${plan.name}`,
+        type: 'expense',
+      })
+      if (error) { toast('Gagal catat transaksi', 'error'); setConfirming(false); return }
+    }
+
+    // Tandai plan selesai
+    await supabase.from('plans').update({ done: true }).eq('id', plan.id)
+    setPlans(ps => ps.map(p => p.id === plan.id ? { ...p, done: true } : p))
+    toast('Rencana selesai dicatat ✓', 'success')
+    setDoneModal(null)
+    setConfirming(false)
   }
 
   const deletePlan = async (id) => {
@@ -287,6 +353,137 @@ export default function Plans() {
         </div>
       )}
 
+      {/* ── Modal: Sumber Uang ───────────────── */}
+      {doneModal && (
+        <div className="modal-overlay" onClick={() => !confirming && setDoneModal(null)}>
+          <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Tandai Selesai</h2>
+              <button className="btn btn-ghost" onClick={() => setDoneModal(null)} disabled={confirming}>✕</button>
+            </div>
+
+            {/* Info plan */}
+            <div className="done-plan-info">
+              <div className="done-plan-icon">🛒</div>
+              <div>
+                <div className="done-plan-name">{doneModal.name}</div>
+                <div className="done-plan-amount tabular">{formatCurrency(doneModal.amount)}</div>
+              </div>
+            </div>
+
+            <p className="done-modal-q">Dari mana uangnya?</p>
+
+            {/* Toggle source */}
+            <div className="done-source-toggle">
+              <button
+                className={`done-src-btn ${doneSource === 'gaji' ? 'active' : ''}`}
+                onClick={() => setDoneSource('gaji')}
+              >
+                <span className="done-src-icon">💳</span>
+                <span className="done-src-label">Potongan Gaji</span>
+                <span className="done-src-sub">Dicatat sebagai pengeluaran</span>
+              </button>
+              <button
+                className={`done-src-btn ${doneSource === 'tabungan' ? 'active' : ''}`}
+                onClick={() => setDoneSource('tabungan')}
+              >
+                <span className="done-src-icon">🏦</span>
+                <span className="done-src-label">Dari Tabungan</span>
+                <span className="done-src-sub">Kurangi saldo tabungan</span>
+              </button>
+            </div>
+
+            {/* Detail form berdasarkan source */}
+            {doneSource === 'gaji' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Kategori pengeluaran</label>
+                  <select
+                    className="form-select"
+                    value={doneCatId}
+                    onChange={e => setDoneCatId(e.target.value)}
+                  >
+                    <option value="">— Tanpa kategori —</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Tanggal transaksi</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={doneDate}
+                    onChange={e => setDoneDate(e.target.value)}
+                  />
+                </div>
+                <div className="done-preview-box">
+                  <span>Pengeluaran dicatat sebesar</span>
+                  <span className="tabular" style={{ color: 'var(--danger)', fontWeight: 700 }}>
+                    {formatCurrency(doneModal.amount)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {doneSource === 'tabungan' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                {savings.length === 0 ? (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Belum ada tabungan. Buat dulu di menu lain.
+                  </p>
+                ) : (
+                  <>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Pilih tabungan</label>
+                      <select
+                        className="form-select"
+                        value={doneSavingsId}
+                        onChange={e => setDoneSavingsId(e.target.value)}
+                      >
+                        {savings.map(sv => (
+                          <option key={sv.id} value={sv.id}>
+                            {sv.name} — {formatCurrency(sv.current_amount)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {doneSavingsId && (() => {
+                      const sv = savings.find(s => s.id === doneSavingsId)
+                      const after = Math.max(0, Number(sv?.current_amount || 0) - Number(doneModal.amount))
+                      const cukup = Number(sv?.current_amount || 0) >= Number(doneModal.amount)
+                      return (
+                        <div className={`done-preview-box ${!cukup ? 'done-preview-warn' : ''}`}>
+                          <span>Saldo setelah dikurangi</span>
+                          <span className="tabular" style={{ color: cukup ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
+                            {formatCurrency(after)}
+                          </span>
+                        </div>
+                      )
+                    })()}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-8 mt-16">
+              <button className="btn btn-secondary" onClick={() => setDoneModal(null)} disabled={confirming}>
+                Batal
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={confirmDone}
+                disabled={confirming || (doneSource === 'tabungan' && savings.length === 0)}
+              >
+                {confirming ? 'Menyimpan...' : '✓ Tandai Selesai'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .plans-stat-bar {
           display: flex;
@@ -492,6 +689,75 @@ export default function Plans() {
           .plan-card { padding: 12px 12px; gap: 10px; }
           .plan-card-amount { display: none; }
         }
+
+        /* ── Done modal ──────────────────────── */
+        .done-plan-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: var(--bg-input);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          padding: 12px 14px;
+          margin-bottom: 16px;
+        }
+        .done-plan-icon {
+          width: 36px; height: 36px;
+          border-radius: var(--radius-sm);
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1rem; flex-shrink: 0;
+        }
+        .done-plan-name {
+          font-size: 0.875rem; font-weight: 700; color: var(--text-primary);
+          margin-bottom: 2px;
+        }
+        .done-plan-amount { font-size: 0.8rem; color: var(--text-secondary); }
+
+        .done-modal-q {
+          font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 10px;
+        }
+
+        .done-source-toggle {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+        .done-src-btn {
+          display: flex; flex-direction: column; align-items: flex-start;
+          gap: 3px; padding: 12px 14px;
+          background: var(--bg-input);
+          border: 1.5px solid var(--border);
+          border-radius: var(--radius-sm);
+          cursor: pointer; text-align: left;
+          transition: all 0.15s;
+          font-family: var(--font-sans);
+        }
+        .done-src-btn:hover { border-color: var(--border-light); background: var(--bg-card-hover); }
+        .done-src-btn.active {
+          border-color: var(--accent);
+          background: var(--accent-dim);
+        }
+        .done-src-icon { font-size: 1.1rem; margin-bottom: 2px; }
+        .done-src-label {
+          font-size: 0.8rem; font-weight: 700;
+          color: var(--text-primary); line-height: 1.2;
+        }
+        .done-src-sub {
+          font-size: 0.65rem; color: var(--text-muted);
+          font-weight: 500; line-height: 1.3;
+        }
+        .done-src-btn.active .done-src-label { color: var(--accent); }
+
+        .done-preview-box {
+          display: flex; justify-content: space-between; align-items: center;
+          background: var(--bg-input); border: 1px solid var(--border);
+          border-radius: var(--radius-sm); padding: 10px 14px;
+          font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;
+        }
+        .done-preview-warn { border-color: rgba(248,113,113,0.4); background: var(--danger-dim); }
       `}</style>
     </div>
   )

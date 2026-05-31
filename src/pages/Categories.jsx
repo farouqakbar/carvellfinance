@@ -119,12 +119,6 @@ export default function Categories() {
             )}
           </div>
 
-          <div className="mand-spent-row">
-            <span className="mand-label">Terpakai bulan ini</span>
-            <span className="mand-spent tabular" style={{ color: spent > 0 ? (over ? 'var(--danger)' : 'var(--text-primary)') : 'var(--text-muted)' }}>
-              {spent > 0 ? formatCurrency(spent) : '—'}
-            </span>
-          </div>
         </div>
       )
     }

@@ -263,74 +263,94 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Budget per Kategori ──────────────── */}
+      {/* ── Pengeluaran Wajib ────────────────── */}
       <div className="card">
         <div className="sect-head">
           <div>
-            <h3 className="sect-title">Budget Kategori</h3>
-            {totalBudget > 0 && (
-              <p className="sect-sub">{formatCurrency(data.totalExpense)} dari {formatCurrency(totalBudget)}</p>
-            )}
+            <h3 className="sect-title">Pengeluaran Wajib</h3>
+            <p className="sect-sub">Dipotong langsung dari gaji</p>
           </div>
           <Link to="/categories" className="pill-link">Kelola</Link>
         </div>
-
         {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 44 }} />)}
-          </div>
-        ) : data.categories.filter(c => c.budget_limit > 0 || isMandatory(c)).length === 0 ? (
-          <div className="empty-hint">
-            <span className="empty-hint-icon">◈</span>
-            <span>Belum ada budget kategori. </span>
-            <Link to="/categories" className="empty-hint-link">Buat sekarang →</Link>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 36 }} />)}
           </div>
         ) : (
-          <div className="budget-rows">
-            {data.categories.filter(c => c.budget_limit > 0 || isMandatory(c)).map(cat => {
-              const rawPct = cat.budget_limit > 0 ? (cat.spent / cat.budget_limit) * 100 : 0
-              const pct = Math.min(rawPct, 100)
-              const isFull = !cat.overBudget && rawPct >= 100
-              const isNear = !cat.overBudget && rawPct >= 80 && rawPct < 100
-              const barColor = cat.overBudget ? 'var(--danger)' : isFull ? 'var(--success)' : isNear ? 'var(--warning)' : cat.color
+          <div className="wajib-rows">
+            {data.categories.filter(c => isMandatory(c)).map(cat => {
+              const budget = Number(cat.budget_limit) > 0
+                ? Number(cat.budget_limit)
+                : (data.salary > 0 ? Math.round(data.salary * 0.15) : 0)
+              const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
               return (
-                <div key={cat.id} className="brow">
-                  <div className="brow-left">
+                <div key={cat.id} className="wajib-row">
+                  <div className="wajib-left">
                     <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
                     <span className="brow-name">{cat.name}</span>
-                    {cat.overBudget && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Over</span>}
-                    {isFull && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Penuh</span>}
-                    {isNear && <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Hampir</span>}
                   </div>
-                  <div className="brow-bar-wrap">
-                    <div className="brow-bar">
-                      <div className="brow-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
-                    </div>
+                  <div className="wajib-right">
+                    {salPct && <span className="wajib-pct">{salPct}%</span>}
+                    <span className="wajib-amount tabular">{formatCurrency(budget)}</span>
                   </div>
-                  <div className="brow-right">
-                    <span className="brow-spent tabular" style={{ color: cat.overBudget ? 'var(--danger)' : 'var(--text-primary)' }}>
-                      {formatCurrency(cat.spent)}
-                    </span>
-                    <span className="brow-limit tabular">/{formatCurrency(cat.budget_limit)}</span>
-                  </div>
-                  <span className="brow-pct" style={{ color: barColor }}>{pct.toFixed(0)}%</span>
                 </div>
               )
             })}
-            {data.categories.filter(c => c.budget_limit === 0 && c.spent > 0).map(cat => (
-              <div key={cat.id} className="brow no-limit">
-                <div className="brow-left">
-                  <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
-                  <span className="brow-name">{cat.name}</span>
-                  <span className="brow-no-limit-tag">no limit</span>
-                </div>
-                <div className="brow-bar-wrap" />
-                <span className="brow-spent tabular">{formatCurrency(cat.spent)}</span>
-              </div>
-            ))}
           </div>
         )}
       </div>
+
+      {/* ── Budget Kategori Lainnya ──────────── */}
+      {(loading || data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).length > 0) && (
+        <div className="card">
+          <div className="sect-head">
+            <div>
+              <h3 className="sect-title">Budget Kategori</h3>
+              {data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).length > 0 && (
+                <p className="sect-sub">
+                  {formatCurrency(data.categories.filter(c => !isMandatory(c)).reduce((s, c) => s + (c.spent || 0), 0))} dari {formatCurrency(data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).reduce((s, c) => s + Number(c.budget_limit), 0))}
+                </p>
+              )}
+            </div>
+          </div>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 44 }} />)}
+            </div>
+          ) : (
+            <div className="budget-rows">
+              {data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).map(cat => {
+                const rawPct = (cat.spent / cat.budget_limit) * 100
+                const pct = Math.min(rawPct, 100)
+                const isFull = !cat.overBudget && rawPct >= 100
+                const isNear = !cat.overBudget && rawPct >= 80 && rawPct < 100
+                const barColor = cat.overBudget ? 'var(--danger)' : isFull ? 'var(--success)' : isNear ? 'var(--warning)' : cat.color
+                return (
+                  <div key={cat.id} className="brow">
+                    <div className="brow-left">
+                      <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                      <span className="brow-name">{cat.name}</span>
+                      {cat.overBudget && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Over</span>}
+                      {isFull && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Penuh</span>}
+                      {isNear && <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Hampir</span>}
+                    </div>
+                    <div className="brow-bar-wrap">
+                      <div className="brow-bar">
+                        <div className="brow-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
+                      </div>
+                    </div>
+                    <div className="brow-right">
+                      <span className="brow-spent tabular" style={{ color: cat.overBudget ? 'var(--danger)' : 'var(--text-primary)' }}>{formatCurrency(cat.spent)}</span>
+                      <span className="brow-limit tabular">/{formatCurrency(cat.budget_limit)}</span>
+                    </div>
+                    <span className="brow-pct" style={{ color: barColor }}>{pct.toFixed(0)}%</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Rencana bulan depan preview ─────── */}
       <div className="card" style={{ borderStyle: 'dashed' }}>
@@ -580,6 +600,21 @@ export default function Dashboard() {
           font-size: 0.8rem; padding: 0; transition: opacity 0.15s;
         }
         .empty-hint-link:hover { opacity: 0.75; }
+
+        /* ── Wajib rows (no bar) ─────────────── */
+        .wajib-rows { display: flex; flex-direction: column; }
+        .wajib-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 9px 0; border-bottom: 1px solid var(--border); gap: 12px;
+        }
+        .wajib-row:last-child { border-bottom: none; }
+        .wajib-left { display: flex; align-items: center; gap: 8px; }
+        .wajib-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .wajib-pct {
+          font-size: 0.68rem; font-weight: 700; color: var(--accent);
+          background: var(--accent-dim); padding: 2px 8px; border-radius: 99px;
+        }
+        .wajib-amount { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; }
 
         /* ── Budget rows ──────────────────────── */
         .budget-rows { display: flex; flex-direction: column; }

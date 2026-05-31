@@ -1,11 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "path";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/carvellfinance/",
+  base: "/",
   build: {
-    outDir: "docs", // Build output ke folder /docs
+    outDir: "docs",
   },
 });

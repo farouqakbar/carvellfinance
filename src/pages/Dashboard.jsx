@@ -730,46 +730,47 @@ export default function Dashboard() {
           align-items: flex-start; margin-bottom: 14px;
         }
         .hero-left {}
+        /* hero card selalu dark bg — semua text hardcoded light agar tidak terpengaruh light mode */
         .hero-date {
-          font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
+          font-size: 0.72rem; font-weight: 600; color: rgba(255,255,255,0.38);
           display: block; margin-bottom: 10px; letter-spacing: 0.01em;
           text-transform: capitalize;
         }
         .hero-eyebrow {
           font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.09em;
-          color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 5px;
+          color: rgba(255,255,255,0.38); font-weight: 600; display: block; margin-bottom: 5px;
         }
         .hero-balance {
           font-size: clamp(1.75rem, 5vw, 2.5rem);
           font-weight: 800; letter-spacing: -0.04em;
-          color: var(--text-primary); font-variant-numeric: tabular-nums; line-height: 1;
+          color: #f2f2fa; font-variant-numeric: tabular-nums; line-height: 1;
         }
-        .hero-balance.neg { color: var(--danger); }
+        .hero-balance.neg { color: #f87171; }
         .hero-neg-sign { font-size: 0.7em; vertical-align: 0.05em; margin-right: 1px; }
 
         .hero-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
         .hero-chip {
           display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
-          background: var(--bg-input); border: 1px solid var(--border);
+          background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
           border-radius: var(--radius-sm); padding: 8px 12px; min-width: 130px;
         }
         .hero-chip-label {
           font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.07em;
-          color: var(--text-muted); font-weight: 600;
+          color: rgba(255,255,255,0.38); font-weight: 600;
         }
         .hero-chip-val {
           font-size: 0.9rem; font-weight: 700;
-          color: var(--text-secondary); letter-spacing: -0.02em;
+          color: rgba(255,255,255,0.85); letter-spacing: -0.02em;
         }
 
         .hero-bar-section {}
         .hero-bar-track {
-          height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 7px;
+          height: 5px; background: rgba(255,255,255,0.1); border-radius: 99px; overflow: hidden; margin-bottom: 7px;
         }
         .hero-bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
         .hero-bar-labels {
           display: flex; justify-content: space-between;
-          font-size: 0.68rem; color: var(--text-muted); font-weight: 500;
+          font-size: 0.68rem; color: rgba(255,255,255,0.35); font-weight: 500;
         }
 
         .hero-no-salary {
@@ -777,17 +778,17 @@ export default function Dashboard() {
         }
         .salary-cta {
           display: inline-flex; align-items: center; gap: 5px;
-          background: var(--accent-dim);
-          border: 1px solid rgba(99,102,241,0.35);
+          background: rgba(99,102,241,0.25);
+          border: 1px solid rgba(99,102,241,0.45);
           border-radius: var(--radius-sm);
           padding: 7px 13px;
-          color: var(--accent); font-size: 0.78rem; font-weight: 700;
+          color: #a5b4fc; font-size: 0.78rem; font-weight: 700;
           cursor: pointer; font-family: var(--font-sans);
           transition: all 0.15s; letter-spacing: -0.01em; white-space: nowrap;
         }
-        .salary-cta:hover { background: rgba(99,102,241,0.2); transform: translateY(-1px); }
+        .salary-cta:hover { background: rgba(99,102,241,0.35); transform: translateY(-1px); }
         .salary-cta-hint {
-          font-size: 0.72rem; color: var(--text-muted); font-weight: 500;
+          font-size: 0.72rem; color: rgba(255,255,255,0.35); font-weight: 500;
         }
 
         /* ── Stats strip ──────────────────────── */

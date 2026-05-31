@@ -108,8 +108,8 @@ export default function Categories() {
             {!isMand && (
               <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(cat); setShowForm(true) }}>✎</button>
             )}
-            <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)}>
-              {budget > 0 ? '₿' : '+ Budget'}
+            <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+              {budget > 0 ? 'Set' : '+ Budget'}
             </button>
             {!isMand && (
               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(cat.id)}>✕</button>
@@ -155,7 +155,7 @@ export default function Categories() {
 
   return (
     <div className="animate-in">
-      <div className="flex-between mb-20">
+      <div className="flex-between mb-24">
         <div>
           <h1 className="page-title">Kategori</h1>
           <p className="page-subtitle" style={{ margin: 0 }}>
@@ -170,12 +170,14 @@ export default function Categories() {
       {/* Pengeluaran Wajib */}
       <div className="cat-section mb-24">
         <div className="cat-section-head">
-          <span className="cat-section-title">Pengeluaran Wajib</span>
-          <span className="cat-section-sub">
-            {salary > 0
-              ? `Total: ${formatCurrency(mandatory.reduce((s, c) => s + Number(c.budget_limit || 0), 0))} dari gaji ${formatCurrency(salary)}`
-              : 'Atur gaji di Dashboard untuk lihat persentase'}
-          </span>
+          <div>
+            <span className="cat-section-title">Pengeluaran Wajib</span>
+            <span className="cat-section-sub">
+              {salary > 0
+                ? `${formatCurrency(mandatory.reduce((s, c) => s + Number(c.budget_limit || 0), 0))} dari gaji ${formatCurrency(salary)} — langsung dipotong`
+                : 'Atur gaji di Dashboard untuk lihat persentase'}
+            </span>
+          </div>
         </div>
         {loading ? (
           <div className="cat-grid">

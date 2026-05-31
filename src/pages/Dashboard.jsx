@@ -91,14 +91,28 @@ export default function Dashboard() {
   }
 
   const totalBudget = data.categories.filter(c => c.budget_limit > 0).reduce((s, c) => s + c.budget_limit, 0)
-  const balance = data.salary + data.totalIncome - data.totalExpense
-  const budgetUsed = data.salary > 0 ? (data.totalExpense / data.salary) * 100 : 0
   const isCurrentMonth = month === getCurrentMonth()
   const overBudgetCats = data.categories.filter(c => c.overBudget)
+
+  // Mandatory categories langsung potong gaji tanpa nunggu transaksi
+  const mandatoryBudgetTotal = data.categories
+    .filter(c => isMandatory(c) && c.budget_limit > 0)
+    .reduce((s, c) => s + Number(c.budget_limit), 0)
+  const mandatoryTransactionSpent = data.categories
+    .filter(c => isMandatory(c))
+    .reduce((s, c) => s + (c.spent || 0), 0)
+  // Deduction tambahan di luar transaksi yang sudah dicatat
+  const mandatoryAutoDeduct = Math.max(0, mandatoryBudgetTotal - mandatoryTransactionSpent)
+
+  const effectiveExpense = data.totalExpense + mandatoryAutoDeduct
+  const balance = data.salary + data.totalIncome - effectiveExpense
+  const budgetUsed = data.salary > 0 ? (effectiveExpense / data.salary) * 100 : 0
   const heroBarColor = budgetUsed > 90 ? 'var(--danger)' : budgetUsed > 70 ? 'var(--warning)' : 'var(--accent)'
 
-  // target_amount = alokasi per bulan (bukan total target)
-  const monthlyTabungan = data.savings.reduce((sum, sv) => sum + Number(sv.target_amount), 0)
+  // Alokasi tabungan dari kategori mandatory "Tabungan Bulanan"
+  const monthlyTabungan = data.categories
+    .filter(c => c.name === 'Tabungan Bulanan' && c.budget_limit > 0)
+    .reduce((s, c) => s + Number(c.budget_limit), 0)
 
   const batasBelanja = data.salary > 0 ? data.salary - monthlyTabungan : 0
   const sisaBelanja = batasBelanja - data.totalExpense
@@ -198,12 +212,10 @@ export default function Dashboard() {
         <div className="stat-col">
           <span className="stat-col-label">Pengeluaran</span>
           <span className="stat-col-val tabular" style={{ color: overBatasBelanja ? 'var(--danger)' : 'var(--text-primary)' }}>
-            -{formatCurrency(data.totalExpense)}
+            -{formatCurrency(effectiveExpense)}
           </span>
-          {data.salary > 0 && monthlyTabungan > 0 && (
-            <span className="stat-col-sub" style={{ color: overBatasBelanja ? 'var(--danger)' : 'var(--text-muted)' }}>
-              {overBatasBelanja ? '⚠ ' : ''}Batas {formatCurrency(batasBelanja)}
-            </span>
+          {mandatoryAutoDeduct > 0 && (
+            <span className="stat-col-sub">+{formatCurrency(mandatoryAutoDeduct)} wajib</span>
           )}
         </div>
         <div className="stat-col">

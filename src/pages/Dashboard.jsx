@@ -69,6 +69,7 @@ export default function Dashboard() {
       const cats = (catRes.data || []).map(cat => ({
         ...cat,
         budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : 0,
+        budget_set: catBudgetMap[cat.id] !== undefined,
       }))
       const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
       const totalIncome = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
@@ -193,12 +194,12 @@ export default function Dashboard() {
   const isCurrentMonth = month === getCurrentMonth()
   const overBudgetCats = data.categories.filter(c => c.overBudget)
 
-  // Mandatory: pakai budget yg diset, atau default 15% gaji kalau belum diset
+  // Mandatory: pakai budget yg diset (termasuk 0), fallback 15% hanya kalau belum ada record
   const DEFAULT_MANDATORY_PCT = 0.15
   const mandatoryBudgetTotal = data.categories
     .filter(c => isMandatory(c))
     .reduce((s, c) => {
-      const budget = Number(c.budget_limit) > 0
+      const budget = c.budget_set
         ? Number(c.budget_limit)
         : (data.salary > 0 ? Math.round(data.salary * DEFAULT_MANDATORY_PCT) : 0)
       return s + budget
@@ -348,7 +349,7 @@ export default function Dashboard() {
         ) : (
           <div className="wajib-rows">
             {data.categories.filter(c => isMandatory(c)).map(cat => {
-              const budget = Number(cat.budget_limit) > 0
+              const budget = cat.budget_set
                 ? Number(cat.budget_limit)
                 : (data.salary > 0 ? Math.round(data.salary * 0.15) : 0)
               const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null

@@ -94,15 +94,8 @@ export default function Dashboard() {
   const overBudgetCats = data.categories.filter(c => c.overBudget)
   const heroBarColor = budgetUsed > 90 ? 'var(--danger)' : budgetUsed > 70 ? 'var(--warning)' : 'var(--accent)'
 
-  // Hitung alokasi tabungan bulanan dari semua goal yang punya deadline
-  const now = new Date()
-  const monthlyTabungan = data.savings
-    .filter(sv => sv.deadline && Number(sv.current_amount) < Number(sv.target_amount))
-    .reduce((sum, sv) => {
-      const sisa = Number(sv.target_amount) - Number(sv.current_amount)
-      const bulanSisa = Math.max(1, Math.ceil((new Date(sv.deadline) - now) / (1000 * 60 * 60 * 24 * 30)))
-      return sum + sisa / bulanSisa
-    }, 0)
+  // target_amount = alokasi per bulan (bukan total target)
+  const monthlyTabungan = data.savings.reduce((sum, sv) => sum + Number(sv.target_amount), 0)
 
   const batasBelanja = data.salary > 0 ? data.salary - monthlyTabungan : 0
   const sisaBelanja = batasBelanja - data.totalExpense

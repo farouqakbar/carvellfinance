@@ -107,10 +107,10 @@ export default function Plans() {
   return (
     <div className="animate-in">
       {/* Header */}
-      <div className="flex-between mb-20" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+      <div className="flex-between" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <div>
           <h1 className="page-title">Rencana</h1>
-          <p className="page-subtitle" style={{ margin: 0 }}>Catat apa saja yang ingin dibeli, berapa, dan kapan</p>
+          <p className="page-subtitle" style={{ marginBottom: 0 }}>Catat apa saja yang ingin dibeli, berapa, dan kapan</p>
         </div>
         <button
           className="btn btn-primary"
@@ -121,7 +121,7 @@ export default function Plans() {
       </div>
 
       {/* Stats bar */}
-      <div className="plans-stat-bar mb-20">
+      <div className="plans-stat-bar" style={{ marginBottom: 20 }}>
         <div className="plans-stat">
           <span className="plans-stat-label">Total Rencana</span>
           <span className="plans-stat-val tabular">{plans.length} item</span>
@@ -140,7 +140,7 @@ export default function Plans() {
 
       {/* Inline add form */}
       {showForm && (
-        <div className="card plans-form-card mb-20 animate-in">
+        <div className="card plans-form-card animate-in" style={{ marginBottom: 20 }}>
           <p className="plans-form-title">Tambah Rencana Baru</p>
           <div className="plans-form-grid">
             <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
@@ -198,7 +198,7 @@ export default function Plans() {
       )}
 
       {/* Filter tabs */}
-      <div className="plans-filter-tabs mb-20">
+      <div className="plans-filter-tabs" style={{ marginBottom: 20 }}>
         {['aktif', 'selesai', 'semua'].map(f => (
           <button
             key={f}

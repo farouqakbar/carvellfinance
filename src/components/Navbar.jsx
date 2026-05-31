@@ -4,7 +4,6 @@ import { LogoWordmark, LogoMark } from './Logo'
 
 const navItems = [
   { to: '/dashboard', icon: '⬡', label: 'Dashboard' },
-  { to: '/categories', icon: '◈', label: 'Kategori' },
   { to: '/savings', icon: '◎', label: 'Rencana' },
   { to: '/report', icon: '▤', label: 'Laporan' },
 ]
@@ -222,7 +221,7 @@ export default function Navbar({ darkMode, setDarkMode }) {
           border-top: 1px solid var(--border);
           z-index: 100;
           padding: 8px 8px max(10px, env(safe-area-inset-bottom));
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
         }
         .mobile-nav-item {

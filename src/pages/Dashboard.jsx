@@ -4,9 +4,12 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
 import TransactionForm from '../components/TransactionForm'
+import CategoryForm from '../components/CategoryForm'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
 import { isMandatory } from '../constants/mandatoryCategories'
+
+const DEFAULT_PCT = 15
 
 function prevMonth(m) {
   const [y, mo] = m.split('-').map(Number)
@@ -34,6 +37,10 @@ export default function Dashboard() {
   const [showSalaryForm, setShowSalaryForm] = useState(false)
   const [salaryInput, setSalaryInput] = useState('')
   const [showTxForm, setShowTxForm] = useState(false)
+  const [showCatManager, setShowCatManager] = useState(false)
+  const [budgetEdit, setBudgetEdit] = useState(null)
+  const [showCatForm, setShowCatForm] = useState(false)
+  const [editCatData, setEditCatData] = useState(null)
 
   useEffect(() => { fetchDashboard() }, [month])
 
@@ -137,6 +144,44 @@ export default function Dashboard() {
     toast('Gaji disimpan', 'success')
     setShowSalaryForm(false)
     setSalaryInput('')
+    fetchDashboard()
+  }
+
+  const openBudgetEdit = (cat) => {
+    const nominal = String(Math.round(cat.budget_limit || 0))
+    const pct = data.salary > 0 && cat.budget_limit > 0
+      ? ((cat.budget_limit / data.salary) * 100).toFixed(1)
+      : ''
+    setBudgetEdit({ id: cat.id, nominal, pct })
+  }
+
+  const handleBudgetNominalChange = (raw) => {
+    const nom = parseFloat(raw) || 0
+    const pct = data.salary > 0 && nom > 0 ? ((nom / data.salary) * 100).toFixed(1) : ''
+    setBudgetEdit(b => ({ ...b, nominal: raw, pct }))
+  }
+
+  const handleBudgetPctChange = (val) => {
+    const p = parseFloat(val) || 0
+    const nom = data.salary > 0 && p > 0 ? String(Math.round((p / 100) * data.salary)) : ''
+    setBudgetEdit(b => ({ ...b, pct: val, nominal: nom }))
+  }
+
+  const saveBudget = async () => {
+    const amount = parseFloat(budgetEdit.nominal) || 0
+    await supabase.from('category_budgets').upsert(
+      { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
+      { onConflict: 'category_id,month' }
+    )
+    toast('Budget disimpan', 'success')
+    setBudgetEdit(null)
+    fetchDashboard()
+  }
+
+  const handleDeleteCat = async (id) => {
+    if (!confirm('Hapus kategori ini?')) return
+    await supabase.from('categories').delete().eq('id', id)
+    toast('Kategori dihapus', 'success')
     fetchDashboard()
   }
 
@@ -290,7 +335,7 @@ export default function Dashboard() {
             <h3 className="sect-title">Pengeluaran Wajib</h3>
             <p className="sect-sub">Dipotong langsung dari gaji</p>
           </div>
-          <Link to="/categories" className="pill-link">Kelola</Link>
+          <button className="pill-link" onClick={() => setShowCatManager(true)}>Kelola</button>
         </div>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -332,6 +377,7 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
+            <button className="pill-link" onClick={() => setShowCatManager(true)}>Kelola</button>
           </div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -453,6 +499,168 @@ export default function Dashboard() {
               <button className="btn btn-ghost" onClick={() => setShowTxForm(false)}>✕</button>
             </div>
             <TransactionForm onSuccess={() => { fetchDashboard(); setShowTxForm(false) }} onClose={() => setShowTxForm(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Category Manager Modal ───────────── */}
+      {showCatManager && (
+        <div className="modal-overlay" onClick={() => setShowCatManager(false)}>
+          <div className="modal cat-manager-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Kelola Kategori</h2>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{getMonthLabel(month)}</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn btn-primary btn-sm" onClick={() => { setEditCatData(null); setShowCatForm(true) }}>+ Kategori</button>
+                <button className="btn btn-ghost" onClick={() => setShowCatManager(false)}>✕</button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <p className="cat-mgr-section-title">Pengeluaran Wajib</p>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {data.categories.filter(c => isMandatory(c)).map(cat => {
+                  const budget = Number(cat.budget_limit) || 0
+                  const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
+                  return (
+                    <div key={cat.id} className="cat-mgr-row">
+                      <div className="cat-mgr-left">
+                        <span className="cat-mgr-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                        <div>
+                          <span className="cat-mgr-name">{cat.name}</span>
+                          <span className="cat-mgr-sub">Wajib · langsung dipotong</span>
+                        </div>
+                      </div>
+                      <div className="cat-mgr-right">
+                        {salPct && <span className="cat-mgr-pct">{salPct}%</span>}
+                        <span className="cat-mgr-amount tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem' }} onClick={() => openBudgetEdit(cat)}>Ubah</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="cat-mgr-section-title">Kategori Lainnya</p>
+              {data.categories.filter(c => !isMandatory(c)).length === 0 ? (
+                <div className="empty-hint">
+                  <span className="empty-hint-icon">◈</span>
+                  <span>Belum ada kategori tambahan.</span>
+                  <button className="empty-hint-link" onClick={() => { setEditCatData(null); setShowCatForm(true) }}>Tambah →</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {data.categories.filter(c => !isMandatory(c)).map(cat => {
+                    const budget = Number(cat.budget_limit) || 0
+                    const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
+                    return (
+                      <div key={cat.id} className="cat-mgr-row">
+                        <div className="cat-mgr-left">
+                          <span className="cat-mgr-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                          <span className="cat-mgr-name">{cat.name}</span>
+                        </div>
+                        <div className="cat-mgr-right">
+                          {salPct && <span className="cat-mgr-pct">{salPct}%</span>}
+                          <span className="cat-mgr-amount tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem' }} onClick={() => openBudgetEdit(cat)}>
+                            {budget > 0 ? 'Set' : '+ Budget'}
+                          </button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => { setEditCatData(cat); setShowCatForm(true) }}>✎</button>
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteCat(cat.id)}>✕</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Budget Edit Modal ────────────────── */}
+      {budgetEdit && (() => {
+        const cat = data.categories.find(c => c.id === budgetEdit.id)
+        return (
+          <div className="modal-overlay" onClick={() => setBudgetEdit(null)}>
+            <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h2 className="modal-title">Budget — {cat?.name}</h2>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {getMonthLabel(month)}{data.salary > 0 ? ` · Gaji ${formatCurrency(data.salary)}` : ''}
+                  </p>
+                </div>
+                <button className="btn btn-ghost" onClick={() => setBudgetEdit(null)}>✕</button>
+              </div>
+
+              {data.salary > 0 && (
+                <div className="form-group">
+                  <label className="form-label">Persentase dari gaji</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        className="form-input"
+                        type="number"
+                        placeholder={String(DEFAULT_PCT)}
+                        value={budgetEdit.pct}
+                        onChange={e => handleBudgetPctChange(e.target.value)}
+                        min="0" max="100" step="0.5"
+                        style={{ paddingRight: 36 }}
+                      />
+                      <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem' }}>%</span>
+                    </div>
+                    {budgetEdit.pct && data.salary > 0 && (
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        = {formatCurrency(Math.round((parseFloat(budgetEdit.pct) / 100) * data.salary))}
+                      </span>
+                    )}
+                  </div>
+                  {!budgetEdit.pct && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      {[10, 15, 20, 25].map(p => (
+                        <button key={p} className="btn btn-secondary btn-sm" onClick={() => handleBudgetPctChange(String(p))}>{p}%</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">Atau nominal langsung</label>
+                <CurrencyInput
+                  value={budgetEdit.nominal}
+                  onChange={handleBudgetNominalChange}
+                  autoFocus={!data.salary}
+                />
+              </div>
+
+              <div className="flex gap-8 mt-16">
+                <button className="btn btn-secondary" onClick={() => setBudgetEdit(null)}>Batal</button>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveBudget}>Simpan</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Category Add/Edit Form Modal ─────── */}
+      {showCatForm && (
+        <div className="modal-overlay" onClick={() => setShowCatForm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{editCatData?.id ? 'Edit Kategori' : 'Kategori Baru'}</h2>
+              <button className="btn btn-ghost" onClick={() => setShowCatForm(false)}>✕</button>
+            </div>
+            <CategoryForm
+              editData={editCatData}
+              onSuccess={() => { fetchDashboard(); setShowCatForm(false) }}
+              onClose={() => setShowCatForm(false)}
+            />
           </div>
         </div>
       )}
@@ -606,6 +814,7 @@ export default function Dashboard() {
           padding: 3px 10px; border: 1px solid var(--border);
           border-radius: 99px; background: transparent; transition: all 0.15s;
           white-space: nowrap; flex-shrink: 0; margin-top: 1px;
+          cursor: pointer; font-family: var(--font-sans);
         }
         .pill-link:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 
@@ -716,6 +925,38 @@ export default function Dashboard() {
         .tx-amount { font-size: 0.8125rem; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
         .tx-amount.inc { color: var(--success); }
         .tx-amount.exp { color: var(--danger); }
+
+        /* ── Category Manager ───────────────── */
+        .cat-manager-modal { max-width: 520px; max-height: 85vh; overflow-y: auto; }
+        .cat-mgr-section-title {
+          font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+          color: var(--text-muted); font-weight: 700; margin: 0 0 6px;
+        }
+        .cat-mgr-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 8px 10px; border-radius: var(--radius-sm); gap: 8px;
+        }
+        .cat-mgr-row:hover { background: var(--bg-input); }
+        .cat-mgr-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+        .cat-mgr-icon {
+          width: 30px; height: 30px; border-radius: 7px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 0.9rem; flex-shrink: 0;
+        }
+        .cat-mgr-name { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); display: block; }
+        .cat-mgr-sub {
+          font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em;
+          color: var(--text-muted); font-weight: 600; margin-top: 1px; display: block;
+        }
+        .cat-mgr-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        .cat-mgr-pct {
+          font-size: 0.65rem; font-weight: 700; color: var(--accent);
+          background: var(--accent-dim); padding: 2px 7px; border-radius: 99px;
+        }
+        .cat-mgr-amount {
+          font-size: 0.8125rem; font-weight: 700; color: var(--text-primary);
+          min-width: 90px; text-align: right;
+        }
 
         /* ── Mobile ───────────────────────────── */
         @media (max-width: 768px) {

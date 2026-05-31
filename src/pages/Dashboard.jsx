@@ -77,6 +77,20 @@ export default function Dashboard() {
         savingsLogs: logsRes.data || [],
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
       })
+      // Auto-set 15% untuk mandatory categories yang belum punya budget
+      const sal = salaryRes.data?.amount || 0
+      if (sal > 0) {
+        const unset = (catRes.data || []).filter(c => isMandatory(c) && !(Number(c.budget_limit) > 0))
+        if (unset.length > 0) {
+          const def = Math.round(Number(sal) * 0.15)
+          await Promise.all(unset.map(c =>
+            supabase.from('categories').update({ budget_limit: def }).eq('id', c.id)
+          ))
+          // Reload categories dengan budget yang sudah diupdate
+          const { data: catRefresh } = await supabase.from('categories').select('*').eq('user_id', user.id).order('name')
+          catRes.data = catRefresh
+        }
+      }
     } finally { setLoading(false) }
   }
 

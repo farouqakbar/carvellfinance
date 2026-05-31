@@ -93,37 +93,62 @@ export default function Categories() {
     const barColor = over ? 'var(--danger)' : full ? 'var(--success)' : near ? 'var(--warning)' : cat.color
     const salaryPct = salary > 0 && budget > 0 ? ((budget / salary) * 100).toFixed(0) : null
 
+    if (isMand) {
+      return (
+        <div key={cat.id} className="cat-card cat-mandatory" style={{ '--cat-color': cat.color }}>
+          <div className="cat-card-top">
+            <div className="cat-card-left">
+              <span className="cat-icon" style={{ background: `${cat.color}20`, color: cat.color }}>{cat.icon}</span>
+              <div>
+                <span className="cat-name">{cat.name}</span>
+                <span className="cat-mandatory-badge">Wajib · langsung dipotong</span>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem' }}>
+              Ubah
+            </button>
+          </div>
+
+          <div className="mand-budget-row">
+            <div>
+              <span className="mand-label">Budget per bulan</span>
+              <span className="mand-val tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
+            </div>
+            {salaryPct && (
+              <span className="mand-pct-chip">{salaryPct}% gaji</span>
+            )}
+          </div>
+
+          <div className="mand-spent-row">
+            <span className="mand-label">Terpakai bulan ini</span>
+            <span className="mand-spent tabular" style={{ color: spent > 0 ? (over ? 'var(--danger)' : 'var(--text-primary)') : 'var(--text-muted)' }}>
+              {spent > 0 ? formatCurrency(spent) : '—'}
+            </span>
+          </div>
+        </div>
+      )
+    }
+
     return (
-      <div key={cat.id} className={`cat-card ${isMand ? 'cat-mandatory' : ''}`}
-        style={{ '--cat-color': cat.color }}>
+      <div key={cat.id} className="cat-card" style={{ '--cat-color': cat.color }}>
         <div className="cat-card-top">
           <div className="cat-card-left">
             <span className="cat-icon" style={{ background: `${cat.color}20`, color: cat.color }}>{cat.icon}</span>
-            <div>
-              <span className="cat-name">{cat.name}</span>
-              {isMand && <span className="cat-mandatory-badge">Wajib</span>}
-            </div>
+            <span className="cat-name">{cat.name}</span>
           </div>
           <div className="cat-card-actions">
-            {!isMand && (
-              <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(cat); setShowForm(true) }}>✎</button>
-            )}
+            <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(cat); setShowForm(true) }}>✎</button>
             <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
               {budget > 0 ? 'Set' : '+ Budget'}
             </button>
-            {!isMand && (
-              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(cat.id)}>✕</button>
-            )}
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(cat.id)}>✕</button>
           </div>
         </div>
 
-        {/* Budget info */}
         {budget > 0 ? (
           <>
             <div className="cat-amounts">
-              <span className="cat-spent tabular" style={{ color: over ? 'var(--danger)' : 'var(--text-primary)' }}>
-                {formatCurrency(spent)}
-              </span>
+              <span className="cat-spent tabular" style={{ color: over ? 'var(--danger)' : 'var(--text-primary)' }}>{formatCurrency(spent)}</span>
               <div style={{ textAlign: 'right' }}>
                 <span className="cat-budget tabular">/ {formatCurrency(budget)}</span>
                 {salaryPct && <span className="cat-pct-label">{salaryPct}% gaji</span>}
@@ -143,9 +168,7 @@ export default function Categories() {
           <div className="cat-no-budget">
             <span>Belum ada budget</span>
             {salary > 0 && (
-              <span className="cat-no-budget-hint">
-                Default: {formatCurrency(Math.round(salary * DEFAULT_PCT / 100))} ({DEFAULT_PCT}% gaji)
-              </span>
+              <span className="cat-no-budget-hint">Default: {formatCurrency(Math.round(salary * DEFAULT_PCT / 100))} ({DEFAULT_PCT}%)</span>
             )}
           </div>
         )}
@@ -351,6 +374,22 @@ export default function Categories() {
         }
         .cat-no-budget span:first-child { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
         .cat-no-budget-hint { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
+
+        /* Mandatory card rows */
+        .mand-budget-row {
+          display: flex; justify-content: space-between; align-items: center;
+          background: var(--bg-input); border-radius: var(--radius-sm);
+          padding: 10px 12px;
+        }
+        .mand-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 3px; }
+        .mand-val { font-size: 1rem; font-weight: 800; letter-spacing: -0.025em; color: var(--text-primary); display: block; }
+        .mand-pct-chip {
+          background: var(--accent-dim); color: var(--accent);
+          font-size: 0.72rem; font-weight: 700;
+          padding: 4px 10px; border-radius: 99px; white-space: nowrap;
+        }
+        .mand-spent-row { display: flex; justify-content: space-between; align-items: center; }
+        .mand-spent { font-size: 0.875rem; font-weight: 700; letter-spacing: -0.02em; }
 
         @media (max-width: 640px) {
           .cat-grid { grid-template-columns: 1fr; }

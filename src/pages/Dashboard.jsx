@@ -291,58 +291,16 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Tabungan ─────────────────────────── */}
-      {(loading || data.savings.length > 0) && (
-        <div className="card">
-          <div className="sect-head">
-            <div>
-              <h3 className="sect-title">Tabungan</h3>
-              {data.savings.length > 0 && (
-                <p className="sect-sub">{formatCurrency(data.savings.reduce((s, sv) => s + Number(sv.current_amount), 0))} terkumpul</p>
-              )}
-            </div>
-            <Link to="/savings" className="pill-link">Kelola</Link>
-          </div>
-
-          {loading ? (
-            <div className="savings-grid">
-              {[...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 68 }} />)}
-            </div>
-          ) : (
-            <div className="savings-grid">
-              {data.savings.map(sv => {
-                const pct = sv.target_amount > 0 ? Math.min((sv.current_amount / sv.target_amount) * 100, 100) : 0
-                const done = pct >= 100
-                const daysLeft = sv.deadline ? Math.ceil((new Date(sv.deadline) - new Date()) / 86400000) : null
-                const urgent = daysLeft !== null && daysLeft < 30 && !done
-                return (
-                  <div key={sv.id} className={`sv-chip ${done ? 'sv-done' : urgent ? 'sv-urgent' : ''}`}>
-                    <div className="sv-chip-top">
-                      <span className="sv-chip-name">{sv.name}</span>
-                      <span className="sv-chip-pct" style={{ color: done ? 'var(--success)' : urgent ? 'var(--warning)' : 'var(--text-muted)' }}>
-                        {done ? '✓' : `${pct.toFixed(0)}%`}
-                      </span>
-                    </div>
-                    <div className="sv-chip-amounts">
-                      <span className="sv-chip-cur tabular">{formatCurrency(sv.current_amount)}</span>
-                      <span className="sv-chip-tgt tabular">/ {formatCurrency(sv.target_amount)}</span>
-                    </div>
-                    <div className="sv-chip-bar">
-                      <div className="sv-chip-fill" style={{
-                        width: `${pct}%`,
-                        background: done ? 'var(--success)' : urgent ? 'var(--warning)' : 'linear-gradient(90deg, var(--accent), var(--info))',
-                      }} />
-                    </div>
-                    {urgent && daysLeft !== null && (
-                      <span className="sv-chip-deadline">{daysLeft > 0 ? `${daysLeft} hari lagi` : 'Deadline lewat'}</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      {/* ── Rencana bulan depan preview ─────── */}
+      <div className="card" style={{ borderStyle: 'dashed' }}>
+        <div className="sect-head">
+          <h3 className="sect-title">Rencana Bulan Depan</h3>
+          <Link to="/savings" className="pill-link">Atur →</Link>
         </div>
-      )}
+        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: 0 }}>
+          Rencanakan pengeluaran bulan depan secara rinci di halaman Rencana.
+        </p>
+      </div>
 
       {/* ── Transaksi terakhir ───────────────── */}
       <div className="card">

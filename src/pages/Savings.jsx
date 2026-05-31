@@ -1,372 +1,371 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
+import { isMandatory } from '../constants/mandatoryCategories'
 
-function prevMonth(m) {
-  const [y, mo] = m.split('-').map(Number)
-  const d = new Date(y, mo - 2, 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-function nextMonth(m) {
-  const [y, mo] = m.split('-').map(Number)
-  const d = new Date(y, mo, 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+// Bulan depan
+function getNextMonth() {
+  const now = new Date()
+  const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()
+  const m = (now.getMonth() + 2) % 12 || 12
+  return `${y}-${String(m).padStart(2, '0')}`
 }
 
-export default function Savings() {
+const PLANS_KEY = (userId, month) => `cashvell_plans_${userId}_${month}`
+
+export default function Planning() {
   const { user } = useAuth()
   const toast = useToast()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
-  const [savings, setSavings] = useState([])
-  const [logs, setLogs] = useState([])   // savings_log untuk bulan ini
+  const nextMonth = getNextMonth()
+  const [salary, setSalary] = useState(0)
+  const [salaryInput, setSalaryInput] = useState('')
+  const [categories, setCategories] = useState([])
+  const [plans, setPlans] = useState([])       // rencana tambahan (localStorage)
+  const [newPlan, setNewPlan] = useState({ name: '', amount: '' })
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editData, setEditData] = useState(null)
-  const [logModal, setLogModal] = useState(null)  // {saving, currentLog}
-  const [logAmount, setLogAmount] = useState('')
+  const [editBudget, setEditBudget] = useState(null) // {id, value}
 
-  const isCurrentMonth = month === getCurrentMonth()
-
-  useEffect(() => { fetchData() }, [month])
-
-  const goToMonth = (m) => { setMonth(m); setSearchParams({ month: m }) }
+  useEffect(() => { fetchData() }, [])
 
   const fetchData = async () => {
     setLoading(true)
-    const [savRes, logRes] = await Promise.all([
-      supabase.from('savings').select('*').eq('user_id', user.id).order('created_at'),
-      supabase.from('savings_log').select('*').eq('user_id', user.id).eq('month', month),
+    const [catRes, salRes] = await Promise.all([
+      supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('salaries').select('amount').eq('user_id', user.id).eq('month', nextMonth).maybeSingle(),
     ])
-    setSavings(savRes.data || [])
-    setLogs(logRes.data || [])
+    setCategories(catRes.data || [])
+    const sal = Number(salRes.data?.amount || 0)
+    setSalary(sal)
+    setSalaryInput(sal > 0 ? String(Math.round(sal)) : '')
+    // Load rencana tambahan dari localStorage
+    try {
+      const stored = localStorage.getItem(PLANS_KEY(user.id, nextMonth))
+      setPlans(stored ? JSON.parse(stored) : [])
+    } catch { setPlans([]) }
     setLoading(false)
   }
 
-  const handleSave = async (form) => {
-    try {
-      const payload = { name: form.name, target_amount: parseFloat(form.monthly_amount) || 0 }
-      if (editData?.id) {
-        await supabase.from('savings').update(payload).eq('id', editData.id)
-        toast('Tabungan diperbarui', 'success')
-      } else {
-        await supabase.from('savings').insert({ ...payload, user_id: user.id, current_amount: 0 })
-        toast('Tabungan dibuat', 'success')
-      }
-      setShowForm(false)
-      fetchData()
-    } catch (err) { toast(err.message, 'error') }
-  }
-
-  // Simpan realisasi tabungan bulan ini
-  const handleLogSave = async () => {
-    if (!logAmount) return
-    const amount = parseFloat(logAmount)
-    if (!amount || amount < 0) return
-
-    const existing = logs.find(l => l.savings_id === logModal.id)
-    const diff = amount - (existing?.amount || 0)  // selisih untuk update current_amount
-
-    // Upsert savings_log untuk bulan ini
-    await supabase.from('savings_log').upsert(
-      { savings_id: logModal.id, user_id: user.id, month, amount },
-      { onConflict: 'savings_id,month' }
+  const saveSalary = async () => {
+    const amount = parseFloat(salaryInput)
+    if (!amount) return
+    await supabase.from('salaries').upsert(
+      { user_id: user.id, month: nextMonth, amount },
+      { onConflict: 'user_id,month' }
     )
+    setSalary(amount)
+    toast('Gaji bulan depan disimpan', 'success')
+  }
 
-    // Update total di tabel savings
-    const newTotal = Math.max(0, Number(logModal.current_amount) + diff)
-    await supabase.from('savings').update({ current_amount: newTotal }).eq('id', logModal.id)
-
-    toast(`Tabungan ${getMonthLabel(month)} disimpan`, 'success')
-    setLogModal(null)
-    setLogAmount('')
+  const saveCategoryBudget = async () => {
+    if (!editBudget) return
+    await supabase.from('categories').update({ budget_limit: parseFloat(editBudget.value) || 0 }).eq('id', editBudget.id)
+    toast('Budget diperbarui', 'success')
+    setEditBudget(null)
     fetchData()
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Hapus tabungan ini?')) return
-    await supabase.from('savings').delete().eq('id', id)
-    toast('Tabungan dihapus', 'success')
-    fetchData()
+  const addPlan = () => {
+    if (!newPlan.name || !newPlan.amount) return
+    const updated = [...plans, { id: Date.now(), name: newPlan.name, amount: parseFloat(newPlan.amount) }]
+    setPlans(updated)
+    localStorage.setItem(PLANS_KEY(user.id, nextMonth), JSON.stringify(updated))
+    setNewPlan({ name: '', amount: '' })
   }
 
-  const totalTerkumpul = savings.reduce((s, sv) => s + Number(sv.current_amount), 0)
-  const totalPerBulan = savings.reduce((s, sv) => s + Number(sv.target_amount), 0)
-  const totalRealisasiBulanIni = logs.reduce((s, l) => s + Number(l.amount), 0)
+  const removePlan = (id) => {
+    const updated = plans.filter(p => p.id !== id)
+    setPlans(updated)
+    localStorage.setItem(PLANS_KEY(user.id, nextMonth), JSON.stringify(updated))
+  }
 
-  const getLog = (savingsId) => logs.find(l => l.savings_id === savingsId)
+  const mandatoryCats = categories.filter(c => isMandatory(c))
+  const regularCats = categories.filter(c => !isMandatory(c) && c.budget_limit > 0)
+  const totalWajib = mandatoryCats.reduce((s, c) => s + Number(c.budget_limit || 0), 0)
+  const totalKategori = regularCats.reduce((s, c) => s + Number(c.budget_limit || 0), 0)
+  const totalRencana = plans.reduce((s, p) => s + Number(p.amount || 0), 0)
+  const totalPengeluaran = totalWajib + totalKategori + totalRencana
+  const sisa = salary - totalPengeluaran
 
   return (
     <div className="animate-in">
-      {/* Header + month nav */}
-      <div className="sv-page-header mb-20">
-        <div>
-          <h1 className="page-title">Tabungan</h1>
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            <span style={{ color: 'var(--success)', fontWeight: 700 }}>{formatCurrency(totalTerkumpul)}</span>
-            <span style={{ color: 'var(--text-muted)' }}> total · {formatCurrency(totalPerBulan)}/bln dialokasikan</span>
-          </p>
+      <div className="mb-20">
+        <h1 className="page-title">Rencana {getMonthLabel(nextMonth)}</h1>
+        <p className="page-subtitle" style={{ margin: 0 }}>Rencanakan pengeluaran bulan depan secara rinci</p>
+      </div>
+
+      {/* ── Summary bar ──────────────────────── */}
+      <div className="plan-summary mb-20">
+        <div className="plan-sum-item">
+          <span className="plan-sum-label">Gaji</span>
+          <span className="plan-sum-val tabular">{salary > 0 ? formatCurrency(salary) : '—'}</span>
         </div>
-        <div className="sv-header-right">
-          <div className="month-nav-group">
-            <button className="month-btn" onClick={() => goToMonth(prevMonth(month))}>‹</button>
-            <span className="month-label-sm">{getMonthLabel(month)}</span>
-            <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
-          </div>
-          <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
-            + Baru
-          </button>
+        <div className="plan-sum-sep">−</div>
+        <div className="plan-sum-item">
+          <span className="plan-sum-label">Total Rencana</span>
+          <span className="plan-sum-val tabular text-danger">{formatCurrency(totalPengeluaran)}</span>
+        </div>
+        <div className="plan-sum-sep">=</div>
+        <div className="plan-sum-item">
+          <span className="plan-sum-label">Sisa</span>
+          <span className="plan-sum-val tabular" style={{ color: sisa >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+            {salary > 0 ? formatCurrency(sisa) : '—'}
+          </span>
         </div>
       </div>
 
-      {/* Ringkasan bulan ini */}
-      {savings.length > 0 && (
-        <div className="sv-month-summary mb-20">
-          <div className="sv-sum-item">
-            <span className="sv-sum-label">Dialokasikan {getMonthLabel(month)}</span>
-            <span className="sv-sum-val tabular">{formatCurrency(totalPerBulan)}</span>
-          </div>
-          <div className="sv-sum-divider" />
-          <div className="sv-sum-item">
-            <span className="sv-sum-label">Direalisasikan</span>
-            <span className="sv-sum-val tabular" style={{ color: totalRealisasiBulanIni >= totalPerBulan ? 'var(--success)' : 'var(--warning)' }}>
-              {formatCurrency(totalRealisasiBulanIni)}
-            </span>
-          </div>
-          <div className="sv-sum-divider" />
-          <div className="sv-sum-item">
-            <span className="sv-sum-label">Total Terkumpul</span>
-            <span className="sv-sum-val tabular" style={{ color: 'var(--accent)' }}>{formatCurrency(totalTerkumpul)}</span>
-          </div>
-        </div>
-      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {loading ? (
-        <div className="sv-grid">
-          {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 160 }} />)}
-        </div>
-      ) : savings.length === 0 ? (
+        {/* ── 1. Gaji bulan depan ─────────────── */}
         <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon">◎</div>
-            <strong>Belum ada tabungan</strong>
-            <p>Buat tabungan dan tentukan berapa yang disisihkan per bulan</p>
-            <button className="btn btn-primary mt-16" onClick={() => setShowForm(true)}>Buat Tabungan</button>
+          <div className="plan-sect-head">
+            <span className="plan-sect-title">① Gaji {getMonthLabel(nextMonth)}</span>
+          </div>
+          <div className="flex gap-8" style={{ alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <CurrencyInput value={salaryInput} onChange={setSalaryInput} autoFocus={!salary} />
+            </div>
+            <button className="btn btn-primary" onClick={saveSalary} disabled={!salaryInput}>Simpan</button>
           </div>
         </div>
-      ) : (
-        <div className="sv-grid">
-          {savings.map(sv => {
-            const log = getLog(sv.id)
-            const realisasi = log ? Number(log.amount) : 0
-            const alokasi = Number(sv.target_amount)
-            const pct = alokasi > 0 ? Math.min((realisasi / alokasi) * 100, 100) : 0
-            const sudahDiisi = realisasi > 0
 
-            return (
-              <div key={sv.id} className={`sv-card ${sudahDiisi ? 'sv-filled' : ''}`}>
-                <div className="sv-card-header">
-                  <span className="sv-name">{sv.name}</span>
-                  <div className="sv-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(sv); setShowForm(true) }}>✎</button>
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(sv.id)}>✕</button>
+        {/* ── 2. Pengeluaran Wajib ─────────────── */}
+        <div className="card">
+          <div className="plan-sect-head">
+            <span className="plan-sect-title">② Pengeluaran Wajib</span>
+            <span className="plan-sect-total tabular">{formatCurrency(totalWajib)}</span>
+          </div>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 40 }} />)}
+            </div>
+          ) : (
+            <div className="plan-rows">
+              {mandatoryCats.map(cat => (
+                <div key={cat.id} className="plan-row">
+                  <div className="plan-row-left">
+                    <span className="plan-row-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                    <span className="plan-row-name">{cat.name}</span>
+                    {salary > 0 && cat.budget_limit > 0 && (
+                      <span className="plan-row-pct">
+                        {((cat.budget_limit / salary) * 100).toFixed(0)}%
+                      </span>
+                    )}
                   </div>
-                </div>
-
-                {/* Bulan ini */}
-                <div className="sv-month-row">
-                  <div>
-                    <div className="sv-row-label">Bulan ini</div>
-                    <div className="sv-realisasi tabular" style={{ color: sudahDiisi ? 'var(--success)' : 'var(--text-muted)' }}>
-                      {sudahDiisi ? formatCurrency(realisasi) : '—'}
+                  {editBudget?.id === cat.id ? (
+                    <div className="plan-row-edit">
+                      <CurrencyInput value={editBudget.value} onChange={v => setEditBudget(b => ({ ...b, value: v }))} style={{ width: 160 }} />
+                      <button className="btn btn-primary btn-sm" onClick={saveCategoryBudget}>✓</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditBudget(null)}>✕</button>
                     </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div className="sv-row-label">Alokasi</div>
-                    <div className="sv-alokasi tabular">{formatCurrency(alokasi)}/bln</div>
-                  </div>
+                  ) : (
+                    <div className="plan-row-right">
+                      <span className="plan-row-amount tabular">
+                        {cat.budget_limit > 0 ? formatCurrency(cat.budget_limit) : <span style={{ color: 'var(--text-muted)' }}>belum diset</span>}
+                      </span>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditBudget({ id: cat.id, value: String(Math.round(cat.budget_limit || 0)) })}>✎</button>
+                    </div>
+                  )}
                 </div>
-
-                {/* Progress bar bulan ini */}
-                {alokasi > 0 && (
-                  <div className="progress-bar" style={{ height: 5 }}>
-                    <div className="progress-fill" style={{
-                      width: `${pct}%`,
-                      background: pct >= 100 ? 'var(--success)' : 'var(--accent)',
-                    }} />
-                  </div>
-                )}
-
-                {/* Total terkumpul */}
-                <div className="sv-total-row">
-                  <span className="sv-row-label">Total terkumpul</span>
-                  <span className="sv-total tabular">{formatCurrency(sv.current_amount)}</span>
-                </div>
-
-                <button
-                  className="sv-log-btn"
-                  onClick={() => {
-                    setLogModal(sv)
-                    setLogAmount(log ? String(log.amount) : '')
-                  }}
-                >
-                  {sudahDiisi ? `✓ Ubah realisasi ${getMonthLabel(month)}` : `+ Catat tabungan ${getMonthLabel(month)}`}
-                </button>
-              </div>
-            )
-          })}
+              ))}
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Form modal */}
-      {showForm && <SavingsForm editData={editData} onSave={handleSave} onClose={() => setShowForm(false)} />}
+        {/* ── 3. Budget Kategori ───────────────── */}
+        <div className="card">
+          <div className="plan-sect-head">
+            <span className="plan-sect-title">③ Budget Kategori</span>
+            <span className="plan-sect-total tabular">{formatCurrency(totalKategori)}</span>
+          </div>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 40 }} />)}
+            </div>
+          ) : regularCats.length === 0 ? (
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '4px 0' }}>
+              Belum ada kategori dengan budget. Set di halaman Kategori.
+            </p>
+          ) : (
+            <div className="plan-rows">
+              {regularCats.map(cat => (
+                <div key={cat.id} className="plan-row">
+                  <div className="plan-row-left">
+                    <span className="plan-row-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                    <span className="plan-row-name">{cat.name}</span>
+                  </div>
+                  {editBudget?.id === cat.id ? (
+                    <div className="plan-row-edit">
+                      <CurrencyInput value={editBudget.value} onChange={v => setEditBudget(b => ({ ...b, value: v }))} style={{ width: 160 }} />
+                      <button className="btn btn-primary btn-sm" onClick={saveCategoryBudget}>✓</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditBudget(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <div className="plan-row-right">
+                      <span className="plan-row-amount tabular">{formatCurrency(cat.budget_limit)}</span>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditBudget({ id: cat.id, value: String(Math.round(cat.budget_limit)) })}>✎</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-      {/* Log modal */}
-      {logModal && (
-        <div className="modal-overlay" onClick={() => setLogModal(null)}>
-          <div className="modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <h2 className="modal-title">{logModal.name}</h2>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{getMonthLabel(month)}</p>
-              </div>
-              <button className="btn btn-ghost" onClick={() => setLogModal(null)}>✕</button>
+        {/* ── 4. Rencana Tambahan ──────────────── */}
+        <div className="card">
+          <div className="plan-sect-head">
+            <span className="plan-sect-title">④ Rencana Tambahan</span>
+            {plans.length > 0 && <span className="plan-sect-total tabular">{formatCurrency(totalRencana)}</span>}
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+            Pengeluaran tidak rutin yang direncanakan — bayar hutang, kondangan, servis, dll.
+          </p>
+
+          {plans.length > 0 && (
+            <div className="plan-rows" style={{ marginBottom: 16 }}>
+              {plans.map(p => (
+                <div key={p.id} className="plan-row">
+                  <div className="plan-row-left">
+                    <span className="plan-row-icon" style={{ background: 'var(--bg-input)', color: 'var(--text-muted)' }}>📋</span>
+                    <span className="plan-row-name">{p.name}</span>
+                  </div>
+                  <div className="plan-row-right">
+                    <span className="plan-row-amount tabular">{formatCurrency(p.amount)}</span>
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => removePlan(p.id)}>✕</button>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="form-group">
-              <label className="form-label">Berapa yang ditabung bulan ini?</label>
-              <CurrencyInput value={logAmount} onChange={setLogAmount} autoFocus />
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
-                Alokasi: {formatCurrency(logModal.target_amount)}/bulan
-              </p>
-            </div>
-            <div className="flex gap-8 mt-16">
-              <button className="btn btn-secondary" onClick={() => setLogModal(null)}>Batal</button>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleLogSave} disabled={!logAmount}>
-                Simpan
-              </button>
-            </div>
+          )}
+
+          {/* Tambah rencana */}
+          <div className="plan-add-row">
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Nama pengeluaran..."
+              value={newPlan.name}
+              onChange={e => setNewPlan(p => ({ ...p, name: e.target.value }))}
+              style={{ flex: 2 }}
+            />
+            <CurrencyInput
+              value={newPlan.amount}
+              onChange={raw => setNewPlan(p => ({ ...p, amount: raw }))}
+              style={{ flex: 1 }}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={addPlan}
+              disabled={!newPlan.name || !newPlan.amount}
+            >+ Tambah</button>
           </div>
         </div>
-      )}
+
+        {/* ── 5. Ringkasan ────────────────────── */}
+        {salary > 0 && (
+          <div className="card">
+            <div className="plan-sect-head">
+              <span className="plan-sect-title">⑤ Ringkasan</span>
+            </div>
+            <div className="plan-summary-detail">
+              <div className="psd-row">
+                <span>Gaji {getMonthLabel(nextMonth)}</span>
+                <span className="tabular">{formatCurrency(salary)}</span>
+              </div>
+              <div className="psd-row">
+                <span>Pengeluaran Wajib</span>
+                <span className="tabular text-danger">− {formatCurrency(totalWajib)}</span>
+              </div>
+              <div className="psd-row">
+                <span>Budget Kategori</span>
+                <span className="tabular text-danger">− {formatCurrency(totalKategori)}</span>
+              </div>
+              {totalRencana > 0 && (
+                <div className="psd-row">
+                  <span>Rencana Tambahan</span>
+                  <span className="tabular text-danger">− {formatCurrency(totalRencana)}</span>
+                </div>
+              )}
+              <div className="psd-divider" />
+              <div className="psd-row psd-total">
+                <span>Sisa / Cadangan</span>
+                <span className="tabular" style={{ color: sisa >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                  {formatCurrency(sisa)}
+                </span>
+              </div>
+              {sisa < 0 && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: 8 }}>
+                  ⚠ Rencana melebihi gaji {formatCurrency(Math.abs(sisa))}. Kurangi budget atau rencana tambahan.
+                </p>
+              )}
+              {sisa > 0 && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
+                  Cadangan {((sisa / salary) * 100).toFixed(0)}% dari gaji — bisa untuk tabungan darurat atau investasi tambahan.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+      </div>
 
       <style>{`
-        .sv-page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-        .sv-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .month-nav-group { display: flex; align-items: center; gap: 2px; }
-        .month-btn {
-          width: 28px; height: 28px; border: none; background: none;
-          color: var(--text-muted); font-size: 1.1rem; cursor: pointer;
-          border-radius: var(--radius-sm); display: flex; align-items: center;
-          justify-content: center; font-family: var(--font-sans); transition: all 0.15s;
-        }
-        .month-btn:hover { background: var(--bg-input); color: var(--text-primary); }
-        .month-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-        .month-label-sm { font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); padding: 0 6px; white-space: nowrap; }
-
-        .sv-month-summary {
-          display: flex; align-items: center;
+        .plan-summary {
+          display: flex; align-items: center; justify-content: center;
           background: var(--bg-card); border: 1px solid var(--border);
-          border-radius: var(--radius-lg); overflow: hidden;
+          border-radius: var(--radius-lg); padding: 16px 24px; gap: 20px; flex-wrap: wrap;
         }
-        .sv-sum-item { flex: 1; padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; }
-        .sv-sum-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600; }
-        .sv-sum-val { font-size: 1rem; font-weight: 800; letter-spacing: -0.025em; }
-        .sv-sum-divider { width: 1px; align-self: stretch; background: var(--border); }
+        .plan-sum-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .plan-sum-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600; }
+        .plan-sum-val { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.03em; }
+        .plan-sum-sep { font-size: 1.2rem; color: var(--border-light); font-weight: 300; align-self: center; }
 
-        .sv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+        .plan-sect-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .plan-sect-title { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); }
+        .plan-sect-total { font-size: 0.875rem; font-weight: 700; color: var(--text-secondary); }
 
-        .sv-card {
-          background: var(--bg-card); border: 1px solid var(--border);
-          border-radius: var(--radius-lg); padding: 18px 20px;
-          display: flex; flex-direction: column; gap: 12px;
+        .plan-rows { display: flex; flex-direction: column; }
+        .plan-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 0; border-bottom: 1px solid var(--border); gap: 12px;
         }
-        .sv-card.sv-filled { border-color: rgba(52,211,153,0.3); }
-
-        .sv-card-header { display: flex; justify-content: space-between; align-items: center; }
-        .sv-name { font-size: 0.9375rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; }
-        .sv-actions { display: flex; gap: 2px; }
-
-        .sv-month-row { display: flex; justify-content: space-between; align-items: flex-end; }
-        .sv-row-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; margin-bottom: 3px; }
-        .sv-realisasi { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.03em; }
-        .sv-alokasi { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
-
-        .sv-total-row { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border); }
-        .sv-total { font-size: 0.875rem; font-weight: 700; color: var(--accent); }
-
-        .sv-log-btn {
-          width: 100%; padding: 9px; border: 1px solid var(--border);
-          border-radius: var(--radius-sm); background: var(--bg-input);
-          font-family: var(--font-sans); font-size: 0.775rem; font-weight: 600;
-          color: var(--text-secondary); cursor: pointer; transition: all 0.15s; text-align: center;
+        .plan-row:last-child { border-bottom: none; }
+        .plan-row-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+        .plan-row-icon {
+          width: 30px; height: 30px; border-radius: 7px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center; font-size: 0.9rem;
         }
-        .sv-log-btn:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+        .plan-row-name { font-size: 0.8125rem; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .plan-row-pct {
+          font-size: 0.65rem; background: var(--accent-dim); color: var(--accent);
+          padding: 2px 7px; border-radius: 99px; font-weight: 700; flex-shrink: 0;
+        }
+        .plan-row-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+        .plan-row-amount { font-size: 0.875rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
+        .plan-row-edit { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
-        @media (max-width: 768px) {
-          .sv-month-summary { flex-direction: column; }
-          .sv-sum-divider { width: 100%; height: 1px; align-self: auto; }
-          .sv-grid { grid-template-columns: 1fr; }
+        .plan-add-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .plan-add-row .form-input { min-width: 140px; }
+
+        .plan-summary-detail { display: flex; flex-direction: column; gap: 0; }
+        .psd-row {
+          display: flex; justify-content: space-between; align-items: center;
+          padding: 9px 0; font-size: 0.8125rem; font-weight: 500; color: var(--text-secondary);
+          border-bottom: 1px solid var(--border);
+        }
+        .psd-row:last-child { border-bottom: none; }
+        .psd-divider { height: 1px; background: var(--border-light); margin: 4px 0; }
+        .psd-total { font-size: 0.9375rem; font-weight: 700; color: var(--text-primary); }
+        .psd-total .tabular { font-size: 1rem; }
+
+        @media (max-width: 640px) {
+          .plan-summary { gap: 12px; padding: 14px 16px; }
+          .plan-add-row { flex-direction: column; align-items: stretch; }
         }
       `}</style>
-    </div>
-  )
-}
-
-function SavingsForm({ editData, onSave, onClose }) {
-  const [form, setForm] = useState({
-    name: editData?.name || '',
-    monthly_amount: editData?.target_amount ? String(Math.round(editData.target_amount)) : '',
-  })
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!form.name) return
-    setLoading(true)
-    await onSave(form)
-    setLoading(false)
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">{editData?.id ? 'Edit Tabungan' : 'Tabungan Baru'}</h2>
-          <button className="btn btn-ghost" onClick={onClose}>✕</button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Nama Tabungan</label>
-            <input
-              className="form-input" type="text"
-              placeholder="Dana Darurat, Liburan, Motor..."
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required autoFocus
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Alokasi per Bulan</label>
-            <CurrencyInput
-              value={form.monthly_amount}
-              onChange={raw => setForm(f => ({ ...f, monthly_amount: raw }))}
-            />
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 6 }}>
-              Jumlah yang akan disisihkan setiap bulan
-            </p>
-          </div>
-          <div className="flex gap-8 mt-16">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Batal</button>
-            <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
-              {loading ? 'Menyimpan...' : editData?.id ? 'Perbarui' : 'Buat'}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   )
 }

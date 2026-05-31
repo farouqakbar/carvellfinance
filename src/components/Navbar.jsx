@@ -5,7 +5,7 @@ import { LogoWordmark, LogoMark } from './Logo'
 const navItems = [
   { to: '/dashboard', icon: '⬡', label: 'Dashboard' },
   { to: '/categories', icon: '◈', label: 'Kategori' },
-  { to: '/savings', icon: '◎', label: 'Tabungan' },
+  { to: '/savings', icon: '◎', label: 'Rencana' },
   { to: '/report', icon: '▤', label: 'Laporan' },
 ]
 

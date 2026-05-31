@@ -1,13 +1,27 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { formatCurrency } from '../utils/formatCurrency'
+import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
 import TransactionForm from '../components/TransactionForm'
 import { useToast } from '../components/Toast'
+
+function prevMonth(m) {
+  const [y, mo] = m.split('-').map(Number)
+  const d = new Date(y, mo - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function nextMonth(m) {
+  const [y, mo] = m.split('-').map(Number)
+  const d = new Date(y, mo, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 
 export default function Transactions() {
   const { user } = useAuth()
   const toast = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
   const [transactions, setTransactions] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -15,13 +29,21 @@ export default function Transactions() {
   const [editData, setEditData] = useState(null)
   const [filter, setFilter] = useState({ category: '', type: '', search: '' })
 
-  useEffect(() => { fetchAll() }, [])
+  const isCurrentMonth = month === getCurrentMonth()
+
+  const goToMonth = (m) => { setMonth(m); setSearchParams({ month: m }) }
+
+  useEffect(() => { fetchAll() }, [month])
 
   const fetchAll = async () => {
     setLoading(true)
+    const startDate = `${month}-01`
+    const endDate = `${month}-31`
     const [txRes, catRes] = await Promise.all([
       supabase.from('transactions').select('*, categories(name, color, icon)')
-        .eq('user_id', user.id).order('date', { ascending: false }).order('created_at', { ascending: false }),
+        .eq('user_id', user.id)
+        .gte('date', startDate).lte('date', endDate)
+        .order('date', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
     ])
     setTransactions(txRes.data || [])
@@ -96,19 +118,25 @@ export default function Transactions() {
   return (
     <div className="animate-in">
       {/* Header */}
-      <div className="flex-between mb-16" style={{ flexWrap: 'wrap', gap: 12 }}>
+      <div className="tx-page-header mb-16">
         <div>
           <h1 className="page-title">Transaksi</h1>
           <p className="page-subtitle" style={{ margin: 0 }}>
-            {filtered.length} transaksi
-            {hasFilter && ' (filter aktif)'}
+            {filtered.length} transaksi {getMonthLabel(month)}{hasFilter ? ' (filter aktif)' : ''}
           </p>
         </div>
-        <div className="flex gap-8">
-          <button className="btn btn-secondary btn-sm" onClick={handleExport}>↓ CSV</button>
-          <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
-            + Tambah
-          </button>
+        <div className="tx-header-right">
+          <div className="month-nav-group">
+            <button className="month-btn" onClick={() => goToMonth(prevMonth(month))}>‹</button>
+            <span className="month-label-sm">{getMonthLabel(month)}</span>
+            <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
+          </div>
+          <div className="flex gap-8">
+            <button className="btn btn-secondary btn-sm" onClick={handleExport}>↓ CSV</button>
+            <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
+              + Tambah
+            </button>
+          </div>
         </div>
       </div>
 
@@ -244,6 +272,19 @@ export default function Transactions() {
       )}
 
       <style>{`
+        .tx-page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+        .tx-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .month-nav-group { display: flex; align-items: center; gap: 2px; }
+        .month-btn {
+          width: 28px; height: 28px; border: none; background: none; color: var(--text-muted);
+          font-size: 1.1rem; cursor: pointer; border-radius: var(--radius-sm);
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--font-sans); transition: all 0.15s;
+        }
+        .month-btn:hover { background: var(--bg-input); color: var(--text-primary); }
+        .month-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+        .month-label-sm { font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); padding: 0 6px; white-space: nowrap; }
+
         .tx-filter-bar {
           display: flex;
           gap: 8px;

@@ -71,7 +71,7 @@ export default function Dashboard() {
         salary: salaryRes.data?.amount || 0,
         totalExpense, totalIncome,
         categories: catsWithStatus,
-        transactions: txs.slice(0, 6),
+        transactions: txs.slice(0, 5),
         savings: savingsRes.data || [],
         savingsLogs: logsRes.data || [],
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
@@ -343,7 +343,7 @@ export default function Dashboard() {
       <div className="card">
         <div className="sect-head">
           <h3 className="sect-title">Transaksi Terakhir</h3>
-          <Link to="/transactions" className="pill-link">Lihat semua</Link>
+          <Link to={`/transactions?month=${month}`} className="pill-link">Lihat semua</Link>
         </div>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>

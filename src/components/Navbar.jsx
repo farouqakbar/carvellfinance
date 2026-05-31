@@ -58,17 +58,29 @@ export default function Navbar({ darkMode, setDarkMode }) {
 
         <div className="sidebar-bottom">
           <div className="datetime-card">
-            <div className="datetime-row">
-              <span className="datetime-date">{dateStr}</span>
-              <button
-                className="theme-toggle"
-                onClick={() => setDarkMode(!darkMode)}
-                title={darkMode ? 'Mode terang' : 'Mode gelap'}
-              >
-                {darkMode ? '☀' : '◑'}
-              </button>
-            </div>
+            <span className="datetime-date">{dateStr}</span>
             <div className="datetime-time">{timeStr}</div>
+          </div>
+
+          {/* Weather toggle */}
+          <div className="weather-toggle">
+            <button
+              type="button"
+              className={`weather-btn weather-night ${darkMode ? 'active' : ''}`}
+              onClick={() => setDarkMode(true)}
+            >
+              <span className="weather-icon">◑</span>
+              <span className="weather-label">Malam</span>
+              {darkMode && <span className="weather-star">✦</span>}
+            </button>
+            <button
+              type="button"
+              className={`weather-btn weather-day ${!darkMode ? 'active' : ''}`}
+              onClick={() => setDarkMode(false)}
+            >
+              <span className="weather-icon">☀</span>
+              <span className="weather-label">Siang</span>
+            </button>
           </div>
 
           <div className="user-chip">
@@ -169,12 +181,9 @@ export default function Navbar({ darkMode, setDarkMode }) {
           border: 1px solid var(--border);
           border-radius: var(--radius-sm);
           padding: 9px 11px 8px;
-        }
-        .datetime-row {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 3px;
+          flex-direction: column;
+          gap: 3px;
         }
         .datetime-date {
           font-size: 0.62rem;
@@ -193,26 +202,66 @@ export default function Navbar({ darkMode, setDarkMode }) {
           line-height: 1;
         }
 
-        .theme-toggle {
-          background: none;
+        /* Weather toggle */
+        .weather-toggle {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 3px;
+          padding: 3px;
+          background: var(--bg-input);
           border: 1px solid var(--border);
-          border-radius: 4px;
-          padding: 0;
-          cursor: pointer;
-          color: var(--text-muted);
-          font-size: 0.72rem;
-          transition: all 0.15s;
-          width: 22px;
-          height: 22px;
+          border-radius: var(--radius-sm);
+        }
+        .weather-btn {
           display: flex;
           align-items: center;
           justify-content: center;
-          flex-shrink: 0;
+          gap: 5px;
+          padding: 8px 6px;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: var(--font-sans);
+          font-size: 0.7rem;
+          font-weight: 700;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          background: transparent;
+          color: var(--text-muted);
+          position: relative;
+          overflow: hidden;
+          letter-spacing: -0.01em;
         }
-        .theme-toggle:hover {
-          color: var(--accent);
-          border-color: var(--accent);
-          background: var(--accent-dim);
+        .weather-btn:hover:not(.active) {
+          background: var(--bg-card);
+          color: var(--text-secondary);
+        }
+        .weather-night.active {
+          background: linear-gradient(135deg, #0d1235 0%, #1e1b4b 100%);
+          color: #c7d2fe;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.4), inset 0 0 14px rgba(99,102,241,0.15);
+        }
+        .weather-day.active {
+          background: linear-gradient(135deg, #fffbeb 0%, #fde68a 100%);
+          color: #92400e;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.1), inset 0 0 14px rgba(245,158,11,0.15);
+        }
+        .weather-icon {
+          font-size: 1rem;
+          line-height: 1;
+        }
+        .weather-label { line-height: 1; }
+        .weather-star {
+          position: absolute;
+          top: 4px;
+          right: 6px;
+          font-size: 0.45rem;
+          color: #a5b4fc;
+          animation: twinkle 2.5s ease-in-out infinite;
+          pointer-events: none;
+        }
+        @keyframes twinkle {
+          0%, 100% { opacity: 0.9; transform: scale(1); }
+          50% { opacity: 0.2; transform: scale(0.6); }
         }
 
         .user-chip {

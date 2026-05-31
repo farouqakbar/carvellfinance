@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
@@ -201,7 +201,7 @@ export default function Dashboard() {
               </p>
             )}
           </div>
-          <a href="/categories" className="section-link">Kelola →</a>
+          <Link to="/categories" className="section-link">Kelola →</Link>
         </div>
 
         {loading ? (
@@ -272,7 +272,7 @@ export default function Dashboard() {
                 </p>
               )}
             </div>
-            <a href="/savings" className="section-link">Kelola →</a>
+            <Link to="/savings" className="section-link">Kelola →</Link>
           </div>
 
           {loading ? (
@@ -318,7 +318,7 @@ export default function Dashboard() {
       <div className="card">
         <div className="section-head">
           <h3 className="section-title">Transaksi Terakhir</h3>
-          <a href="/transactions" className="section-link">Semua →</a>
+          <Link to="/transactions" className="section-link">Semua →</Link>
         </div>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>

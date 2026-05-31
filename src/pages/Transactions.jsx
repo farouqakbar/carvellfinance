@@ -118,7 +118,8 @@ export default function Transactions() {
   }
 
   return (
-    <div className="animate-in">
+    <>
+      <div className="animate-in">
       {/* Header */}
       <div className="tx-page-header mb-16">
         <div>
@@ -257,30 +258,6 @@ export default function Transactions() {
               </div>
             )
           })}
-        </div>
-      )}
-
-      {/* Confirm delete */}
-      {confirmDel && (
-        <ConfirmModal
-          title="Hapus Transaksi"
-          message="Transaksi ini akan dihapus permanen dan tidak bisa dikembalikan."
-          confirmLabel="Hapus"
-          onConfirm={doDelete}
-          onCancel={() => setConfirmDel(null)}
-        />
-      )}
-
-      {/* Modal */}
-      {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">{editData?.id ? 'Edit Transaksi' : 'Tambah Transaksi'}</h2>
-              <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
-            </div>
-            <TransactionForm editData={editData} onSuccess={fetchAll} onClose={() => setShowForm(false)} />
-          </div>
         </div>
       )}
 
@@ -457,6 +434,31 @@ export default function Transactions() {
           .tri-amount { font-size: 0.8rem; }
         }
       `}</style>
-    </div>
+      </div>
+
+      {/* Confirm delete */}
+      {confirmDel && (
+        <ConfirmModal
+          title="Hapus Transaksi"
+          message="Transaksi ini akan dihapus permanen dan tidak bisa dikembalikan."
+          confirmLabel="Hapus"
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDel(null)}
+        />
+      )}
+
+      {/* Modal tambah/edit */}
+      {showForm && (
+        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{editData?.id ? 'Edit Transaksi' : 'Tambah Transaksi'}</h2>
+              <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
+            </div>
+            <TransactionForm editData={editData} onSuccess={fetchAll} onClose={() => setShowForm(false)} />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

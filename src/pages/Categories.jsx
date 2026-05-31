@@ -185,7 +185,8 @@ export default function Categories() {
   }
 
   return (
-    <div className="animate-in">
+    <>
+      <div className="animate-in">
       <div className="flex-between mb-24">
         <div>
           <h1 className="page-title">Kategori</h1>
@@ -244,100 +245,6 @@ export default function Categories() {
           </div>
         )}
       </div>
-
-      {/* Confirm delete */}
-      {confirmDel && (
-        <ConfirmModal
-          title="Hapus Kategori"
-          message={`Hapus kategori "${confirmDel.name}"? Transaksi yang terhubung tidak akan ikut terhapus.`}
-          confirmLabel="Hapus"
-          onConfirm={doDelete}
-          onCancel={() => setConfirmDel(null)}
-        />
-      )}
-
-      {/* Form tambah/edit kategori */}
-      {showForm && !budgetEdit && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">{editData?.id ? 'Edit Kategori' : 'Kategori Baru'}</h2>
-              <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
-            </div>
-            <CategoryForm
-              editData={editData}
-              onSuccess={() => { fetchAll(); setShowForm(false) }}
-              onClose={() => setShowForm(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Budget edit modal */}
-      {budgetEdit && (() => {
-        const cat = categories.find(c => c.id === budgetEdit.id)
-        return (
-          <div className="modal-overlay" onClick={() => setBudgetEdit(null)}>
-            <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
-              <div className="modal-header">
-                <div>
-                  <h2 className="modal-title">Budget — {cat?.name}</h2>
-                  {salary > 0 && <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Gaji: {formatCurrency(salary)}</p>}
-                </div>
-                <button className="btn btn-ghost" onClick={() => setBudgetEdit(null)}>✕</button>
-              </div>
-
-              {salary > 0 && (
-                <div className="form-group">
-                  <label className="form-label">Persentase dari gaji</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <input
-                        className="form-input"
-                        type="number"
-                        placeholder={String(DEFAULT_PCT)}
-                        value={budgetEdit.pct}
-                        onChange={e => handlePctChange(e.target.value)}
-                        min="0" max="100" step="0.5"
-                        style={{ paddingRight: 36 }}
-                      />
-                      <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem' }}>%</span>
-                    </div>
-                    {budgetEdit.pct && salary > 0 && (
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        = {formatCurrency(Math.round((parseFloat(budgetEdit.pct) / 100) * salary))}
-                      </span>
-                    )}
-                  </div>
-                  {!budgetEdit.pct && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                      {[10, 15, 20, 25].map(p => (
-                        <button key={p} className="btn btn-secondary btn-sm" onClick={() => handlePctChange(String(p))}>
-                          {p}%
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Atau nominal langsung</label>
-                <CurrencyInput
-                  value={budgetEdit.nominal}
-                  onChange={handleNominalChange}
-                  autoFocus={!salary}
-                />
-              </div>
-
-              <div className="flex gap-8 mt-16">
-                <button className="btn btn-secondary" onClick={() => setBudgetEdit(null)}>Batal</button>
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveBudget}>Simpan</button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       <style>{`
         .cat-section { }
@@ -414,6 +321,86 @@ export default function Categories() {
           .cat-grid { grid-template-columns: 1fr; }
         }
       `}</style>
-    </div>
+      </div>
+
+      {/* Confirm delete */}
+      {confirmDel && (
+        <ConfirmModal
+          title="Hapus Kategori"
+          message={`Hapus kategori "${confirmDel.name}"? Transaksi yang terhubung tidak akan ikut terhapus.`}
+          confirmLabel="Hapus"
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDel(null)}
+        />
+      )}
+
+      {/* Form tambah/edit kategori */}
+      {showForm && !budgetEdit && (
+        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{editData?.id ? 'Edit Kategori' : 'Kategori Baru'}</h2>
+              <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
+            </div>
+            <CategoryForm
+              editData={editData}
+              onSuccess={() => { fetchAll(); setShowForm(false) }}
+              onClose={() => setShowForm(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Budget edit modal */}
+      {budgetEdit && (() => {
+        const cat = categories.find(c => c.id === budgetEdit.id)
+        return (
+          <div className="modal-overlay" onClick={() => setBudgetEdit(null)}>
+            <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h2 className="modal-title">Budget — {cat?.name}</h2>
+                  {salary > 0 && <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Gaji: {formatCurrency(salary)}</p>}
+                </div>
+                <button className="btn btn-ghost" onClick={() => setBudgetEdit(null)}>✕</button>
+              </div>
+              {salary > 0 && (
+                <div className="form-group">
+                  <label className="form-label">Persentase dari gaji</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input className="form-input" type="number" placeholder={String(DEFAULT_PCT)}
+                        value={budgetEdit.pct} onChange={e => handlePctChange(e.target.value)}
+                        min="0" max="100" step="0.5" style={{ paddingRight: 36 }} />
+                      <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem' }}>%</span>
+                    </div>
+                    {budgetEdit.pct && salary > 0 && (
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        = {formatCurrency(Math.round((parseFloat(budgetEdit.pct) / 100) * salary))}
+                      </span>
+                    )}
+                  </div>
+                  {!budgetEdit.pct && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      {[10, 15, 20, 25].map(p => (
+                        <button key={p} className="btn btn-secondary btn-sm" onClick={() => handlePctChange(String(p))}>{p}%</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="form-group">
+                <label className="form-label">Atau nominal langsung</label>
+                <CurrencyInput value={budgetEdit.nominal} onChange={handleNominalChange} autoFocus={!salary} />
+              </div>
+              <div className="flex gap-8 mt-16">
+                <button className="btn btn-secondary" onClick={() => setBudgetEdit(null)}>Batal</button>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveBudget}>Simpan</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+    </>
   )
 }

@@ -171,7 +171,8 @@ export default function Plans() {
   const totalSelesai = plans.filter(p => p.done).reduce((s, p) => s + Number(p.amount), 0)
 
   return (
-    <div className="animate-in">
+    <>
+      <div className="animate-in">
       {/* Header */}
       <div className="flex-between" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <div>
@@ -763,5 +764,6 @@ export default function Plans() {
         .done-preview-warn { border-color: rgba(248,113,113,0.4); background: var(--danger-dim); }
       `}</style>
     </div>
+  </>
   )
 }

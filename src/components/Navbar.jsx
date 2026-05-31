@@ -93,6 +93,46 @@ export default function Navbar({ darkMode, setDarkMode }) {
         </div>
       </nav>
 
+      {/* ── Mobile topbar ─────────────────── */}
+      <header className="mobile-topbar">
+        {/* Row 1: Logo + controls */}
+        <div className="mtp-row1">
+          <div className="mtp-logo">
+            <LogoMark size={22} id="mobile-logo" />
+            <span className="mtp-logo-text">Cashvell</span>
+          </div>
+
+          <div className="mtp-controls">
+            {/* Theme toggle compact */}
+            <div className="mtp-theme">
+              <button
+                type="button"
+                className={`mtp-theme-btn mtp-night ${darkMode ? 'active' : ''}`}
+                onClick={() => setDarkMode(true)}
+                title="Gelap"
+              >◑</button>
+              <button
+                type="button"
+                className={`mtp-theme-btn mtp-day ${!darkMode ? 'active' : ''}`}
+                onClick={() => setDarkMode(false)}
+                title="Terang"
+              >☀</button>
+            </div>
+
+            {/* Profile avatar */}
+            <div className="mtp-avatar">{initial}</div>
+          </div>
+        </div>
+
+        {/* Row 2: Date + time + signout */}
+        <div className="mtp-row2">
+          <span className="mtp-datetime">{dateStr} · {timeStr}</span>
+          <button className="mtp-signout" onClick={handleSignOut}>
+            {name} · Keluar
+          </button>
+        </div>
+      </header>
+
       {/* Mobile bottom nav */}
       <nav className="mobile-nav">
         {mobileItems.map(item => (
@@ -310,7 +350,129 @@ export default function Navbar({ darkMode, setDarkMode }) {
         }
         .sign-out-btn:hover { color: var(--danger); }
 
-        /* Mobile */
+        /* ── Mobile topbar ─────────────────── */
+        .mobile-topbar {
+          display: none;
+          position: fixed;
+          top: 0; left: 0; right: 0;
+          background: var(--bg-card);
+          border-bottom: 1px solid var(--border);
+          z-index: 100;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
+        .mtp-row1 {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 16px;
+          height: 50px;
+        }
+
+        .mtp-logo {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .mtp-logo-text {
+          font-size: 1rem;
+          font-weight: 800;
+          letter-spacing: -0.035em;
+          color: var(--text-primary);
+        }
+
+        .mtp-controls {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        /* Compact weather toggle */
+        .mtp-theme {
+          display: flex;
+          gap: 2px;
+          padding: 2px;
+          background: var(--bg-input);
+          border: 1px solid var(--border);
+          border-radius: 7px;
+        }
+        .mtp-theme-btn {
+          width: 32px;
+          height: 28px;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: transparent;
+          color: var(--text-muted);
+          transition: all 0.2s;
+          font-family: var(--font-sans);
+        }
+        .mtp-night.active {
+          background: linear-gradient(135deg, #0d1235, #1e1b4b);
+          color: #c7d2fe;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .mtp-day.active {
+          background: linear-gradient(135deg, #fffbeb, #fde68a);
+          color: #92400e;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .mtp-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: var(--accent-dim);
+          border: 1.5px solid var(--accent);
+          color: var(--accent);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          font-size: 0.78rem;
+          flex-shrink: 0;
+        }
+
+        .mtp-row2 {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 16px;
+          height: 28px;
+          background: var(--bg-input);
+          border-top: 1px solid var(--border);
+        }
+        .mtp-datetime {
+          font-size: 0.63rem;
+          font-weight: 600;
+          color: var(--text-muted);
+          font-variant-numeric: tabular-nums;
+          letter-spacing: 0.01em;
+          text-transform: capitalize;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .mtp-signout {
+          background: none;
+          border: none;
+          color: var(--text-muted);
+          font-size: 0.63rem;
+          font-family: var(--font-sans);
+          font-weight: 600;
+          cursor: pointer;
+          padding: 0;
+          flex-shrink: 0;
+          margin-left: 8px;
+          transition: color 0.15s;
+        }
+        .mtp-signout:hover { color: var(--danger); }
+
+        /* ── Mobile bottom nav ──────────────── */
         .mobile-nav {
           display: none;
           position: fixed;
@@ -318,9 +480,9 @@ export default function Navbar({ darkMode, setDarkMode }) {
           background: var(--bg-card);
           border-top: 1px solid var(--border);
           z-index: 100;
-          padding: 8px 8px max(10px, env(safe-area-inset-bottom));
+          padding: 6px 8px max(8px, env(safe-area-inset-bottom));
           grid-template-columns: repeat(3, 1fr);
-          box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
         }
         .mobile-nav-item {
           display: flex;
@@ -333,15 +495,16 @@ export default function Navbar({ darkMode, setDarkMode }) {
           color: var(--text-muted);
           transition: color 0.15s;
           border-radius: var(--radius-sm);
-          min-height: 48px;
+          min-height: 46px;
         }
         .mobile-nav-item.active { color: var(--accent); }
         .mobile-nav-item:active { background: var(--bg-input); }
-        .mobile-nav-icon { font-size: 1.15rem; line-height: 1; }
-        .mobile-nav-label { font-size: 0.58rem; font-weight: 600; letter-spacing: 0.02em; margin-top: 2px; }
+        .mobile-nav-icon { font-size: 1.1rem; line-height: 1; }
+        .mobile-nav-label { font-size: 0.58rem; font-weight: 600; letter-spacing: 0.02em; }
 
         @media (max-width: 768px) {
           .sidebar { display: none; }
+          .mobile-topbar { display: block; }
           .mobile-nav { display: grid; }
         }
       `}</style>

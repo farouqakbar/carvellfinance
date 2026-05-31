@@ -146,7 +146,8 @@ body::before {
   .main-content {
     margin-left: 0;
     padding: 16px 14px;
-    padding-bottom: 92px;
+    padding-top: 94px;   /* topbar: 50px row1 + 28px row2 + 16px gap */
+    padding-bottom: 88px; /* bottom nav */
     max-width: 100vw;
     overflow-x: hidden;
   }

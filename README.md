@@ -1,4 +1,4 @@
-# Carvell Finance — Personal Finance Tracker
+# Finora — Personal Finance Tracker
 
 **Kelola keuangan dengan lebih bijak** 💰
 
@@ -6,16 +6,29 @@ Aplikasi tracker keuangan personal yang simple dan powerful. Catat pengeluaran, 
 
 ## 🎯 Fitur Utama
 
-- 📊 **Dashboard Visual** — Ringkasan keuangan bulanan dengan grafik
+- 📊 **Dashboard Visual** — Ringkasan keuangan dengan grafik
 - 💳 **Kategori & Budget** — Buat kategori custom dan set budget limit
-- 💰 **Target Tabungan** — Tetapkan target dan pantau progress real-time
-- 📝 **Riwayat Transaksi** — Catat semua pengeluaran dengan filter lengkap
-- 🌙 **Dark Mode** — Nyaman digunakan kapan saja
-- 🔐 **Secure Auth** — Login dengan username + password (Supabase)
+- 💰 **Target Tabungan** — Tetapkan target dan pantau progress
+- 📝 **Riwayat Transaksi** — Catat pengeluaran dengan filter lengkap
+- 🔐 **Secure Auth** — Login dengan username + password
 
-## 🚀 Quick Start
+## 🌐 Live Demo
 
-### 1. Clone Repository
+Website tersedia di: **https://farouqakbar.github.io/carvellfinance/**
+
+Coba login dengan username dan password yang Anda daftar!
+
+## ⚙️ Tech Stack
+
+- **Frontend**: React 18 + Vite
+- **Database**: Supabase (PostgreSQL)
+- **Auth**: Custom username/password authentication
+- **Charts**: Recharts
+- **Deploy**: GitHub Pages
+
+## 🚀 Quick Start (Development)
+
+### 1. Clone & Install
 
 ```bash
 git clone https://github.com/farouqakbar/carvellfinance.git
@@ -25,132 +38,122 @@ npm install
 
 ### 2. Setup Supabase
 
-1. Buka [supabase.com](https://supabase.com) → **Create a new project**
-2. Tunggu project selesai dibuat
-3. **SQL Editor** → Copy paste isi `supabase_schema.sql` → **Run**
-4. **Authentication → Providers → Email**:
-   - Matikan toggle **"Confirm email"** → **Save**
+1. Buka [supabase.com](https://supabase.com) → Create project
+2. SQL Editor → Run `supabase_schema.sql`
+3. Disable RLS untuk testing (atau setup policies)
 
 ### 3. Environment Variables
 
 ```bash
-cp .env.example .env
-```
-
-Edit `.env` dan isi dengan Supabase credentials:
-
-```env
+# Create .env file
 VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
+VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Dapatkan dari: **Supabase → Project Settings → API**
-
-### 4. Run
+### 4. Run Development Server
 
 ```bash
 npm run dev
 ```
 
-Buka browser: `http://localhost:5173`
+Browser: `http://localhost:5173`
 
-## 🚢 Deployment
+## 🛠️ Build & Deploy
 
-### Option 1: Vercel (Recommended)
-
-```bash
-npm run build
-```
-
-1. Push ke GitHub
-2. Buka [vercel.com](https://vercel.com) → **New Project**
-3. Import repository
-4. Set environment variables:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-5. Deploy!
-
-### Option 2: GitHub Pages
+### Build untuk Production
 
 ```bash
 npm run build
-# Push dist folder ke gh-pages branch
 ```
 
-### Option 3: Netlify
+Output: `docs/` folder (siap untuk GitHub Pages)
+
+### Deploy Changes
 
 ```bash
 npm run build
-# Drag dist folder ke Netlify
+git add .
+git commit -m "Update website"
+git push origin main
 ```
 
-Atau connect GitHub dan set env vars di Netlify dashboard.
+Website akan update otomatis dalam 1-2 menit di GitHub Pages!
 
-## 📁 Struktur Proyek
+## 📂 Struktur Folder
 
 ```
-src/
-├── components/          # UI components
-├── context/             # React Context (Auth)
-├── pages/               # Page components
-├── services/            # Supabase client
-├── hooks/               # Custom hooks
-├── utils/               # Utilities
-├── App.jsx
-├── index.css
-└── main.jsx
+finora/
+├── src/
+│   ├── components/       # React components
+│   ├── pages/            # Page routes
+│   ├── context/          # Auth context
+│   ├── services/         # Supabase client
+│   ├── hooks/            # Custom hooks
+│   ├── utils/            # Helper functions
+│   ├── App.jsx
+│   └── main.jsx
+├── docs/                 # Build output (GitHub Pages)
+├── public/               # Static assets
+├── package.json
+├── vite.config.js
+├── supabase_schema.sql   # Database schema
+└── .env                  # Environment variables
 ```
 
-## 🛠️ Tech Stack
+## 🔐 Authentication
 
-- **Frontend**: React 18 + Vite
-- **Backend**: Supabase (PostgreSQL)
-- **Auth**: Supabase Auth (Email/Password)
-- **Charts**: Recharts
-- **Routing**: React Router v6
+Sistem menggunakan **custom username/password** stored di Supabase:
 
-## 🔐 Keamanan
-
-- Passwords di-hash di Supabase Auth
-- Row Level Security (RLS) pada semua tables
-- Credentials tidak di-commit (`.gitignore`)
-- User data terenkripsi di database
+- Register dengan username (min 3 char) dan password (min 6 char)
+- Login dengan username + password
+- Session disimpan di localStorage
+- Auto-logout saat refresh browser (optional)
 
 ## 📊 Database Schema
 
-- `user_profiles` — Menyimpan username & data user
-- `salaries` — Gaji bulanan
-- `categories` — Kategori pengeluaran custom
-- `transactions` — Catat semua transaksi
-- `savings` — Target tabungan
+| Table | Deskripsi |
+|-------|-----------|
+| `user_profiles` | Store user account & password |
+| `categories` | Kategori pengeluaran |
+| `transactions` | Riwayat transaksi |
+| `salaries` | Pendapatan bulanan |
+| `savings` | Target tabungan |
 
 ## 🐛 Troubleshooting
 
-**Error: "Missing Supabase environment variables"**
-→ Cek file `.env` sudah ada dan berisi credentials yang benar
+### Supabase connection error
 
-**Login gagal dengan "Username atau password salah"**
-→ Pastikan email confirmation sudah di-disable di Supabase
+- Verifikasi `VITE_SUPABASE_URL` & `VITE_SUPABASE_ANON_KEY` di `.env`
+- Cek Supabase project status
+- Clear browser cache (Ctrl+Shift+Del)
 
-**Username sudah terdaftar tapi lupa password**
-→ Buka Supabase Dashboard → Users → hapus user → daftar ulang
+### Login gagal
 
-## 📝 Available Scripts
+- Pastikan database table `user_profiles` sudah dibuat
+- Check apakah RLS policies tidak menghalangi insert/select
+- Verify password hashing function di `src/utils/passwordUtils.js`
 
-```bash
-npm run dev      # Development server
-npm run build    # Build for production
-npm run preview  # Preview build
-```
+### Website blank saat deploy
 
-## 📄 License
+- Check GitHub Pages settings: Source = `main` branch, folder = `/docs`
+- Cek browser console (F12) untuk error message
+- Tunggu 1-2 menit setelah push
 
-MIT License
+## 📚 Resources
 
-## 👤 Author
+- [React Docs](https://react.dev)
+- [Vite Docs](https://vitejs.dev)
+- [Supabase Docs](https://supabase.com/docs)
+- [GitHub Pages Guide](https://pages.github.com)
 
-**Farouq Akbar** — [@farouqakbar](https://github.com/farouqakbar)
+## 📝 License
+
+MIT License - Feel free to use for personal projects!
+
+## 👨‍💻 Author
+
+Farouq - [GitHub](https://github.com/farouqakbar)
 
 ---
 
-**Mulai kelola keuangan dengan bijak hari ini! 🚀**
+**Happy tracking your finances! 🎉**

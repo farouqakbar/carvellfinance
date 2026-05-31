@@ -84,6 +84,16 @@ export default function Dashboard() {
     const amount = parseFloat(salaryInput)
     if (!amount) return
     await supabase.from('salaries').upsert({ user_id: user.id, month, amount }, { onConflict: 'user_id,month' })
+
+    // Auto-set budget 15% untuk kategori wajib yang belum diset
+    const unsetMandatory = data.categories.filter(c => isMandatory(c) && !(Number(c.budget_limit) > 0))
+    if (unsetMandatory.length > 0) {
+      const defaultBudget = Math.round(amount * 0.15)
+      await Promise.all(unsetMandatory.map(c =>
+        supabase.from('categories').update({ budget_limit: defaultBudget }).eq('id', c.id)
+      ))
+    }
+
     toast('Gaji disimpan', 'success')
     setShowSalaryForm(false)
     setSalaryInput('')
@@ -94,14 +104,19 @@ export default function Dashboard() {
   const isCurrentMonth = month === getCurrentMonth()
   const overBudgetCats = data.categories.filter(c => c.overBudget)
 
-  // Mandatory categories langsung potong gaji tanpa nunggu transaksi
+  // Mandatory: pakai budget yg diset, atau default 15% gaji kalau belum diset
+  const DEFAULT_MANDATORY_PCT = 0.15
   const mandatoryBudgetTotal = data.categories
-    .filter(c => isMandatory(c) && c.budget_limit > 0)
-    .reduce((s, c) => s + Number(c.budget_limit), 0)
+    .filter(c => isMandatory(c))
+    .reduce((s, c) => {
+      const budget = Number(c.budget_limit) > 0
+        ? Number(c.budget_limit)
+        : (data.salary > 0 ? Math.round(data.salary * DEFAULT_MANDATORY_PCT) : 0)
+      return s + budget
+    }, 0)
   const mandatoryTransactionSpent = data.categories
     .filter(c => isMandatory(c))
     .reduce((s, c) => s + (c.spent || 0), 0)
-  // Deduction tambahan di luar transaksi yang sudah dicatat
   const mandatoryAutoDeduct = Math.max(0, mandatoryBudgetTotal - mandatoryTransactionSpent)
 
   const effectiveExpense = data.totalExpense + mandatoryAutoDeduct

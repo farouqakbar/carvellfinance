@@ -4,9 +4,32 @@ import { supabase } from "../services/supabaseClient";
 const AuthContext = createContext({});
 const STORAGE_KEY = "cashvell_user";
 
+const DEFAULT_CATEGORIES = [
+  { name: "Orang Tua",       icon: "👨‍👩‍👧", color: "#f59e0b", budget_limit: 0 },
+  { name: "Tabungan Bulanan", icon: "🏦",    color: "#6366f1", budget_limit: 0 },
+  { name: "Investasi",        icon: "📈",    color: "#10b981", budget_limit: 0 },
+];
+
 async function hashPassword(password) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function seedDefaultCategories(userId) {
+  const { data: existing } = await supabase
+    .from("categories")
+    .select("name")
+    .eq("user_id", userId);
+
+  const existingNames = new Set((existing || []).map(c => c.name));
+
+  const toInsert = DEFAULT_CATEGORIES
+    .filter(c => !existingNames.has(c.name))
+    .map(c => ({ ...c, user_id: userId }));
+
+  if (toInsert.length > 0) {
+    await supabase.from("categories").insert(toInsert);
+  }
 }
 
 export function AuthProvider({ children }) {
@@ -16,7 +39,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      try { setUser(JSON.parse(stored)); } catch { localStorage.removeItem(STORAGE_KEY); }
+      try {
+        const u = JSON.parse(stored);
+        setUser(u);
+        seedDefaultCategories(u.id);
+      } catch { localStorage.removeItem(STORAGE_KEY); }
     }
     setLoading(false);
   }, []);
@@ -36,10 +63,10 @@ export function AuthProvider({ children }) {
     const userData = { id: data.id, username: data.username, full_name: data.full_name };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     setUser(userData);
+    await seedDefaultCategories(userData.id);
   };
 
   const signUp = async (username, password) => {
-    // Cek username sudah ada
     const { data: existing } = await supabase
       .from("user_profiles")
       .select("id")
@@ -62,6 +89,7 @@ export function AuthProvider({ children }) {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setUser(data);
+    await seedDefaultCategories(data.id);
   };
 
   const signOut = () => {

@@ -391,6 +391,13 @@ export default function Savings() {
         .update-divider::before { left: 0; }
         .update-divider::after { right: 0; }
 
+        @media (max-width: 768px) {
+          .sv-grid { grid-template-columns: 1fr; gap: 10px; }
+          .sv-card { padding: 16px; }
+          .sv-current { font-size: 1.3rem; }
+          .sv-update-btn { padding: 10px; font-size: 0.8rem; }
+          .scc-top { flex-wrap: wrap; }
+        }
         @media (max-width: 640px) {
           .sv-grid { grid-template-columns: 1fr; }
         }

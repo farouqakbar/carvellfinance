@@ -388,8 +388,19 @@ export default function Transactions() {
         @media (max-width: 768px) {
           .tx-filter-bar { flex-direction: column; align-items: stretch; }
           .tx-filter-bar .form-input,
-          .tx-filter-bar .form-select { width: 100%; }
+          .tx-filter-bar .form-select { width: 100%; flex: none; }
+          .type-filter-btns { width: 100%; justify-content: stretch; }
+          .type-filter-btn { flex: 1; }
           .tri-actions { opacity: 1; }
+          .tx-summary-strip { padding: 10px 14px; }
+          .tss-val { font-size: 0.8rem; }
+          .tx-row-item { padding: 12px 14px; }
+          .tx-group-date { font-size: 0.68rem; }
+        }
+
+        @media (max-width: 400px) {
+          .tx-summary-strip { display: none; }
+          .tri-amount { font-size: 0.8rem; }
         }
       `}</style>
     </div>

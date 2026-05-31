@@ -211,11 +211,14 @@ export default function Categories() {
         .cat-spent { font-size: 1rem; font-weight: 800; letter-spacing: -0.02em; }
         .cat-limit { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
 
-        @media (max-width: 640px) {
-          .cat-grid { grid-template-columns: 1fr 1fr; }
+        @media (max-width: 768px) {
           .cat-actions { opacity: 1; }
+          .cat-card { padding: 14px; }
         }
-        @media (max-width: 400px) {
+        @media (max-width: 640px) {
+          .cat-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+        }
+        @media (max-width: 380px) {
           .cat-grid { grid-template-columns: 1fr; }
         }
       `}</style>

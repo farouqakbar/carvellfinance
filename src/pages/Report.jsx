@@ -177,20 +177,21 @@ export default function Report() {
       )}
 
       <style>{`
-        .report-summary-card { padding: 20px 24px; }
+        .report-summary-card { padding: 16px 20px; }
         .report-summary-value {
-          font-family: var(--font-serif);
-          font-size: 1.6rem;
+          font-size: 1.4rem;
+          font-weight: 800;
+          letter-spacing: -0.03em;
         }
 
         .month-row {
           background: var(--bg-card);
           border: 1px solid var(--border);
           border-radius: var(--radius-lg);
-          padding: 18px 24px;
+          padding: 16px 18px;
           display: flex;
           align-items: center;
-          gap: 20px;
+          gap: 16px;
           flex-wrap: wrap;
           cursor: pointer;
           transition: border-color 0.2s, transform 0.15s;
@@ -205,18 +206,18 @@ export default function Report() {
           display: flex;
           flex-direction: column;
           gap: 3px;
-          min-width: 130px;
+          min-width: 110px;
         }
         .month-name {
-          font-family: var(--font-serif);
-          font-style: italic;
-          font-size: 1rem;
+          font-size: 0.9rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
           color: var(--text-primary);
         }
 
         .month-stats {
           display: flex;
-          gap: 28px;
+          gap: 20px;
           flex: 1;
           flex-wrap: wrap;
         }
@@ -237,6 +238,19 @@ export default function Report() {
         }
 
         .month-arrow { flex-shrink: 0; }
+
+        @media (max-width: 768px) {
+          .month-row { padding: 14px 16px; gap: 12px; }
+          .month-stats { gap: 14px; flex-wrap: wrap; }
+          .month-stat { min-width: 70px; }
+          .month-net-bar { display: none; }
+          .report-summary-value { font-size: 1.1rem; }
+          .grid-2 { grid-template-columns: 1fr 1fr; gap: 10px; }
+        }
+        @media (max-width: 480px) {
+          .month-stats { gap: 10px; }
+          .month-stat span { font-size: 0.72rem; }
+        }
       `}</style>
     </div>
   )

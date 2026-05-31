@@ -777,19 +777,62 @@ export default function Dashboard() {
         .tx-amount.income { color: var(--success); }
         .tx-amount.expense { color: var(--danger); }
 
+        /* ── Mobile ─────────────────────────── */
         @media (max-width: 768px) {
+          /* Header */
+          .dash-header { flex-wrap: wrap; row-gap: 8px; }
+          .month-label-text { font-size: 0.875rem; min-width: 110px; }
+
+          /* Hero */
+          .hero-card { padding: 16px; }
+          .hero-top { flex-direction: column; gap: 0; margin-bottom: 12px; }
+          .hero-right { display: none; }
+          .hero-balance { font-size: 1.75rem; }
+          .hero-eyebrow { margin-bottom: 4px; }
+
+          /* Quick stats */
+          .quick-stats { gap: 6px; }
+          .qs-item { padding: 10px 12px; }
+          .qs-label { font-size: 0.6rem; }
+          .qs-value { font-size: 0.8rem; }
+
+          /* Budget rows — reorder with grid areas */
           .budget-row-item {
             grid-template-columns: 1fr auto;
             grid-template-rows: auto auto;
+            grid-template-areas:
+              "left right"
+              "bar  bar";
+            padding: 12px 0;
+            gap: 8px;
           }
-          .bri-bar-wrap {
-            grid-column: 1 / -1;
-          }
-          .bri-right { grid-row: 1; }
+          .bri-left { grid-area: left; }
+          .bri-bar-wrap { grid-area: bar; }
+          .bri-right { grid-area: right; align-self: start; }
           .bri-pct { display: none; }
-          .quick-stats { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-          .qs-value { font-size: 0.78rem; }
+          .bri-limit { display: none; }
+
+          /* Savings compact — 1 col */
+          .savings-compact-grid { grid-template-columns: 1fr; }
+
+          /* Sections */
+          .section-head { flex-wrap: nowrap; gap: 8px; }
+
+          /* Transactions on dash */
+          .tx-item { padding: 10px 0; }
+          .tx-icon-wrap { width: 30px; height: 30px; font-size: 0.8rem; }
+          .tx-desc { font-size: 0.78rem; }
+          .tx-amount { font-size: 0.8rem; }
+
+          /* Alert */
+          .alert-banner { font-size: 0.75rem; padding: 9px 12px; }
+        }
+
+        @media (max-width: 400px) {
+          .quick-stats { grid-template-columns: 1fr; gap: 6px; }
+          .qs-item { flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 14px; }
           .hero-balance { font-size: 1.5rem; }
+          .month-label-text { min-width: 100px; font-size: 0.8rem; }
         }
       `}</style>
     </div>

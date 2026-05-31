@@ -70,7 +70,7 @@ export default function Navbar({ darkMode, setDarkMode }) {
               onClick={() => setDarkMode(true)}
             >
               <span className="weather-icon">◑</span>
-              <span className="weather-label">Malam</span>
+              <span className="weather-label">Gelap</span>
               {darkMode && <span className="weather-star">✦</span>}
             </button>
             <button
@@ -79,7 +79,7 @@ export default function Navbar({ darkMode, setDarkMode }) {
               onClick={() => setDarkMode(false)}
             >
               <span className="weather-icon">☀</span>
-              <span className="weather-label">Siang</span>
+              <span className="weather-label">Terang</span>
             </button>
           </div>
 

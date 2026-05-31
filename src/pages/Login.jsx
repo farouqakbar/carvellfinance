@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-
-const BASE = import.meta.env.BASE_URL
+import { LogoWordmark, LogoMark } from '../components/Logo'
 
 export default function Login() {
   const { signIn, signUp } = useAuth()
@@ -44,57 +43,68 @@ export default function Login() {
     setForm({ username: '', password: '', confirmPassword: '' })
   }
 
-  const isDark = localStorage.getItem('theme') !== 'light'
-  const loginIcon = isDark ? `${BASE}logo/logologindark.svg` : `${BASE}logo/logologinlight.svg`
-
   return (
-    <div className="login-page">
-      <div className="login-left">
-        <div className="login-brand">
-          <img src={loginIcon} alt="Cashvell" width="48" height="48" />
-          <span className="login-logo-text">Cashvell</span>
-        </div>
-        <div className="login-tagline">
-          <h1>Kelola keuangan<br /><em>dengan lebih bijak.</em></h1>
-          <p>Lacak pengeluaran, atur budget, dan capai target tabungan kamu — semua dalam satu tempat.</p>
-        </div>
-        <div className="login-features">
-          {[
-            'Dashboard visual ringkas per bulan',
-            'Kategori & budget limit custom',
-            'Target tabungan & progress',
-            'Laporan keuangan bulanan',
-          ].map(f => (
-            <div key={f} className="feature-item">
-              <span className="feature-check">✓</span>
-              <span>{f}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+    <div className="login-root">
+      {/* Left panel */}
+      <div className="login-panel">
+        <div className="login-panel-inner">
+          <LogoWordmark dark size="lg" id="login-logo" />
 
-      <div className="login-right">
-        <div className="login-card">
-          <div className="login-header">
-            <div className="login-logo-sm">
-              <img src={loginIcon} alt="Cashvell" width="32" height="32" />
-              <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: '1.2rem' }}>Cashvell</span>
-            </div>
-            <h2 className="login-title">
-              {mode === 'login' ? 'Selamat datang kembali' : 'Buat akun baru'}
-            </h2>
-            <p className="login-sub">
-              {mode === 'login' ? 'Masukkan username dan password kamu' : 'Pilih username dan password'}
+          <div className="login-hero">
+            <h1 className="login-headline">
+              Kendali penuh<br />atas keuanganmu.
+            </h1>
+            <p className="login-sub-text">
+              Catat pemasukan dan pengeluaran, pantau budget per kategori,
+              dan capai target tabungan — dalam satu dashboard yang ringkas.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <ul className="login-features">
+            {[
+              { icon: '↗', text: 'Dashboard keuangan per bulan' },
+              { icon: '◈', text: 'Budget per kategori + alert overbudget' },
+              { icon: '◎', text: 'Target tabungan dengan progress' },
+              { icon: '▤', text: 'Laporan bulanan dengan grafik tren' },
+            ].map(f => (
+              <li key={f.text} className="login-feature-item">
+                <span className="login-feature-icon">{f.icon}</span>
+                <span>{f.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* Decorative grid dots */}
+          <div className="login-grid-dots" aria-hidden />
+        </div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="login-form-panel">
+        <div className="login-form-wrap">
+          {/* Mobile logo */}
+          <div className="login-mobile-logo">
+            <LogoWordmark dark={false} size="md" id="login-mobile-logo" />
+          </div>
+
+          <div className="login-form-header">
+            <h2 className="login-form-title">
+              {mode === 'login' ? 'Selamat datang' : 'Buat akun'}
+            </h2>
+            <p className="login-form-sub">
+              {mode === 'login'
+                ? 'Masuk dengan username dan password kamu'
+                : 'Pilih username dan password'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="login-form">
             <div className="form-group">
               <label className="form-label">Username</label>
-              <div className="input-wrap">
-                <span className="input-prefix">@</span>
+              <div className="input-prefix-wrap">
+                <span className="input-prefix-char">@</span>
                 <input
-                  className="form-input input-with-prefix"
+                  className="form-input input-has-prefix"
                   type="text"
                   placeholder="username_kamu"
                   value={form.username}
@@ -105,7 +115,7 @@ export default function Login() {
                 />
               </div>
               {mode === 'register' && (
-                <p className="form-hint">Hanya huruf, angka, dan underscore. Min. 3 karakter.</p>
+                <p className="form-hint">Huruf, angka, underscore. Min. 3 karakter.</p>
               )}
             </div>
 
@@ -139,85 +149,214 @@ export default function Login() {
 
             {error && <div className="auth-error">{error}</div>}
 
-            <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading}>
+            <button type="submit" className="btn btn-primary btn-block login-submit-btn" disabled={loading}>
               {loading ? 'Memproses...' : mode === 'login' ? 'Masuk' : 'Buat Akun'}
             </button>
           </form>
 
-          <div className="login-switch">
+          <p className="login-switch">
             {mode === 'login' ? (
-              <>Belum punya akun? <button onClick={() => switchMode('register')}>Daftar</button></>
+              <>Belum punya akun? <button type="button" onClick={() => switchMode('register')}>Daftar</button></>
             ) : (
-              <>Sudah punya akun? <button onClick={() => switchMode('login')}>Masuk</button></>
+              <>Sudah punya akun? <button type="button" onClick={() => switchMode('login')}>Masuk</button></>
             )}
-          </div>
+          </p>
         </div>
       </div>
 
       <style>{`
-        .login-page { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; }
+        .login-root {
+          min-height: 100dvh;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          background: var(--bg);
+        }
 
-        .login-left {
-          background: linear-gradient(135deg, #0a0a10 0%, #13131a 100%);
-          padding: 48px;
+        /* Left panel */
+        .login-panel {
+          background: #0a0a10;
+          border-right: 1px solid #1e1e2a;
+          position: relative;
+          overflow: hidden;
+          display: flex;
+          align-items: stretch;
+        }
+        .login-panel::before {
+          content: '';
+          position: absolute;
+          top: -120px; left: -120px;
+          width: 480px; height: 480px;
+          background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 65%);
+          pointer-events: none;
+        }
+        .login-panel::after {
+          content: '';
+          position: absolute;
+          bottom: -80px; right: -80px;
+          width: 340px; height: 340px;
+          background: radial-gradient(circle, rgba(167,139,250,0.08) 0%, transparent 65%);
+          pointer-events: none;
+        }
+        .login-panel-inner {
+          position: relative;
+          z-index: 1;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
-          border-right: 1px solid var(--border);
-          position: relative;
-          overflow: hidden;
+          padding: 40px 44px;
+          width: 100%;
         }
-        .login-left::before {
-          content: '';
+
+        .login-hero { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 40px 0; }
+        .login-headline {
+          font-size: clamp(1.75rem, 3vw, 2.5rem);
+          font-weight: 800;
+          letter-spacing: -0.04em;
+          line-height: 1.1;
+          color: #eeeef5;
+          margin-bottom: 16px;
+        }
+        .login-sub-text {
+          font-size: 0.9rem;
+          line-height: 1.65;
+          color: #6565808a;
+          color: rgba(160, 160, 200, 0.7);
+          max-width: 380px;
+        }
+
+        .login-features {
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .login-feature-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: rgba(160, 160, 200, 0.65);
+          font-size: 0.8125rem;
+          font-weight: 500;
+        }
+        .login-feature-icon {
+          color: #818cf8;
+          font-size: 0.85rem;
+          width: 18px;
+          text-align: center;
+          flex-shrink: 0;
+        }
+
+        .login-grid-dots {
           position: absolute;
-          top: -80px; left: -80px;
-          width: 360px; height: 360px;
-          background: radial-gradient(circle, rgba(96,165,250,0.08) 0%, transparent 70%);
+          inset: 0;
+          background-image: radial-gradient(circle, rgba(99,102,241,0.15) 1px, transparent 1px);
+          background-size: 32px 32px;
+          opacity: 0.4;
           pointer-events: none;
+          mask-image: radial-gradient(ellipse at 80% 20%, black 20%, transparent 70%);
+          -webkit-mask-image: radial-gradient(ellipse at 80% 20%, black 20%, transparent 70%);
         }
-        .login-left::after {
-          content: '';
+
+        /* Right panel */
+        .login-form-panel {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 48px 40px;
+        }
+        .login-form-wrap {
+          width: 100%;
+          max-width: 380px;
+        }
+
+        .login-mobile-logo {
+          display: none;
+          margin-bottom: 32px;
+        }
+
+        .login-form-header { margin-bottom: 28px; }
+        .login-form-title {
+          font-size: 1.5rem;
+          font-weight: 800;
+          letter-spacing: -0.035em;
+          color: var(--text-primary);
+          margin-bottom: 6px;
+        }
+        .login-form-sub {
+          font-size: 0.825rem;
+          color: var(--text-secondary);
+          font-weight: 500;
+        }
+
+        .login-form { display: flex; flex-direction: column; gap: 0; }
+
+        .input-prefix-wrap { position: relative; }
+        .input-prefix-char {
           position: absolute;
-          bottom: -60px; right: -60px;
-          width: 280px; height: 280px;
-          background: radial-gradient(circle, rgba(167,139,250,0.06) 0%, transparent 70%);
+          left: 13px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--text-muted);
+          font-size: 0.875rem;
+          font-weight: 600;
           pointer-events: none;
+          z-index: 1;
+        }
+        .input-has-prefix { padding-left: 28px !important; }
+
+        .form-hint {
+          font-size: 0.7rem;
+          color: var(--text-muted);
+          margin-top: 5px;
+          font-weight: 500;
         }
 
-        .login-brand { display: flex; align-items: center; gap: 12px; }
-        .login-logo-text { font-family: var(--font-serif); font-size: 1.4rem; font-style: italic; color: #f1f5f9; }
+        .auth-error {
+          background: var(--danger-dim);
+          color: var(--danger);
+          border: 1px solid rgba(248,113,113,0.2);
+          border-radius: var(--radius-sm);
+          padding: 9px 13px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          margin-bottom: 14px;
+        }
 
-        .login-tagline h1 { font-family: var(--font-serif); font-size: 2.8rem; line-height: 1.15; color: #f1f5f9; margin-bottom: 16px; }
-        .login-tagline p { color: #94a3b8; font-size: 1rem; line-height: 1.6; max-width: 380px; }
+        .login-submit-btn {
+          padding: 12px;
+          font-size: 0.875rem;
+          border-radius: var(--radius-sm);
+          margin-top: 4px;
+          letter-spacing: -0.01em;
+        }
 
-        .login-features { display: flex; flex-direction: column; gap: 12px; }
-        .feature-item { display: flex; align-items: center; gap: 12px; color: #94a3b8; font-size: 0.9rem; }
-        .feature-check { color: #60a5fa; font-weight: 700; width: 20px; text-align: center; flex-shrink: 0; }
-
-        .login-right { display: flex; align-items: center; justify-content: center; padding: 48px; background: var(--bg); }
-        .login-card { width: 100%; max-width: 400px; }
-        .login-header { margin-bottom: 28px; }
-
-        .login-logo-sm { display: none; align-items: center; gap: 8px; margin-bottom: 20px; }
-        .login-title { font-family: var(--font-serif); font-size: 1.6rem; font-style: italic; color: var(--text-primary); margin-bottom: 6px; }
-        .login-sub { color: var(--text-secondary); font-size: 0.875rem; }
-
-        .input-wrap { position: relative; }
-        .input-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem; pointer-events: none; }
-        .input-with-prefix { padding-left: 28px !important; }
-        .form-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; }
-
-        .auth-error { background: var(--danger-dim); color: var(--danger); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.85rem; margin-bottom: 16px; }
-
-        .login-switch { text-align: center; margin-top: 20px; font-size: 0.875rem; color: var(--text-secondary); }
-        .login-switch button { background: none; border: none; color: #60a5fa; cursor: pointer; font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
-        .login-switch button:hover { opacity: 0.8; }
+        .login-switch {
+          text-align: center;
+          margin-top: 20px;
+          font-size: 0.8rem;
+          color: var(--text-muted);
+          font-weight: 500;
+        }
+        .login-switch button {
+          background: none;
+          border: none;
+          color: var(--accent);
+          cursor: pointer;
+          font-family: var(--font-sans);
+          font-size: 0.8rem;
+          font-weight: 600;
+          padding: 0;
+          text-decoration: none;
+          margin-left: 4px;
+          transition: opacity 0.15s;
+        }
+        .login-switch button:hover { opacity: 0.75; }
 
         @media (max-width: 768px) {
-          .login-page { grid-template-columns: 1fr; }
-          .login-left { display: none; }
-          .login-right { padding: 24px; align-items: flex-start; padding-top: 48px; }
-          .login-logo-sm { display: flex; }
+          .login-root { grid-template-columns: 1fr; }
+          .login-panel { display: none; }
+          .login-form-panel { padding: 32px 20px; align-items: flex-start; padding-top: 48px; }
+          .login-mobile-logo { display: block; }
         }
       `}</style>
     </div>

@@ -1,7 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-
-const BASE = import.meta.env.BASE_URL
+import { LogoWordmark, LogoMark } from './Logo'
 
 const navItems = [
   { to: '/dashboard', icon: '⬡', label: 'Dashboard' },
@@ -11,7 +10,7 @@ const navItems = [
   { to: '/report', icon: '▤', label: 'Laporan' },
 ]
 
-const mobileNavItems = navItems.slice(0, 4)
+const mobileItems = navItems.slice(0, 4)
 
 export default function Navbar({ darkMode, setDarkMode }) {
   const { user, signOut } = useAuth()
@@ -25,15 +24,11 @@ export default function Navbar({ darkMode, setDarkMode }) {
   const name = user?.full_name || user?.username || 'User'
   const initial = name.charAt(0).toUpperCase()
 
-  const navLogo = darkMode
-    ? `${BASE}logo/logonavdark.svg`
-    : `${BASE}logo/logonavlight.svg`
-
   return (
     <>
       <nav className="sidebar">
         <div className="sidebar-logo">
-          <img src={navLogo} alt="Cashvell" height="36" style={{ maxWidth: 160 }} />
+          <LogoWordmark dark={darkMode} size="md" id="nav-logo" />
         </div>
 
         <div className="sidebar-nav">
@@ -53,13 +48,13 @@ export default function Navbar({ darkMode, setDarkMode }) {
           <button
             className="theme-toggle"
             onClick={() => setDarkMode(!darkMode)}
-            title="Toggle tema"
+            title={darkMode ? 'Mode terang' : 'Mode gelap'}
           >
             {darkMode ? '☀' : '◑'}
           </button>
 
-          <div className="user-info">
-            <div className="avatar avatar-fallback">{initial}</div>
+          <div className="user-chip">
+            <div className="user-avatar">{initial}</div>
             <div className="user-detail">
               <div className="user-name truncate">{name}</div>
               <button className="sign-out-btn" onClick={handleSignOut}>Keluar</button>
@@ -68,8 +63,9 @@ export default function Navbar({ darkMode, setDarkMode }) {
         </div>
       </nav>
 
+      {/* Mobile bottom nav */}
       <nav className="mobile-nav">
-        {mobileNavItems.map(item => (
+        {mobileItems.map(item => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -84,165 +80,157 @@ export default function Navbar({ darkMode, setDarkMode }) {
       <style>{`
         .sidebar {
           position: fixed;
-          left: 0;
-          top: 0;
-          bottom: 0;
+          left: 0; top: 0; bottom: 0;
           width: 240px;
           background: var(--bg-card);
           border-right: 1px solid var(--border);
           display: flex;
           flex-direction: column;
-          padding: 24px 16px;
+          padding: 20px 12px;
           z-index: 100;
         }
 
         .sidebar-logo {
-          padding: 0 8px;
-          margin-bottom: 32px;
-          display: flex;
-          align-items: center;
+          padding: 4px 8px 24px;
         }
 
         .sidebar-nav {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 2px;
         }
 
         .nav-item {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 10px 12px;
+          gap: 10px;
+          padding: 9px 10px;
           border-radius: var(--radius-sm);
           text-decoration: none;
           color: var(--text-secondary);
-          font-size: 0.875rem;
-          font-weight: 500;
+          font-size: 0.8125rem;
+          font-weight: 600;
           transition: all 0.15s;
+          letter-spacing: -0.01em;
         }
-
         .nav-item:hover {
           color: var(--text-primary);
           background: var(--bg-input);
         }
-
         .nav-item.active {
           color: var(--accent);
           background: var(--accent-dim);
         }
-
         .nav-icon {
-          font-size: 1rem;
-          width: 20px;
+          font-size: 0.95rem;
+          width: 18px;
           text-align: center;
           flex-shrink: 0;
+          opacity: 0.8;
         }
+        .nav-item.active .nav-icon { opacity: 1; }
 
         .sidebar-bottom {
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 10px;
+          padding-top: 16px;
+          border-top: 1px solid var(--border);
         }
 
         .theme-toggle {
           background: none;
           border: 1px solid var(--border);
           border-radius: var(--radius-sm);
-          padding: 8px;
+          padding: 7px;
           cursor: pointer;
-          color: var(--text-secondary);
-          font-size: 1rem;
+          color: var(--text-muted);
+          font-size: 0.875rem;
           transition: all 0.15s;
-          width: 36px;
-          height: 36px;
+          width: 34px;
+          height: 34px;
           display: flex;
           align-items: center;
           justify-content: center;
+          align-self: flex-start;
         }
-
         .theme-toggle:hover {
           color: var(--accent);
           border-color: var(--accent);
+          background: var(--accent-dim);
         }
 
-        .user-info {
+        .user-chip {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 10px;
+          padding: 9px 10px;
           border: 1px solid var(--border);
           border-radius: var(--radius-sm);
+          background: var(--bg-input);
         }
-
-        .avatar {
-          width: 32px;
-          height: 32px;
+        .user-avatar {
+          width: 30px;
+          height: 30px;
           border-radius: 50%;
-          object-fit: cover;
-          flex-shrink: 0;
-        }
-
-        .avatar-fallback {
           background: var(--accent-dim);
+          border: 1.5px solid var(--accent);
           color: var(--accent);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-weight: 600;
-          font-size: 0.875rem;
+          font-weight: 700;
+          font-size: 0.75rem;
+          flex-shrink: 0;
+          letter-spacing: 0;
         }
-
         .user-detail { flex: 1; min-width: 0; }
-
         .user-name {
-          font-size: 0.8rem;
-          font-weight: 500;
+          font-size: 0.78rem;
+          font-weight: 600;
           color: var(--text-primary);
+          letter-spacing: -0.01em;
         }
-
         .sign-out-btn {
           background: none;
           border: none;
           color: var(--text-muted);
-          font-size: 0.7rem;
+          font-size: 0.68rem;
           cursor: pointer;
           padding: 0;
           font-family: var(--font-sans);
+          font-weight: 500;
           transition: color 0.15s;
+          display: block;
+          margin-top: 1px;
         }
-
         .sign-out-btn:hover { color: var(--danger); }
 
+        /* Mobile */
         .mobile-nav {
           display: none;
           position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
+          bottom: 0; left: 0; right: 0;
           background: var(--bg-card);
           border-top: 1px solid var(--border);
           z-index: 100;
-          padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+          padding: 6px 0 max(6px, env(safe-area-inset-bottom));
           grid-template-columns: repeat(4, 1fr);
         }
-
         .mobile-nav-item {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 4px;
-          padding: 8px;
+          gap: 3px;
+          padding: 8px 4px;
           text-decoration: none;
           color: var(--text-muted);
           transition: color 0.15s;
         }
-
         .mobile-nav-item.active { color: var(--accent); }
-
-        .mobile-nav-icon { font-size: 1.2rem; }
-        .mobile-nav-label { font-size: 0.65rem; font-weight: 500; }
+        .mobile-nav-icon { font-size: 1.1rem; }
+        .mobile-nav-label { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.02em; }
 
         @media (max-width: 768px) {
           .sidebar { display: none; }

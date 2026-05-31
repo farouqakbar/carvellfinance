@@ -479,15 +479,15 @@ export default function Dashboard() {
         /* ── Stats strip ──────────────────────── */
         .stats-strip {
           display: grid; grid-template-columns: repeat(3, 1fr);
-          background: #13131f;
-          border: 1px solid #252538;
-          border-radius: var(--radius-lg); overflow: hidden;
+          gap: 10px;
         }
         .stat-col {
           padding: 16px 20px; display: flex; flex-direction: column; gap: 6px;
-          border-right: 1px solid #252538;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
-        .stat-col:last-child { border-right: none; }
         .stat-col-label {
           font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
           color: var(--text-muted); font-weight: 700;

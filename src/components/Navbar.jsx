@@ -4,13 +4,12 @@ import { LogoWordmark, LogoMark } from './Logo'
 
 const navItems = [
   { to: '/dashboard', icon: '⬡', label: 'Dashboard' },
-  { to: '/transactions', icon: '↕', label: 'Transaksi' },
   { to: '/categories', icon: '◈', label: 'Kategori' },
   { to: '/savings', icon: '◎', label: 'Tabungan' },
   { to: '/report', icon: '▤', label: 'Laporan' },
 ]
 
-const mobileItems = navItems.slice(0, 4)
+const mobileItems = navItems
 
 export default function Navbar({ darkMode, setDarkMode }) {
   const { user, signOut } = useAuth()

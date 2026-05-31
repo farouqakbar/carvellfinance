@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [data, setData] = useState({
     salary: 0, totalExpense: 0, totalIncome: 0,
     categories: [], transactions: [], savings: [], savingsLogs: [], categorySpend: [],
+    todayExpense: 0, totalTabungan: 0,
   })
   const [loading, setLoading] = useState(true)
   const [showSalaryForm, setShowSalaryForm] = useState(false)
@@ -42,12 +43,14 @@ export default function Dashboard() {
     try {
       const startDate = `${month}-01`
       const endDate = `${month}-31`
-      const [salaryRes, txRes, catRes, savingsRes, logsRes] = await Promise.all([
+      const today = new Date().toISOString().split('T')[0]
+      const [salaryRes, txRes, catRes, savingsRes, logsRes, todayRes] = await Promise.all([
         supabase.from('salaries').select('*').eq('user_id', user.id).eq('month', month).maybeSingle(),
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
         supabase.from('savings').select('*').eq('user_id', user.id),
         supabase.from('savings_log').select('*').eq('user_id', user.id).eq('month', month),
+        supabase.from('transactions').select('amount').eq('user_id', user.id).eq('date', today).eq('type', 'expense'),
       ])
       const txs = txRes.data || []
       const cats = catRes.data || []
@@ -75,6 +78,8 @@ export default function Dashboard() {
         transactions: txs.slice(0, 5),
         savings: savingsRes.data || [],
         savingsLogs: logsRes.data || [],
+        todayExpense: (todayRes.data || []).reduce((s, t) => s + Number(t.amount), 0),
+        totalTabungan: (savingsRes.data || []).reduce((s, sv) => s + Number(sv.current_amount), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
       })
       // Auto-set 15% untuk mandatory categories yang belum punya budget
@@ -199,11 +204,11 @@ export default function Dashboard() {
                     <span className="hero-chip-val tabular">{formatCurrency(data.salary)}</span>
                   </div>
                 )}
-                {data.savings.length > 0 && (
+                {data.totalTabungan > 0 && (
                   <div className="hero-chip">
-                    <span className="hero-chip-label">Ditabung {getMonthLabel(month).split(' ')[0]}</span>
+                    <span className="hero-chip-label">Total Tabungan</span>
                     <span className="hero-chip-val tabular" style={{ color: 'var(--success)' }}>
-                      {formatCurrency(data.savingsLogs.reduce((s, l) => s + Number(l.amount), 0))}
+                      {formatCurrency(data.totalTabungan)}
                     </span>
                   </div>
                 )}
@@ -248,17 +253,12 @@ export default function Dashboard() {
           )}
         </div>
         <div className="stat-col">
-          <span className="stat-col-label">
-            {data.salary > 0 && monthlyTabungan > 0 ? 'Sisa belanja' : 'Bisa ditabung'}
+          <span className="stat-col-label">Belanja Hari Ini</span>
+          <span className="stat-col-val tabular" style={{ color: data.todayExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+            {data.todayExpense > 0 ? `-${formatCurrency(data.todayExpense)}` : '—'}
           </span>
-          <span className="stat-col-val tabular" style={{ color: sisaBelanja >= 0 ? 'var(--accent)' : 'var(--danger)' }}>
-            {data.salary > 0 && monthlyTabungan > 0
-              ? formatCurrency(Math.max(0, sisaBelanja))
-              : formatCurrency(Math.max(0, balance))
-            }
-          </span>
-          {data.salary > 0 && monthlyTabungan > 0 && (
-            <span className="stat-col-sub">Tabungan {formatCurrency(monthlyTabungan)}/bln</span>
+          {data.todayExpense > 0 && data.salary > 0 && (
+            <span className="stat-col-sub">{((data.todayExpense / data.salary) * 100).toFixed(1)}% gaji</span>
           )}
         </div>
       </div>

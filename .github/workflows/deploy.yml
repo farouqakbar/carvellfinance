@@ -35,3 +35,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs
           publish_branch: gh-pages
+          # Force browser untuk tidak cache index.html
+          keep_files: false
+          enable_jekyll: false
+          cname: ''

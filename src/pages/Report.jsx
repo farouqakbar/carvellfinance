@@ -66,16 +66,22 @@ export default function Report() {
       if (!monthMap[m]) monthMap[m] = { income: 0, expense: 0 }
     })
 
-    const sortedMonths = Object.keys(monthMap).sort().reverse().map(m => ({
-      month: m,
-      label: getMonthLabel(m),
-      shortLabel: new Intl.DateTimeFormat('id-ID', { month: 'short', year: '2-digit' }).format(new Date(m + '-01')),
-      income: monthMap[m].income,
-      expense: monthMap[m].expense,
-      salary: salaryMap[m] || 0,
-      net: monthMap[m].income - monthMap[m].expense,
-      catBreakdown: monthCatMap[m] || {},
-    }))
+    const sortedMonths = Object.keys(monthMap).sort().reverse().map(m => {
+      const salary = salaryMap[m] || 0
+      const txIncome = monthMap[m].income
+      const expense = monthMap[m].expense
+      return {
+        month: m,
+        label: getMonthLabel(m),
+        shortLabel: new Intl.DateTimeFormat('id-ID', { month: 'short', year: '2-digit' }).format(new Date(m + '-01')),
+        income: salary + txIncome,   // gaji + income transaksi
+        salary,
+        txIncome,
+        expense,
+        net: salary + txIncome - expense,
+        catBreakdown: monthCatMap[m] || {},
+      }
+    })
 
     const cats = Object.entries(catTotals)
       .sort((a, b) => b[1].total - a[1].total)
@@ -89,12 +95,18 @@ export default function Report() {
       return row
     })
 
-    // Trend: all months ascending
+    // Trend: all months ascending (income sudah include salary)
     const trendRows = [...sortedMonths].reverse().map(m => ({
       label: m.shortLabel,
       Pemasukan: m.income,
       Pengeluaran: m.expense,
     }))
+
+    // Chart: last 6 months ascending — income per bulan (gaji+tx)
+    // Tambahkan kolom income ke chartData untuk referensi tooltip
+    chartRows.forEach((row, i) => {
+      row._income = chart6[i]?.income || 0
+    })
 
     setMonths(sortedMonths)
     setCategories(cats)
@@ -321,6 +333,9 @@ export default function Report() {
                     <div className="rpt-stat">
                       <span className="rpt-stat-label">Masuk</span>
                       <span className="rpt-stat-val text-success tabular">{formatCurrency(m.income)}</span>
+                      {m.salary > 0 && m.txIncome === 0 && (
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>dari gaji</span>
+                      )}
                     </div>
                     <div className="rpt-stat">
                       <span className="rpt-stat-label">Selisih</span>

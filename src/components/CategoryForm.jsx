@@ -84,22 +84,6 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
         />
       </div>
 
-      <div className="form-group">
-        <label className="form-label">Icon</label>
-        <div className="cf-icon-grid">
-          {ICONS.map(icon => (
-            <button
-              key={icon}
-              type="button"
-              className={`cf-icon-btn ${form.icon === icon ? 'active' : ''}`}
-              style={form.icon === icon ? { borderColor: form.color, background: `${form.color}15` } : {}}
-              onClick={() => setForm(f => ({ ...f, icon }))}
-            >
-              {icon}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="form-group">
         <label className="form-label">Warna</label>

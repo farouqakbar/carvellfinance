@@ -11,7 +11,7 @@ const navItems = [
 
 const mobileItems = navItems
 
-export default function Navbar({ darkMode, setDarkMode }) {
+export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
@@ -41,6 +41,15 @@ export default function Navbar({ darkMode, setDarkMode }) {
       <nav className="sidebar">
         <div className="sidebar-logo">
           <LogoWordmark dark={darkMode} size="md" id="nav-logo" />
+          <button
+            type="button"
+            className={`theme-toggle-btn ${darkMode ? 'weather-night active' : 'weather-day active'}`}
+            onClick={() => setDarkMode(v => !v)}
+            title={darkMode ? 'Mode Gelap' : 'Mode Terang'}
+          >
+            <span className="weather-icon">{darkMode ? '◑' : '☀'}</span>
+            {darkMode && <span className="weather-star">✦</span>}
+          </button>
         </div>
 
         <div className="sidebar-nav">
@@ -57,38 +66,17 @@ export default function Navbar({ darkMode, setDarkMode }) {
         </div>
 
         <div className="sidebar-bottom">
-          <div className="datetime-card">
-            <span className="datetime-date">{dateStr}</span>
-            <div className="datetime-time">{timeStr}</div>
-          </div>
-
-          {/* Weather toggle */}
-          <div className="weather-toggle">
-            <button
-              type="button"
-              className={`weather-btn weather-night ${darkMode ? 'active' : ''}`}
-              onClick={() => setDarkMode(true)}
-            >
-              <span className="weather-icon">◑</span>
-              <span className="weather-label">Gelap</span>
-              {darkMode && <span className="weather-star">✦</span>}
-            </button>
-            <button
-              type="button"
-              className={`weather-btn weather-day ${!darkMode ? 'active' : ''}`}
-              onClick={() => setDarkMode(false)}
-            >
-              <span className="weather-icon">☀</span>
-              <span className="weather-label">Terang</span>
-            </button>
-          </div>
-
-          <div className="user-chip">
+          <div className="user-chip" style={{ cursor: 'pointer' }} onClick={onProfileClick}>
             <div className="user-avatar">{initial}</div>
             <div className="user-detail">
               <div className="user-name truncate">{name}</div>
-              <button className="sign-out-btn" onClick={handleSignOut}>Keluar</button>
+              <span className="sign-out-btn" style={{ pointerEvents: 'none' }}>Profil & Pengaturan</span>
             </div>
+          </div>
+
+          <div className="datetime-card">
+            <span className="datetime-date">{dateStr}</span>
+            <div className="datetime-time">{timeStr}</div>
           </div>
         </div>
       </nav>
@@ -120,7 +108,7 @@ export default function Navbar({ darkMode, setDarkMode }) {
             </div>
 
             {/* Profile avatar */}
-            <div className="mtp-avatar">{initial}</div>
+            <div className="mtp-avatar" style={{ cursor: 'pointer' }} onClick={onProfileClick}>{initial}</div>
           </div>
         </div>
 
@@ -162,6 +150,9 @@ export default function Navbar({ darkMode, setDarkMode }) {
 
         .sidebar-logo {
           padding: 4px 8px 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
         }
 
         .sidebar-nav {
@@ -216,60 +207,53 @@ export default function Navbar({ darkMode, setDarkMode }) {
           border-top: 1px solid var(--border);
         }
 
+        .bottom-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
         .datetime-card {
+          flex: 1;
           background: var(--bg-input);
           border: 1px solid var(--border);
           border-radius: var(--radius-sm);
           padding: 9px 11px 8px;
           display: flex;
           flex-direction: column;
+          align-items: center;
           gap: 3px;
         }
         .datetime-date {
-          font-size: 0.62rem;
+          font-size: 0.6rem;
           font-weight: 600;
           color: var(--text-muted);
-          letter-spacing: 0.01em;
+          letter-spacing: 0.02em;
           text-transform: capitalize;
           line-height: 1;
         }
         .datetime-time {
-          font-size: 1.05rem;
+          font-size: 1.1rem;
           font-weight: 700;
           font-variant-numeric: tabular-nums;
-          letter-spacing: -0.03em;
+          letter-spacing: -0.04em;
           color: var(--text-primary);
           line-height: 1;
         }
 
         /* Weather toggle */
-        .weather-toggle {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 3px;
-          padding: 3px;
-          background: var(--bg-input);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-        }
-        .weather-btn {
+        .theme-toggle-btn {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 5px;
-          padding: 8px 6px;
-          border: none;
-          border-radius: 4px;
+          padding: 9px 11px 8px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
           cursor: pointer;
-          font-family: var(--font-sans);
-          font-size: 0.7rem;
-          font-weight: 700;
+          font-size: 1.05rem;
           transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          background: transparent;
-          color: var(--text-muted);
           position: relative;
           overflow: hidden;
-          letter-spacing: -0.01em;
+          flex-shrink: 0;
         }
         .weather-btn:hover:not(.active) {
           background: var(--bg-card);

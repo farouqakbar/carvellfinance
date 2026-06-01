@@ -273,7 +273,7 @@ export default function Report() {
                     <div key={cat.name} className="rpt-cat-row">
                       <div className="rpt-cat-left">
                         <span className="rpt-cat-rank">{i + 1}</span>
-                        <span className="rpt-cat-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                        <span className="rpt-cat-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
                         <span className="rpt-cat-name">{cat.name}</span>
                       </div>
                       <div className="rpt-cat-mid">

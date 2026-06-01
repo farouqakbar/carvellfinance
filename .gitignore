@@ -1,6 +1,5 @@
 node_modules
 dist
-docs
 .env
 .env.local
 .env.production.local
@@ -9,3 +8,8 @@ docs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Dev only
+*.png
+*.mjs
+src/components/DevOverlay.jsx

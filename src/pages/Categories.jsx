@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { formatCurrency, getCurrentMonth } from '../utils/formatCurrency'
+import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
 import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import CurrencyInput from '../components/CurrencyInput'
@@ -9,6 +9,17 @@ import { useToast } from '../components/Toast'
 import { MANDATORY_NAMES, isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
 
 const DEFAULT_PCT = 15
+
+function prevMonth(m) {
+  const [y, mo] = m.split('-').map(Number)
+  const d = new Date(y, mo - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function nextMonth(m) {
+  const [y, mo] = m.split('-').map(Number)
+  const d = new Date(y, mo, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 
 export default function Categories() {
   const { user } = useAuth()
@@ -21,9 +32,11 @@ export default function Categories() {
   const [editData, setEditData] = useState(null)
   const [budgetEdit, setBudgetEdit] = useState(null) // {id, nominal, pct}
   const [confirmDel, setConfirmDel] = useState(null) // { id, name }
-  const month = getCurrentMonth()
+  const [month, setMonth] = useState(getCurrentMonth())
+  const [copying, setCopying] = useState(false)
+  const isCurrentMonth = month === getCurrentMonth()
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll() }, [month])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -96,6 +109,28 @@ export default function Categories() {
     fetchAll()
   }
 
+  const copyFromPrevMonth = async () => {
+    setCopying(true)
+    const pm = prevMonth(month)
+    const { data: prevBudgets } = await supabase
+      .from('category_budgets').select('category_id, budget_limit')
+      .eq('user_id', user.id).eq('month', pm)
+    if (!prevBudgets || prevBudgets.length === 0) {
+      toast(`Tidak ada budget di ${getMonthLabel(pm)}`, 'error')
+      setCopying(false)
+      return
+    }
+    await Promise.all(prevBudgets.map(b =>
+      supabase.from('category_budgets').upsert(
+        { user_id: user.id, category_id: b.category_id, month, budget_limit: b.budget_limit },
+        { onConflict: 'category_id,month' }
+      )
+    ))
+    toast(`Budget disalin dari ${getMonthLabel(pm)}`, 'success')
+    setCopying(false)
+    fetchAll()
+  }
+
   const mandatoryIncome = categories.filter(c => isMandatoryIncome(c))
   const mandatory = categories.filter(c => isMandatory(c))
   const regular = categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c))
@@ -118,7 +153,7 @@ export default function Categories() {
         <div key={cat.id} className="cat-card cat-mandatory" style={{ '--cat-color': cat.color }}>
           <div className="cat-card-top">
             <div className="cat-card-left">
-              <span className="cat-icon" style={{ background: `${cat.color}20`, color: cat.color }}>{cat.icon}</span>
+              <span className="cat-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
               <div>
                 <span className="cat-name">{cat.name}</span>
                 <span className="cat-mandatory-badge">Wajib · langsung dipotong</span>
@@ -193,16 +228,33 @@ export default function Categories() {
   return (
     <>
       <div className="animate-in">
-      <div className="flex-between mb-24">
+      <div className="flex-between mb-24" style={{ flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 className="page-title">Kategori</h1>
+          <h1 className="page-title">Budget & Kategori</h1>
           <p className="page-subtitle" style={{ margin: 0 }}>
-            {formatCurrency(totalSpent)} dari {formatCurrency(totalBudget)} budget bulan ini
+            {formatCurrency(totalSpent)} dari {formatCurrency(totalBudget)} · {getMonthLabel(month)}
           </p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
-          + Kategori
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Month nav */}
+          <div className="month-nav-group">
+            <button className="month-btn" onClick={() => setMonth(prevMonth(month))}>‹</button>
+            <span className="month-label-text">{getMonthLabel(month)}</span>
+            <button className="month-btn" onClick={() => setMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
+          </div>
+          {/* Salin dari bulan sebelumnya */}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={copyFromPrevMonth}
+            disabled={copying}
+            title={`Salin semua budget dari ${getMonthLabel(prevMonth(month))}`}
+          >
+            {copying ? '...' : `⎘ Salin dari ${getMonthLabel(prevMonth(month))}`}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
+            + Kategori
+          </button>
+        </div>
       </div>
 
       {/* Pemasukan Wajib */}
@@ -221,7 +273,7 @@ export default function Categories() {
               <div key={cat.id} className="cat-card cat-mandatory" style={{ '--cat-color': cat.color }}>
                 <div className="cat-card-top">
                   <div className="cat-card-left">
-                    <span className="cat-icon" style={{ background: `${cat.color}20`, color: cat.color }}>{cat.icon}</span>
+                    <span className="cat-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>+</span>
                     <div>
                       <span className="cat-name">{cat.name}</span>
                       <span className="cat-mandatory-badge" style={{ color: 'var(--success)' }}>Wajib · pemasukan rutin</span>
@@ -290,6 +342,27 @@ export default function Categories() {
       </div>
 
       <style>{`
+        .month-nav-group {
+          display: flex; align-items: center; gap: 0;
+          background: var(--bg-card); border: 1px solid var(--border);
+          border-radius: 99px; overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .month-btn {
+          width: 32px; height: 32px; border: none; background: transparent;
+          color: var(--text-secondary); font-size: 1rem; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s; font-family: var(--font-sans); flex-shrink: 0;
+        }
+        .month-btn:hover:not(:disabled) { background: var(--bg-input); color: var(--text-primary); }
+        .month-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+        .month-btn:first-child { border-right: 1px solid var(--border); }
+        .month-btn:last-child  { border-left:  1px solid var(--border); }
+        .month-label-text {
+          font-size: 0.8rem; font-weight: 700; letter-spacing: -0.02em;
+          color: var(--text-primary); padding: 0 12px; min-width: 110px;
+          text-align: center; line-height: 32px; white-space: nowrap;
+        }
         .cat-section { }
         .cat-section-head { margin-bottom: 12px; }
         .cat-section-title {

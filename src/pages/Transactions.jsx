@@ -96,11 +96,23 @@ export default function Transactions() {
     return Object.entries(map).sort(([a], [b]) => b.localeCompare(a))
   }, [filtered])
 
-  const totals = useMemo(() => filtered.reduce((acc, tx) => {
-    if (tx.type === 'expense') acc.expense += Number(tx.amount)
-    else acc.income += Number(tx.amount)
+  const totals = useMemo(() => {
+    const gajiCat = categories.find(c => c.name === 'Gaji')
+    const acc = filtered.reduce((a, tx) => {
+      const isGaji = gajiCat && tx.category_id === gajiCat.id && tx.type === 'income'
+      if (isGaji) {
+        a.gaji += Number(tx.amount)
+      } else if (tx.type === 'expense') {
+        a.expense += Number(tx.amount)
+      } else {
+        a.nonGajiIncome += Number(tx.amount)
+      }
+      return a
+    }, { gaji: 0, expense: 0, nonGajiIncome: 0 })
+    acc.pengeluaran = Math.max(0, acc.expense - acc.nonGajiIncome)
+    acc.saldo = acc.gaji - acc.pengeluaran
     return acc
-  }, { expense: 0, income: 0 }), [filtered])
+  }, [filtered, categories])
 
   const hasFilter = filter.category || filter.type || filter.search
 
@@ -160,7 +172,7 @@ export default function Transactions() {
           style={{ flex: 1 }}
         >
           <option value="">Semua Kategori</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <div className="type-filter-btns">
           {[['', 'Semua'], ['expense', '↓ Keluar'], ['income', '↑ Masuk']].map(([val, label]) => (
@@ -184,20 +196,15 @@ export default function Transactions() {
       {filtered.length > 0 && (
         <div className="tx-summary-strip mb-16">
           <div className="tss-item">
-            <span className="tss-label">Pemasukan</span>
-            <span className="tss-val text-success tabular">+{formatCurrency(totals.income)}</span>
+            <span className="tss-label">Total Saldo</span>
+            <span className={`tss-val tabular ${totals.saldo >= 0 ? 'text-success' : 'text-danger'}`}>
+              {totals.saldo >= 0 ? '+' : ''}{formatCurrency(totals.saldo)}
+            </span>
           </div>
           <div className="tss-divider" />
           <div className="tss-item">
             <span className="tss-label">Pengeluaran</span>
-            <span className="tss-val text-danger tabular">-{formatCurrency(totals.expense)}</span>
-          </div>
-          <div className="tss-divider" />
-          <div className="tss-item">
-            <span className="tss-label">Selisih</span>
-            <span className={`tss-val tabular ${totals.income - totals.expense >= 0 ? 'text-success' : 'text-danger'}`}>
-              {totals.income - totals.expense >= 0 ? '+' : ''}{formatCurrency(totals.income - totals.expense)}
-            </span>
+            <span className="tss-val text-danger tabular">-{formatCurrency(totals.pengeluaran)}</span>
           </div>
         </div>
       )}

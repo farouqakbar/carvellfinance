@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
   const signIn = async (username, password) => {
     const { data, error } = await supabase
       .from("user_profiles")
-      .select("id, username, full_name, password_hash")
+      .select("id, username, full_name, password_hash, recording_start_month, saldo_awal, tabungan_awal")
       .eq("username", username.toLowerCase())
       .single();
 
@@ -61,7 +61,14 @@ export function AuthProvider({ children }) {
     const hash = await hashPassword(password);
     if (hash !== data.password_hash) throw new Error("Username atau password salah");
 
-    const userData = { id: data.id, username: data.username, full_name: data.full_name };
+    const userData = {
+      id: data.id,
+      username: data.username,
+      full_name: data.full_name,
+      recording_start_month: data.recording_start_month || null,
+      saldo_awal: Number(data.saldo_awal) || 0,
+      tabungan_awal: Number(data.tabungan_awal) || 0,
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     setUser(userData);
     await seedDefaultCategories(userData.id);
@@ -80,7 +87,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase
       .from("user_profiles")
       .insert({ username: username.toLowerCase(), password_hash, full_name: username })
-      .select("id, username, full_name")
+      .select("id, username, full_name, recording_start_month, saldo_awal, tabungan_awal")
       .single();
 
     if (error) {
@@ -88,9 +95,37 @@ export function AuthProvider({ children }) {
       throw new Error("Pendaftaran gagal: " + error.message);
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    setUser(data);
-    await seedDefaultCategories(data.id);
+    const userData = {
+      id: data.id,
+      username: data.username,
+      full_name: data.full_name,
+      recording_start_month: null,
+      saldo_awal: 0,
+      tabungan_awal: 0,
+      isNewUser: true,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    setUser(userData);
+    await seedDefaultCategories(userData.id);
+  };
+
+  const updateProfile = async (updates) => {
+    const allowed = {};
+    if (updates.full_name !== undefined) allowed.full_name = updates.full_name;
+    if (updates.recording_start_month !== undefined) allowed.recording_start_month = updates.recording_start_month;
+    if (updates.saldo_awal !== undefined) allowed.saldo_awal = updates.saldo_awal;
+    if (updates.tabungan_awal !== undefined) allowed.tabungan_awal = updates.tabungan_awal;
+
+    const { error } = await supabase
+      .from("user_profiles")
+      .update(allowed)
+      .eq("id", user.id);
+
+    if (error) throw error;
+
+    const updatedUser = { ...user, ...allowed, isNewUser: false };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+    setUser(updatedUser);
   };
 
   const signOut = () => {
@@ -99,7 +134,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

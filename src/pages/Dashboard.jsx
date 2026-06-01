@@ -32,7 +32,8 @@ export default function Dashboard() {
   const [data, setData] = useState({
     salary: 0, totalExpense: 0, totalIncome: 0,
     categories: [], transactions: [], savings: [], savingsLogs: [], categorySpend: [],
-    todayExpense: 0, totalTabungan: 0, nextMonthPlans: [],
+    todayExpense: 0, totalTabungan: 0, nextMonthPlans: [], cumulativeBalance: 0,
+    gajiTx: null, gajiCatId: null,
   })
   const [loading, setLoading] = useState(true)
   const [showTxForm, setShowTxForm] = useState(false)
@@ -41,6 +42,14 @@ export default function Dashboard() {
   const [showCatForm, setShowCatForm] = useState(false)
   const [editCatData, setEditCatData] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null) // { id, name }
+  const [showWajibModal, setShowWajibModal] = useState(false)
+  const [showTabunganModal, setShowTabunganModal] = useState(false)
+  const [showRencanaModal, setShowRencanaModal] = useState(false)
+  const [showGajiModal, setShowGajiModal] = useState(false)
+  const [gajiForm, setGajiForm] = useState({ amount: '', note: '' })
+  const [gajiSaving, setGajiSaving] = useState(false)
+  const [showMonthPicker, setShowMonthPicker] = useState(false)
+  const [pickerYear, setPickerYear] = useState(() => Number(getCurrentMonth().split('-')[0]))
 
   useEffect(() => { fetchDashboard() }, [month])
 
@@ -53,15 +62,23 @@ export default function Dashboard() {
       const endDate = `${month}-31`
       const today = new Date().toISOString().split('T')[0]
       const nmStr = nextMonth(month)
-      const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes] = await Promise.all([
+      const recordStart = user.recording_start_month
+      let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lte('date', endDate)
+      if (recordStart) histQuery = histQuery.gte('date', `${recordStart}-01`)
+
+      let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month)
+      if (recordStart) allLogsQuery = allLogsQuery.gte('month', recordStart)
+
+      const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes] = await Promise.all([
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
         supabase.from('savings').select('*').eq('user_id', user.id),
         supabase.from('savings_log').select('*').eq('user_id', user.id).eq('month', month),
         supabase.from('transactions').select('amount').eq('user_id', user.id).eq('date', today).eq('type', 'expense'),
         supabase.from('category_budgets').select('*').eq('user_id', user.id).eq('month', month),
-        supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month),
+        allLogsQuery,
         supabase.from('plans').select('*').eq('user_id', user.id).eq('target_month', nmStr).eq('done', false).order('created_at', { ascending: true }),
+        histQuery,
       ])
       const txs = txRes.data || []
       // Budget murni per-bulan: tidak fallback ke global
@@ -74,9 +91,8 @@ export default function Dashboard() {
       }))
       // Derivasi salary dari transaksi kategori "Gaji" (mandatory income)
       const gajiCat = (catRes.data || []).find(c => c.name === 'Gaji')
-      const salary = gajiCat
-        ? txs.filter(t => t.type === 'income' && t.category_id === gajiCat.id).reduce((s, t) => s + Number(t.amount), 0)
-        : 0
+      const gajiTxs = gajiCat ? txs.filter(t => t.type === 'income' && t.category_id === gajiCat.id) : []
+      const salary = gajiTxs.reduce((s, t) => s + Number(t.amount), 0)
       const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
       // totalIncome = pemasukan non-Gaji (Gaji sudah masuk ke salary)
       const totalIncome = txs.filter(t => t.type === 'income' && t.category_id !== gajiCat?.id).reduce((s, t) => s + Number(t.amount), 0)
@@ -103,15 +119,17 @@ export default function Dashboard() {
         savings: savingsRes.data || [],
         savingsLogs: logsRes.data || [],
         todayExpense: (todayRes.data || []).reduce((s, t) => s + Number(t.amount), 0),
-        // Poin 1: total tabungan = sum "Tabungan Bulanan" dari category_budgets semua bulan
         totalTabungan: (allLogsRes.data || [])
           .filter(cb => {
             const c = cats.find(cat => cat.id === cb.category_id)
             return c && c.name === 'Tabungan Bulanan'
           })
-          .reduce((s, cb) => s + Number(cb.budget_limit), 0),
+          .reduce((s, cb) => s + Number(cb.budget_limit), 0) + (user.tabungan_awal || 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
         nextMonthPlans: plansRes.data || [],
+        gajiTx: gajiTxs[0] || null,
+        gajiCatId: gajiCat?.id || null,
+        cumulativeBalance: (histRes.data || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0) + (user.saldo_awal || 0),
       })
       // Auto-set 15% untuk mandatory categories yang belum pernah punya record (bukan yang di-set 0)
       const sal = salary
@@ -193,7 +211,13 @@ export default function Dashboard() {
   const effectiveExpense = data.totalExpense + mandatoryAutoDeduct
   const balance = data.salary + data.totalIncome - effectiveExpense
   const budgetUsed = data.salary > 0 ? (effectiveExpense / data.salary) * 100 : 0
-  const heroBarColor = budgetUsed > 90 ? 'var(--danger)' : budgetUsed > 70 ? 'var(--warning)' : 'var(--accent)'
+
+  // Bar: total pengeluaran dari gaji bulan ini
+  const spendingBudget = Math.max(0, data.salary - mandatoryBudgetTotal)
+  const nonMandatoryExpense = Math.max(0, data.totalExpense - mandatoryTransactionSpent)
+  const freeBalance = spendingBudget - nonMandatoryExpense
+  const spendingPct = data.salary > 0 ? (data.totalExpense / data.salary) * 100 : 0
+  const heroBarColor = spendingPct > 90 ? 'var(--danger)' : spendingPct > 70 ? 'var(--warning)' : 'var(--accent)'
 
   // Alokasi tabungan dari kategori mandatory "Tabungan Bulanan"
   const monthlyTabungan = data.categories
@@ -209,21 +233,69 @@ export default function Dashboard() {
 
       {/* ── Header ─────────────────────────────── */}
       <div className="dash-header">
-        <div className="month-nav-group">
-          <button className="month-btn" onClick={() => goToMonth(prevMonth(month))}>‹</button>
-          <span className="month-label-text">{getMonthLabel(month)}</span>
-          <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
+        <div style={{ position: 'relative' }}>
+          <div className="month-nav-group">
+            <button className="month-btn" onClick={() => goToMonth(prevMonth(month))}>‹</button>
+            <span
+              className="month-label-text month-label-clickable"
+              onClick={() => { setPickerYear(Number(month.split('-')[0])); setShowMonthPicker(v => !v) }}
+            >
+              {getMonthLabel(month)}
+            </span>
+            <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
+          </div>
+
+          {showMonthPicker && (() => {
+            const nowStr = getCurrentMonth()
+            const [nowY, nowM] = nowStr.split('-').map(Number)
+            const MONTHS = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des']
+            return (
+              <div className="month-picker-popup" onMouseDown={e => e.preventDefault()}>
+                {/* Year nav */}
+                <div className="mp-year-row">
+                  <button className="mp-year-btn" onClick={() => setPickerYear(y => y - 1)}>‹</button>
+                  <span className="mp-year-label">{pickerYear}</span>
+                  <button className="mp-year-btn" onClick={() => setPickerYear(y => y + 1)} disabled={pickerYear >= nowY}>›</button>
+                </div>
+                {/* Month grid */}
+                <div className="mp-grid">
+                  {MONTHS.map((name, i) => {
+                    const m = i + 1
+                    const val = `${pickerYear}-${String(m).padStart(2, '0')}`
+                    const isFuture = pickerYear > nowY || (pickerYear === nowY && m > nowM)
+                    const isActive = val === month
+                    return (
+                      <button
+                        key={val}
+                        className={`mp-month-btn${isActive ? ' mp-active' : ''}`}
+                        disabled={isFuture}
+                        onClick={() => { goToMonth(val); setShowMonthPicker(false) }}
+                      >
+                        {name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
+          {showMonthPicker && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 299 }} onClick={() => setShowMonthPicker(false)} />
+          )}
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowTxForm(true)}>
-          + Transaksi
-        </button>
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button className="btn btn-primary btn-sm" style={{ fontSize: '0.78rem', height: 34 }} onClick={() => setShowTxForm(true)}>+ Transaksi</button>
+          <Link to="/categories" className="btn btn-secondary btn-sm" style={{ fontSize: '0.78rem', height: 34 }}>⚙ Settings</Link>
+        </div>
       </div>
 
       {/* ── Overbudget alert ─────────────────── */}
       {overBudgetCats.length > 0 && (
         <div className="alert-banner">
           <span>⚠</span>
-          <span><strong>Overbudget</strong> — {overBudgetCats.map(c => `${c.icon} ${c.name}`).join(', ')}</span>
+          <span><strong>Overbudget</strong> — {overBudgetCats.map(c => c.name).join(', ')}</span>
         </div>
       )}
 
@@ -238,131 +310,80 @@ export default function Dashboard() {
           <>
             <div className="hero-top">
               <div className="hero-left">
-                <span className="hero-date">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-        <span className="hero-eyebrow">Saldo Bersih {getMonthLabel(month)}</span>
-                <div className={`hero-balance ${balance < 0 ? 'neg' : ''}`}>
-                  {balance < 0 && <span className="hero-neg-sign">-</span>}
-                  {formatCurrency(Math.abs(balance))}
+        <span className="hero-eyebrow">Sisa Belanja</span>
+                <div className={`hero-balance ${freeBalance < 0 ? 'neg' : ''}`}>
+                  {freeBalance < 0 && <span className="hero-neg-sign">-</span>}
+                  {formatCurrency(Math.abs(freeBalance))}
                 </div>
               </div>
               <div className="hero-right">
-                {data.salary > 0 && (
-                  <div className="hero-chip">
-                    <span className="hero-chip-label">Gaji</span>
-                    <span className="hero-chip-val tabular">{formatCurrency(data.salary)}</span>
-                  </div>
-                )}
-                <div className="hero-chip">
+                <div className="hero-chip hero-chip-btn" onClick={() => {
+                  setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '' })
+                  setShowGajiModal(true)
+                }}>
+                  <span className="hero-chip-label">Gaji</span>
+                  <span className="hero-chip-val tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {formatCurrency(data.salary)}
+                  </span>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--accent)', fontWeight: 600, marginTop: 1 }}>
+                    {data.salary > 0 ? 'See Detail' : '+ Catat sekarang'}
+                  </span>
+                </div>
+                <div className="hero-chip hero-chip-btn" onClick={() => setShowWajibModal(true)}>
+                  <span className="hero-chip-label">Pengeluaran Wajib</span>
+                  <span className="hero-chip-val tabular" style={{ color: mandatoryBudgetTotal > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                    {mandatoryBudgetTotal > 0 ? `−${formatCurrency(mandatoryBudgetTotal)}` : '—'}
+                  </span>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--accent)', fontWeight: 600, marginTop: 1 }}>See Detail</span>
+                </div>
+                <div className="hero-chip hero-chip-btn" onClick={() => setShowTabunganModal(true)}>
                   <span className="hero-chip-label">Total Tabungan</span>
                   <span className="hero-chip-val tabular" style={{ color: data.totalTabungan > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
                     {formatCurrency(data.totalTabungan)}
                   </span>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--accent)', fontWeight: 600, marginTop: 1 }}>See Detail</span>
                 </div>
               </div>
             </div>
 
-            {data.salary > 0 ? (
-              <div className="hero-bar-section">
-                <div className="hero-bar-track">
-                  <div className="hero-bar-fill" style={{ width: `${Math.min(budgetUsed, 100)}%`, background: heroBarColor }} />
+            {data.salary > 0 && (
+              <div className="hero-bar-section" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="hero-bar-track" style={{ flex: 1 }}>
+                  <div className="hero-bar-fill" style={{ width: `${Math.min(spendingPct, 100)}%`, background: heroBarColor }} />
                 </div>
-                <div className="hero-bar-labels">
-                  <span>{formatCurrency(data.totalExpense)} dipakai</span>
-                  <span style={{ color: heroBarColor, fontWeight: 700 }}>{budgetUsed.toFixed(0)}%</span>
-                </div>
-              </div>
-            ) : (
-              <div className="hero-no-salary">
-                <button className="salary-cta" onClick={() => setShowTxForm(true)}>
-                  + Catat Gaji bulan ini
-                </button>
-                <span className="salary-cta-hint">untuk menghitung saldo bersih</span>
+                <span style={{ fontSize: '0.68rem', color: heroBarColor, fontWeight: 700, flexShrink: 0 }}>{spendingPct.toFixed(0)}%</span>
               </div>
             )}
+
+            {/* ── 3 section bawah ── */}
+            <div className="hero-stats-row">
+              <div className="hero-stat">
+                <span className="hero-stat-label">Total Pengeluaran</span>
+                <span className="hero-stat-val" style={{ color: data.totalExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                  {data.totalExpense > 0 ? `−${formatCurrency(data.totalExpense)}` : '—'}
+                </span>
+                <span className="hero-stat-sub">bulan ini</span>
+              </div>
+              <div className="hero-stat-divider" />
+              <div className="hero-stat">
+                <span className="hero-stat-label">Hari Ini</span>
+                <span className="hero-stat-val" style={{ color: data.todayExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                  {data.todayExpense > 0 ? `−${formatCurrency(data.todayExpense)}` : '—'}
+                </span>
+                <span className="hero-stat-sub">pengeluaran</span>
+              </div>
+              <div className="hero-stat-divider" />
+              <div className="hero-stat hero-stat-btn" onClick={() => setShowRencanaModal(true)}>
+                <span className="hero-stat-label">Rencana Bulan Depan</span>
+                <span className="hero-stat-val" style={{ color: data.nextMonthPlans.length > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                  {data.nextMonthPlans.length > 0 ? formatCurrency(data.nextMonthPlans.reduce((s, p) => s + Number(p.amount), 0)) : '—'}
+                </span>
+                <span className="hero-stat-sub" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                  {data.nextMonthPlans.length > 0 ? `${data.nextMonthPlans.length} item · See Detail` : 'Belum ada'}
+                </span>
+              </div>
+            </div>
           </>
-        )}
-      </div>
-
-      {/* ── Stats strip ──────────────────────── */}
-      <div className="stats-strip">
-        <div className="stat-col">
-          <span className="stat-col-label">Pemasukan</span>
-          <span className="stat-col-val tabular" style={{ color: 'var(--success)' }}>+{formatCurrency(data.totalIncome)}</span>
-        </div>
-        <div className="stat-col">
-          <span className="stat-col-label">Pengeluaran</span>
-          <span className="stat-col-val tabular" style={{ color: overBatasBelanja ? 'var(--danger)' : 'var(--text-primary)' }}>
-            -{formatCurrency(effectiveExpense)}
-          </span>
-          {mandatoryAutoDeduct > 0 && (
-            <span className="stat-col-sub">+{formatCurrency(mandatoryAutoDeduct)} wajib</span>
-          )}
-        </div>
-        <div className="stat-col">
-          <span className="stat-col-label">Belanja Hari Ini</span>
-          <span className="stat-col-val tabular" style={{ color: data.todayExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-            {data.todayExpense > 0 ? `-${formatCurrency(data.todayExpense)}` : '—'}
-          </span>
-          {data.todayExpense > 0 && data.salary > 0 && (
-            <span className="stat-col-sub">{((data.todayExpense / data.salary) * 100).toFixed(1)}% gaji</span>
-          )}
-        </div>
-      </div>
-
-      {/* ── Keuangan Wajib ───────────────────── */}
-      <div className="card">
-        <div className="sect-head">
-          <div>
-            <h3 className="sect-title">Keuangan Wajib</h3>
-            <p className="sect-sub">Pemasukan & potongan rutin setiap bulan</p>
-          </div>
-          <button className="pill-link" onClick={() => setShowCatManager(true)}>Kelola</button>
-        </div>
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 36 }} />)}
-          </div>
-        ) : (
-          <div className="wajib-rows">
-            {/* Gaji — mandatory income */}
-            {data.categories.filter(c => isMandatoryIncome(c)).map(cat => (
-              <div key={cat.id} className="wajib-row">
-                <div className="wajib-left">
-                  <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
-                  <span className="brow-name">{cat.name}</span>
-                  <span className="wajib-type-badge income">Pemasukan</span>
-                </div>
-                <div className="wajib-right">
-                  <span className="wajib-amount tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {/* Divider antara income & expense */}
-            {data.categories.some(c => isMandatoryIncome(c)) && data.categories.some(c => isMandatory(c)) && (
-              <div className="wajib-divider" />
-            )}
-            {/* Pengeluaran wajib */}
-            {data.categories.filter(c => isMandatory(c)).map(cat => {
-              const budget = cat.budget_set
-                ? Number(cat.budget_limit)
-                : (data.salary > 0 ? Math.round(data.salary * 0.15) : 0)
-              const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
-              return (
-                <div key={cat.id} className="wajib-row">
-                  <div className="wajib-left">
-                    <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
-                    <span className="brow-name">{cat.name}</span>
-                  </div>
-                  <div className="wajib-right">
-                    {salPct && <span className="wajib-pct">{salPct}%</span>}
-                    <span className="wajib-amount tabular">{formatCurrency(budget)}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
         )}
       </div>
 
@@ -395,7 +416,7 @@ export default function Dashboard() {
                 return (
                   <div key={cat.id} className="brow">
                     <div className="brow-left">
-                      <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                      <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>−</span>
                       <span className="brow-name">{cat.name}</span>
                       {cat.overBudget && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Over</span>}
                       {isFull && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Penuh</span>}
@@ -419,49 +440,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Rencana bulan depan ─────────────── */}
-      <div className="card">
-        <div className="sect-head">
-          <div>
-            <h3 className="sect-title">Rencana {getMonthLabel(nextMonth(month))}</h3>
-            {data.nextMonthPlans.length > 0 && (
-              <p className="sect-sub">
-                {data.nextMonthPlans.length} item ·{' '}
-                {formatCurrency(data.nextMonthPlans.reduce((s, p) => s + Number(p.amount), 0))}
-              </p>
-            )}
-          </div>
-          <Link to="/savings" className="pill-link">Kelola →</Link>
-        </div>
-
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 36 }} />)}
-          </div>
-        ) : data.nextMonthPlans.length === 0 ? (
-          <div className="empty-hint">
-            <span className="empty-hint-icon">📋</span>
-            <span>Belum ada rencana untuk {getMonthLabel(nextMonth(month))}.</span>
-            <Link to="/savings" className="empty-hint-link">Tambah →</Link>
-          </div>
-        ) : (
-          <div className="plan-preview-list">
-            {data.nextMonthPlans.slice(0, 4).map(plan => (
-              <div key={plan.id} className="plan-preview-row">
-                <span className="plan-preview-icon">🛒</span>
-                <span className="plan-preview-name">{plan.name}</span>
-                <span className="plan-preview-amount tabular">{formatCurrency(plan.amount)}</span>
-              </div>
-            ))}
-            {data.nextMonthPlans.length > 4 && (
-              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                +{data.nextMonthPlans.length - 4} rencana lainnya —{' '}
-                <Link to="/savings" style={{ color: 'var(--accent)', fontWeight: 600 }}>lihat semua</Link>
-              </p>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* ── Transaksi terakhir ───────────────── */}
       <div className="card">
@@ -483,8 +461,8 @@ export default function Dashboard() {
           <div className="tx-list">
             {data.transactions.map(tx => (
               <div key={tx.id} className="tx-row">
-                <div className="tx-icon" style={{ background: tx.categories?.color ? `${tx.categories.color}18` : 'var(--bg-input)' }}>
-                  {tx.categories?.icon || (tx.type === 'income' ? '↑' : '↓')}
+                <div className="tx-icon" style={{ background: tx.type === 'income' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)', color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)', fontSize: '1rem', fontWeight: 700 }}>
+                  {tx.type === 'income' ? '↑' : '↓'}
                 </div>
                 <div className="tx-meta">
                   <span className="tx-desc">{tx.description || tx.categories?.name || 'Transaksi'}</span>
@@ -502,6 +480,220 @@ export default function Dashboard() {
       </div>{/* end sections gap wrapper */}
 
       {/* ── Modals ───────────────────────────── */}
+      {/* ── Gaji Modal ──────────────────────── */}
+      {showGajiModal && (() => {
+        const hasGaji = data.salary > 0
+
+        const saveGaji = async () => {
+          const amount = parseFloat(gajiForm.amount.replace(/\D/g, '')) || 0
+          if (!amount) return
+          setGajiSaving(true)
+          const txDate = `${month}-01`
+          if (data.gajiTx) {
+            await supabase.from('transactions').update({ amount, description: gajiForm.note, date: txDate }).eq('id', data.gajiTx.id)
+          } else {
+            await supabase.from('transactions').insert({ user_id: user.id, category_id: data.gajiCatId, type: 'income', amount, description: gajiForm.note, date: txDate })
+          }
+          toast('Gaji disimpan', 'success')
+          setGajiSaving(false)
+          setShowGajiModal(false)
+          fetchDashboard()
+        }
+
+        return (
+          <div className="modal-overlay" onClick={() => setShowGajiModal(false)}>
+            <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <h2 className="modal-title">Gaji {getMonthLabel(month)}</h2>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {hasGaji ? 'Edit jumlah atau catatan' : 'Catat pemasukan gaji bulan ini'}
+                  </p>
+                </div>
+                <button className="btn btn-ghost" onClick={() => setShowGajiModal(false)}>✕</button>
+              </div>
+
+              {hasGaji ? (
+                <div style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Gaji tercatat</span>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--success)', letterSpacing: '-0.02em' }}>{formatCurrency(data.salary)}</span>
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label className="form-label">Jumlah Gaji</label>
+                  <CurrencyInput
+                    value={gajiForm.amount}
+                    onChange={v => setGajiForm(f => ({ ...f, amount: v }))}
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">Catatan {!hasGaji && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span>}</label>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  placeholder="Misal: gaji pokok + bonus, tunjangan, dll..."
+                  value={gajiForm.note}
+                  onChange={e => setGajiForm(f => ({ ...f, note: e.target.value }))}
+                  style={{ resize: 'vertical', fontFamily: 'var(--font-sans)', fontSize: '0.875rem' }}
+                />
+              </div>
+
+              <div className="flex gap-8 mt-16">
+                <button className="btn btn-secondary" onClick={() => setShowGajiModal(false)}>Batal</button>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveGaji} disabled={gajiSaving || (!hasGaji && !gajiForm.amount)}>
+                  {gajiSaving ? 'Menyimpan...' : hasGaji ? 'Simpan Catatan' : 'Simpan Gaji'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Tabungan Modal ──────────────────── */}
+      {showTabunganModal && (
+        <div className="modal-overlay" onClick={() => setShowTabunganModal(false)}>
+          <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Total Tabungan</h2>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Semua kantong tabungan</p>
+              </div>
+              <button className="btn btn-ghost" onClick={() => setShowTabunganModal(false)}>✕</button>
+            </div>
+
+            {data.savings.length === 0 ? (
+              <div className="empty-hint">
+                <span className="empty-hint-icon">🏦</span>
+                <span>Belum ada kantong tabungan.</span>
+              </div>
+            ) : (
+              <div className="wajib-rows">
+                {data.savings.map(sv => (
+                  <div key={sv.id} className="wajib-row">
+                    <div className="wajib-left">
+                      <span className="brow-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>−</span>
+                      <span className="brow-name">{sv.name}</span>
+                    </div>
+                    <span className="wajib-amount tabular" style={{ color: sv.current_amount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                      {formatCurrency(sv.current_amount || 0)}
+                    </span>
+                  </div>
+                ))}
+                <div className="wajib-divider" />
+                <div className="wajib-row" style={{ paddingTop: 10 }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
+                  <span className="wajib-amount tabular" style={{ color: 'var(--success)' }}>
+                    {formatCurrency(data.savings.reduce((s, sv) => s + Number(sv.current_amount || 0), 0) + (user.tabungan_awal || 0))}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Rencana Bulan Depan Modal ──────────── */}
+      {showRencanaModal && (
+        <div className="modal-overlay" onClick={() => setShowRencanaModal(false)}>
+          <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Rencana Bulan Depan</h2>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{getMonthLabel(nextMonth(month))}</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Link to="/savings" className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => setShowRencanaModal(false)}>Kelola →</Link>
+                <button className="btn btn-ghost" onClick={() => setShowRencanaModal(false)}>✕</button>
+              </div>
+            </div>
+            {data.nextMonthPlans.length === 0 ? (
+              <div className="empty-hint">
+                <span className="empty-hint-icon">◈</span>
+                <span>Belum ada rencana untuk {getMonthLabel(nextMonth(month))}.</span>
+                <Link to="/savings" className="empty-hint-link" onClick={() => setShowRencanaModal(false)}>Tambah →</Link>
+              </div>
+            ) : (
+              <div className="wajib-rows">
+                {data.nextMonthPlans.map(plan => (
+                  <div key={plan.id} className="wajib-row">
+                    <span className="brow-name">{plan.name}</span>
+                    <span className="wajib-amount tabular">{formatCurrency(plan.amount)}</span>
+                  </div>
+                ))}
+                <div className="wajib-divider" />
+                <div className="wajib-row" style={{ paddingTop: 10 }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>Total</span>
+                  <span className="wajib-amount tabular">
+                    {formatCurrency(data.nextMonthPlans.reduce((s, p) => s + Number(p.amount), 0))}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Keuangan Wajib Modal ────────────── */}
+      {showWajibModal && (
+        <div className="modal-overlay" onClick={() => setShowWajibModal(false)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Pengeluaran Tetap</h2>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{getMonthLabel(month)}</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => { setShowWajibModal(false); setShowCatManager(true) }}>Kelola</button>
+                <button className="btn btn-ghost" onClick={() => setShowWajibModal(false)}>✕</button>
+              </div>
+            </div>
+
+            <div className="wajib-rows">
+              {data.categories.filter(c => isMandatoryIncome(c)).map(cat => (
+                <div key={cat.id} className="wajib-row">
+                  <div className="wajib-left">
+                    <span className="brow-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>+</span>
+                    <span className="brow-name">{cat.name}</span>
+                    <span className="wajib-type-badge income">Pemasukan</span>
+                  </div>
+                  <span className="wajib-amount tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
+                  </span>
+                </div>
+              ))}
+
+              {data.categories.some(c => isMandatoryIncome(c)) && <div className="wajib-divider" />}
+
+              {data.categories.filter(c => isMandatory(c)).map(cat => {
+                const budget = cat.budget_set ? Number(cat.budget_limit) : (data.salary > 0 ? Math.round(data.salary * 0.15) : 0)
+                const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
+                return (
+                  <div key={cat.id} className="wajib-row">
+                    <div className="wajib-left">
+                      <span className="brow-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
+                      <span className="brow-name">{cat.name}</span>
+                    </div>
+                    <div className="wajib-right">
+                      {salPct && <span className="wajib-pct">{salPct}%</span>}
+                      <span className="wajib-amount tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
+                    </div>
+                  </div>
+                )
+              })}
+
+              <div className="wajib-divider" />
+              <div className="wajib-row" style={{ paddingTop: 10 }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>Total Potongan</span>
+                <span className="wajib-amount tabular" style={{ color: 'var(--danger)' }}>−{formatCurrency(mandatoryBudgetTotal)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showTxForm && (
         <div className="modal-overlay" onClick={() => setShowTxForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -535,7 +727,7 @@ export default function Dashboard() {
                 {data.categories.filter(c => isMandatoryIncome(c)).map(cat => (
                   <div key={cat.id} className="cat-mgr-row">
                     <div className="cat-mgr-left">
-                      <span className="cat-mgr-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                      <span className="cat-mgr-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>+</span>
                       <div>
                         <span className="cat-mgr-name">{cat.name}</span>
                         <span className="cat-mgr-sub">Wajib · pemasukan rutin</span>
@@ -560,7 +752,7 @@ export default function Dashboard() {
                   return (
                     <div key={cat.id} className="cat-mgr-row">
                       <div className="cat-mgr-left">
-                        <span className="cat-mgr-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                        <span className="cat-mgr-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
                         <div>
                           <span className="cat-mgr-name">{cat.name}</span>
                           <span className="cat-mgr-sub">Wajib · langsung dipotong</span>
@@ -593,7 +785,7 @@ export default function Dashboard() {
                     return (
                       <div key={cat.id} className="cat-mgr-row">
                         <div className="cat-mgr-left">
-                          <span className="cat-mgr-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                          <span className="cat-mgr-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
                           <span className="cat-mgr-name">{cat.name}</span>
                         </div>
                         <div className="cat-mgr-right">
@@ -713,20 +905,79 @@ export default function Dashboard() {
         /* ── Header ───────────────────────────── */
         .dash-header {
           display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: 20px; gap: 12px; flex-wrap: wrap;
+          gap: 10px;
+          position: sticky; top: 0; z-index: 100;
+          background: var(--bg-sticky);
+          backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+          padding: 10px 0;
+          margin-bottom: 10px;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
         }
-        .month-nav-group { display: flex; align-items: center; gap: 2px; }
+        .month-nav-group {
+          display: flex; align-items: center; gap: 0;
+          background: var(--bg-card); border: 1px solid var(--border);
+          border-radius: 99px; overflow: hidden;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
         .month-btn {
-          width: 30px; height: 30px; border: none; background: none;
-          color: var(--text-muted); font-size: 1.2rem; cursor: pointer;
+          width: 34px; height: 34px; border: none; background: transparent;
+          color: var(--text-secondary); font-size: 1.1rem; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s; font-family: var(--font-sans); flex-shrink: 0;
+        }
+        .month-btn:hover:not(:disabled) { background: var(--bg-input); color: var(--text-primary); }
+        .month-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+        .month-btn:first-child { border-right: 1px solid var(--border); }
+        .month-btn:last-child  { border-left:  1px solid var(--border); }
+        .month-label-text {
+          font-size: 0.875rem; font-weight: 700; letter-spacing: -0.02em;
+          color: var(--text-primary); padding: 0 16px; min-width: 120px;
+          text-align: center; line-height: 34px; white-space: nowrap;
+        }
+        .month-label-clickable {
+          cursor: pointer; transition: color 0.15s; user-select: none;
+        }
+        .month-label-clickable:hover { color: var(--accent); }
+
+        /* ── Month Picker Popup ───────────────── */
+        .month-picker-popup {
+          position: absolute; top: calc(100% + 8px); left: 0;
+          z-index: 300; width: 224px;
+          background: var(--bg-card); border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+          padding: 12px;
+        }
+        .mp-year-row {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 10px;
+        }
+        .mp-year-btn {
+          width: 28px; height: 28px; border: none; background: transparent;
+          color: var(--text-secondary); font-size: 1rem; cursor: pointer;
           border-radius: var(--radius-sm); display: flex; align-items: center;
           justify-content: center; transition: all 0.15s; font-family: var(--font-sans);
         }
-        .month-btn:hover { background: var(--bg-input); color: var(--text-primary); }
-        .month-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-        .month-label-text {
-          font-size: 0.9375rem; font-weight: 700; letter-spacing: -0.025em;
-          color: var(--text-primary); padding: 0 8px; min-width: 130px; text-align: center;
+        .mp-year-btn:hover:not(:disabled) { background: var(--bg-input); color: var(--text-primary); }
+        .mp-year-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+        .mp-year-label {
+          font-size: 0.875rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;
+        }
+        .mp-grid {
+          display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+        }
+        .mp-month-btn {
+          padding: 7px 0; border: 1px solid transparent; background: transparent;
+          color: var(--text-secondary); font-size: 0.75rem; font-weight: 600;
+          border-radius: var(--radius-sm); cursor: pointer; transition: all 0.12s;
+          font-family: var(--font-sans);
+        }
+        .mp-month-btn:hover:not(:disabled) {
+          background: var(--bg-input); color: var(--text-primary); border-color: var(--border);
+        }
+        .mp-month-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+        .mp-month-btn.mp-active {
+          background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700;
         }
 
         /* ── Alert ────────────────────────────── */
@@ -772,13 +1023,28 @@ export default function Dashboard() {
         }
         .hero-balance.neg { color: var(--danger); }
         .hero-neg-sign { font-size: 0.7em; vertical-align: 0.05em; margin-right: 1px; }
+        .hero-month-delta {
+          display: block; font-size: 0.72rem; font-weight: 600;
+          margin-top: 4px; letter-spacing: -0.01em;
+        }
 
-        .hero-right { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+        .hero-right {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-auto-rows: auto;
+          grid-auto-flow: column;
+          gap: 8px;
+          align-items: start;
+        }
         .hero-chip {
           display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
           background: var(--hero-chip-bg); border: 1px solid var(--hero-chip-border);
           border-radius: var(--radius-sm); padding: 8px 12px; min-width: 130px;
         }
+        .hero-chip-btn {
+          cursor: pointer; transition: border-color 0.15s, background 0.15s;
+        }
+        .hero-chip-btn:hover { border-color: var(--accent); background: var(--accent-dim); }
         .hero-chip-label {
           font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.07em;
           color: var(--hero-muted); font-weight: 600;
@@ -789,6 +1055,50 @@ export default function Dashboard() {
         }
 
         .hero-bar-section {}
+        .hero-stats-row {
+          display: flex;
+          align-items: stretch;
+          gap: 0;
+          margin-top: 12px;
+          padding-top: 12px;
+          border-top: 1px solid var(--border);
+        }
+        .hero-stat {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding: 0 12px;
+        }
+        .hero-stat:first-child { padding-left: 0; }
+        .hero-stat:last-child { padding-right: 0; }
+        .hero-stat-btn { cursor: pointer; }
+        .hero-stat-btn:hover .hero-stat-label { color: var(--accent); }
+        .hero-stat-label {
+          font-size: 0.6rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: var(--text-muted);
+        }
+        .hero-stat-val {
+          font-size: 0.82rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          font-variant-numeric: tabular-nums;
+          color: var(--text-primary);
+        }
+        .hero-stat-sub {
+          font-size: 0.6rem;
+          color: var(--text-muted);
+          font-weight: 500;
+        }
+        .hero-stat-divider {
+          width: 1px;
+          background: var(--border);
+          flex-shrink: 0;
+          align-self: stretch;
+        }
         .hero-bar-track {
           height: 5px; background: var(--hero-track); border-radius: 99px; overflow: hidden; margin-bottom: 7px;
         }

@@ -408,7 +408,7 @@ export default function Plans() {
                   >
                     <option value="">— Tanpa kategori —</option>
                     {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                      <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
                 </div>

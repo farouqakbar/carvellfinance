@@ -3,6 +3,8 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './components/Toast'
 import Navbar from './components/Navbar'
+import OnboardingModal from './components/OnboardingModal'
+import ProfileModal from './components/ProfileModal'
 import './index.css'
 
 const Login = lazy(() => import('./pages/Login'))
@@ -33,11 +35,19 @@ function AppRoutes() {
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') !== 'light'
   })
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
     localStorage.setItem('theme', darkMode ? 'dark' : 'light')
   }, [darkMode])
+
+  useEffect(() => {
+    if (user && user.recording_start_month === null) {
+      setShowOnboarding(true)
+    }
+  }, [user?.id])
 
   return (
     <BrowserRouter basename="/carvellfinance">
@@ -48,7 +58,11 @@ function AppRoutes() {
           <Route path="/*" element={
             <ProtectedRoute>
               <div className="app-layout">
-                <Navbar darkMode={darkMode} setDarkMode={setDarkMode} />
+                <Navbar
+                  darkMode={darkMode}
+                  setDarkMode={setDarkMode}
+                  onProfileClick={() => setShowProfile(true)}
+                />
                 <main className="main-content">
                   <Routes>
                     <Route path="/dashboard" element={<Dashboard />} />
@@ -61,6 +75,12 @@ function AppRoutes() {
                   </Routes>
                 </main>
               </div>
+              {showOnboarding && (
+                <OnboardingModal onClose={() => setShowOnboarding(false)} />
+              )}
+              {showProfile && (
+                <ProfileModal onClose={() => setShowProfile(false)} />
+              )}
             </ProtectedRoute>
           } />
         </Routes>

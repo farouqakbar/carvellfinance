@@ -1,4 +1,4 @@
-# Finora — Personal Finance Tracker
+# Cashvell — Personal Finance Tracker
 
 **Kelola keuangan dengan lebih bijak** 💰
 

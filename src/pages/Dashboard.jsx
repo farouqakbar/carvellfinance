@@ -8,7 +8,7 @@ import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
-import { isMandatory } from '../constants/mandatoryCategories'
+import { isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
 
 const DEFAULT_PCT = 15
 
@@ -35,8 +35,6 @@ export default function Dashboard() {
     todayExpense: 0, totalTabungan: 0, nextMonthPlans: [],
   })
   const [loading, setLoading] = useState(true)
-  const [showSalaryForm, setShowSalaryForm] = useState(false)
-  const [salaryInput, setSalaryInput] = useState('')
   const [showTxForm, setShowTxForm] = useState(false)
   const [showCatManager, setShowCatManager] = useState(false)
   const [budgetEdit, setBudgetEdit] = useState(null)
@@ -55,8 +53,7 @@ export default function Dashboard() {
       const endDate = `${month}-31`
       const today = new Date().toISOString().split('T')[0]
       const nmStr = nextMonth(month)
-      const [salaryRes, txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes] = await Promise.all([
-        supabase.from('salaries').select('*').eq('user_id', user.id).eq('month', month).maybeSingle(),
+      const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes] = await Promise.all([
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
         supabase.from('savings').select('*').eq('user_id', user.id),
@@ -75,8 +72,14 @@ export default function Dashboard() {
         budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : 0,
         budget_set: catBudgetMap[cat.id] !== undefined,
       }))
+      // Derivasi salary dari transaksi kategori "Gaji" (mandatory income)
+      const gajiCat = (catRes.data || []).find(c => c.name === 'Gaji')
+      const salary = gajiCat
+        ? txs.filter(t => t.type === 'income' && t.category_id === gajiCat.id).reduce((s, t) => s + Number(t.amount), 0)
+        : 0
       const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-      const totalIncome = txs.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
+      // totalIncome = pemasukan non-Gaji (Gaji sudah masuk ke salary)
+      const totalIncome = txs.filter(t => t.type === 'income' && t.category_id !== gajiCat?.id).reduce((s, t) => s + Number(t.amount), 0)
       const catSpendMap = {}
       txs.filter(t => t.type === 'expense' && t.categories).forEach(t => {
         const n = t.categories.name
@@ -93,7 +96,7 @@ export default function Dashboard() {
         return (b.pct || 0) - (a.pct || 0)
       })
       setData({
-        salary: salaryRes.data?.amount || 0,
+        salary,
         totalExpense, totalIncome,
         categories: catsWithStatus,
         transactions: txs.slice(0, 5),
@@ -111,7 +114,7 @@ export default function Dashboard() {
         nextMonthPlans: plansRes.data || [],
       })
       // Auto-set 15% untuk mandatory categories yang belum pernah punya record (bukan yang di-set 0)
-      const sal = salaryRes.data?.amount || 0
+      const sal = salary
       if (sal > 0) {
         const unset = cats.filter(c => isMandatory(c) && catBudgetMap[c.id] === undefined)
         if (unset.length > 0) {
@@ -128,33 +131,6 @@ export default function Dashboard() {
         }
       }
     } finally { setLoading(false) }
-  }
-
-  const handleSaveSalary = async () => {
-    const amount = parseFloat(salaryInput)
-    if (!amount) return
-    await supabase.from('salaries').upsert({ user_id: user.id, month, amount }, { onConflict: 'user_id,month' })
-
-    // Auto-set 15% hanya untuk mandatory yang belum punya record sama sekali
-    const { data: existingBudgets } = await supabase
-      .from('category_budgets').select('category_id')
-      .eq('user_id', user.id).eq('month', month)
-    const existingIds = new Set((existingBudgets || []).map(cb => cb.category_id))
-    const unsetMandatory = data.categories.filter(c => isMandatory(c) && !existingIds.has(c.id))
-    if (unsetMandatory.length > 0) {
-      const defaultBudget = Math.round(amount * 0.15)
-      await Promise.all(unsetMandatory.map(c =>
-        supabase.from('category_budgets').upsert(
-          { user_id: user.id, category_id: c.id, month, budget_limit: defaultBudget },
-          { onConflict: 'category_id,month' }
-        )
-      ))
-    }
-
-    toast('Gaji disimpan', 'success')
-    setShowSalaryForm(false)
-    setSalaryInput('')
-    fetchDashboard()
   }
 
   const openBudgetEdit = (cat) => {
@@ -238,14 +214,9 @@ export default function Dashboard() {
           <span className="month-label-text">{getMonthLabel(month)}</span>
           <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
         </div>
-        <div className="flex gap-8">
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowSalaryForm(true)}>
-            Atur Gaji
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowTxForm(true)}>
-            + Transaksi
-          </button>
-        </div>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowTxForm(true)}>
+          + Transaksi
+        </button>
       </div>
 
       {/* ── Overbudget alert ─────────────────── */}
@@ -302,8 +273,8 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="hero-no-salary">
-                <button className="salary-cta" onClick={() => setShowSalaryForm(true)}>
-                  + Atur gaji bulan ini
+                <button className="salary-cta" onClick={() => setShowTxForm(true)}>
+                  + Catat Gaji bulan ini
                 </button>
                 <span className="salary-cta-hint">untuk menghitung saldo bersih</span>
               </div>
@@ -338,21 +309,41 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Pengeluaran Wajib ────────────────── */}
+      {/* ── Keuangan Wajib ───────────────────── */}
       <div className="card">
         <div className="sect-head">
           <div>
-            <h3 className="sect-title">Pengeluaran Wajib</h3>
-            <p className="sect-sub">Dipotong langsung dari gaji</p>
+            <h3 className="sect-title">Keuangan Wajib</h3>
+            <p className="sect-sub">Pemasukan & potongan rutin setiap bulan</p>
           </div>
           <button className="pill-link" onClick={() => setShowCatManager(true)}>Kelola</button>
         </div>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 36 }} />)}
+            {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 36 }} />)}
           </div>
         ) : (
           <div className="wajib-rows">
+            {/* Gaji — mandatory income */}
+            {data.categories.filter(c => isMandatoryIncome(c)).map(cat => (
+              <div key={cat.id} className="wajib-row">
+                <div className="wajib-left">
+                  <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                  <span className="brow-name">{cat.name}</span>
+                  <span className="wajib-type-badge income">Pemasukan</span>
+                </div>
+                <div className="wajib-right">
+                  <span className="wajib-amount tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {/* Divider antara income & expense */}
+            {data.categories.some(c => isMandatoryIncome(c)) && data.categories.some(c => isMandatory(c)) && (
+              <div className="wajib-divider" />
+            )}
+            {/* Pengeluaran wajib */}
             {data.categories.filter(c => isMandatory(c)).map(cat => {
               const budget = cat.budget_set
                 ? Number(cat.budget_limit)
@@ -376,14 +367,14 @@ export default function Dashboard() {
       </div>
 
       {/* ── Budget Kategori Lainnya ──────────── */}
-      {(loading || data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).length > 0) && (
+      {(loading || data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.budget_limit > 0).length > 0) && (
         <div className="card">
           <div className="sect-head">
             <div>
               <h3 className="sect-title">Budget Kategori</h3>
-              {data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).length > 0 && (
+              {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.budget_limit > 0).length > 0 && (
                 <p className="sect-sub">
-                  {formatCurrency(data.categories.filter(c => !isMandatory(c)).reduce((s, c) => s + (c.spent || 0), 0))} dari {formatCurrency(data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).reduce((s, c) => s + Number(c.budget_limit), 0))}
+                  {formatCurrency(data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).reduce((s, c) => s + (c.spent || 0), 0))} dari {formatCurrency(data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.budget_limit > 0).reduce((s, c) => s + Number(c.budget_limit), 0))}
                 </p>
               )}
             </div>
@@ -395,7 +386,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="budget-rows">
-              {data.categories.filter(c => !isMandatory(c) && c.budget_limit > 0).map(cat => {
+              {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.budget_limit > 0).map(cat => {
                 const rawPct = (cat.spent / cat.budget_limit) * 100
                 const pct = Math.min(rawPct, 100)
                 const isFull = !cat.overBudget && rawPct >= 100
@@ -511,29 +502,6 @@ export default function Dashboard() {
       </div>{/* end sections gap wrapper */}
 
       {/* ── Modals ───────────────────────────── */}
-      {showSalaryForm && (
-        <div className="modal-overlay" onClick={() => setShowSalaryForm(false)}>
-          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Gaji {getMonthLabel(month)}</h2>
-              <button className="btn btn-ghost" onClick={() => setShowSalaryForm(false)}>✕</button>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Gaji Bulan Ini</label>
-              <CurrencyInput
-                value={salaryInput}
-                onChange={raw => setSalaryInput(raw)}
-                autoFocus
-              />
-            </div>
-            <div className="flex gap-8">
-              <button className="btn btn-secondary" onClick={() => setShowSalaryForm(false)}>Batal</button>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSaveSalary}>Simpan</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showTxForm && (
         <div className="modal-overlay" onClick={() => setShowTxForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -558,6 +526,28 @@ export default function Dashboard() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="btn btn-primary btn-sm" onClick={() => { setEditCatData(null); setShowCatForm(true) }}>+ Kategori</button>
                 <button className="btn btn-ghost" onClick={() => setShowCatManager(false)}>✕</button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <p className="cat-mgr-section-title">Pemasukan Wajib</p>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {data.categories.filter(c => isMandatoryIncome(c)).map(cat => (
+                  <div key={cat.id} className="cat-mgr-row">
+                    <div className="cat-mgr-left">
+                      <span className="cat-mgr-icon" style={{ background: `${cat.color}18`, color: cat.color }}>{cat.icon}</span>
+                      <div>
+                        <span className="cat-mgr-name">{cat.name}</span>
+                        <span className="cat-mgr-sub">Wajib · pemasukan rutin</span>
+                      </div>
+                    </div>
+                    <div className="cat-mgr-right">
+                      <span className="cat-mgr-amount tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                        {data.salary > 0 ? formatCurrency(data.salary) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -589,7 +579,7 @@ export default function Dashboard() {
 
             <div>
               <p className="cat-mgr-section-title">Kategori Lainnya</p>
-              {data.categories.filter(c => !isMandatory(c)).length === 0 ? (
+              {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).length === 0 ? (
                 <div className="empty-hint">
                   <span className="empty-hint-icon">◈</span>
                   <span>Belum ada kategori tambahan.</span>
@@ -597,7 +587,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {data.categories.filter(c => !isMandatory(c)).map(cat => {
+                  {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).map(cat => {
                     const budget = Number(cat.budget_limit) || 0
                     const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
                     return (
@@ -898,6 +888,16 @@ export default function Dashboard() {
         .wajib-row:last-child { border-bottom: none; }
         .wajib-left { display: flex; align-items: center; gap: 8px; }
         .wajib-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .wajib-type-badge {
+          font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.06em;
+          font-weight: 700; padding: 2px 7px; border-radius: 99px; flex-shrink: 0;
+        }
+        .wajib-type-badge.income {
+          background: rgba(34,197,94,0.12); color: var(--success);
+        }
+        .wajib-divider {
+          height: 1px; background: var(--border); margin: 4px 0;
+        }
         .wajib-pct {
           font-size: 0.68rem; font-weight: 700; color: var(--accent);
           background: var(--accent-dim); padding: 2px 8px; border-radius: 99px;

@@ -6,7 +6,7 @@ import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import CurrencyInput from '../components/CurrencyInput'
 import { useToast } from '../components/Toast'
-import { MANDATORY_NAMES, isMandatory } from '../constants/mandatoryCategories'
+import { MANDATORY_NAMES, isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
 
 const DEFAULT_PCT = 15
 
@@ -29,10 +29,10 @@ export default function Categories() {
     setLoading(true)
     const startDate = `${month}-01`
     const endDate = `${month}-31`
-    const [catRes, txRes, salRes, catBudgetsRes] = await Promise.all([
+    const [catRes, txRes, incomeTxRes, catBudgetsRes] = await Promise.all([
       supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
       supabase.from('transactions').select('category_id, amount').eq('user_id', user.id).eq('type', 'expense').gte('date', startDate).lte('date', endDate),
-      supabase.from('salaries').select('amount').eq('user_id', user.id).eq('month', month).maybeSingle(),
+      supabase.from('transactions').select('category_id, amount').eq('user_id', user.id).eq('type', 'income').gte('date', startDate).lte('date', endDate),
       supabase.from('category_budgets').select('*').eq('user_id', user.id).eq('month', month),
     ])
     const catBudgetMap = {}
@@ -46,9 +46,14 @@ export default function Categories() {
       ...cat,
       budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : 0,
     }))
+    // Derivasi salary dari transaksi kategori "Gaji"
+    const gajiCat = (catRes.data || []).find(c => c.name === 'Gaji')
+    const derivedSalary = gajiCat
+      ? (incomeTxRes.data || []).filter(t => t.category_id === gajiCat.id).reduce((s, t) => s + Number(t.amount), 0)
+      : 0
     setCategories(cats)
     setSpendMap(spend)
-    setSalary(Number(salRes.data?.amount || 0))
+    setSalary(derivedSalary)
     setLoading(false)
   }
 
@@ -91,8 +96,9 @@ export default function Categories() {
     fetchAll()
   }
 
+  const mandatoryIncome = categories.filter(c => isMandatoryIncome(c))
   const mandatory = categories.filter(c => isMandatory(c))
-  const regular = categories.filter(c => !isMandatory(c))
+  const regular = categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c))
   const totalBudget = categories.reduce((s, c) => s + Number(c.budget_limit || 0), 0)
   const totalSpent = Object.values(spendMap).reduce((s, v) => s + v, 0)
 
@@ -199,6 +205,43 @@ export default function Categories() {
         </button>
       </div>
 
+      {/* Pemasukan Wajib */}
+      {mandatoryIncome.length > 0 && (
+        <div className="cat-section mb-24">
+          <div className="cat-section-head">
+            <div>
+              <span className="cat-section-title">Pemasukan Wajib</span>
+              <span className="cat-section-sub">
+                {salary > 0 ? `Total gaji bulan ini: ${formatCurrency(salary)}` : 'Belum ada transaksi Gaji bulan ini'}
+              </span>
+            </div>
+          </div>
+          <div className="cat-grid">
+            {mandatoryIncome.map(cat => (
+              <div key={cat.id} className="cat-card cat-mandatory" style={{ '--cat-color': cat.color }}>
+                <div className="cat-card-top">
+                  <div className="cat-card-left">
+                    <span className="cat-icon" style={{ background: `${cat.color}20`, color: cat.color }}>{cat.icon}</span>
+                    <div>
+                      <span className="cat-name">{cat.name}</span>
+                      <span className="cat-mandatory-badge" style={{ color: 'var(--success)' }}>Wajib · pemasukan rutin</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mand-budget-row">
+                  <div>
+                    <span className="mand-label">Bulan ini</span>
+                    <span className="mand-val tabular" style={{ color: salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                      {salary > 0 ? `+${formatCurrency(salary)}` : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Pengeluaran Wajib */}
       <div className="cat-section mb-24">
         <div className="cat-section-head">
@@ -207,7 +250,7 @@ export default function Categories() {
             <span className="cat-section-sub">
               {salary > 0
                 ? `${formatCurrency(mandatory.reduce((s, c) => s + Number(c.budget_limit || 0), 0))} dari gaji ${formatCurrency(salary)} — langsung dipotong`
-                : 'Atur gaji di Dashboard untuk lihat persentase'}
+                : 'Catat gaji di Dashboard untuk lihat persentase'}
             </span>
           </div>
         </div>

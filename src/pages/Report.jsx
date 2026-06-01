@@ -28,17 +28,12 @@ export default function Report() {
 
   const fetchReport = async () => {
     setLoading(true)
-    const [txRes, salaryRes] = await Promise.all([
-      supabase.from('transactions')
-        .select('amount, type, date, category_id, categories(name, color, icon)')
-        .eq('user_id', user.id)
-        .order('date'),
-      supabase.from('salaries').select('amount, month').eq('user_id', user.id),
-    ])
+    const txRes = await supabase.from('transactions')
+      .select('amount, type, date, category_id, categories(name, color, icon)')
+      .eq('user_id', user.id)
+      .order('date')
 
     const salaryMap = {}
-    ;(salaryRes.data || []).forEach(s => { salaryMap[s.month] = Number(s.amount) })
-
     const monthMap = {}
     const monthCatMap = {}
     const catTotals = {}
@@ -49,7 +44,12 @@ export default function Report() {
       if (!monthCatMap[m]) monthCatMap[m] = {}
 
       if (tx.type === 'income') {
-        monthMap[m].income += Number(tx.amount)
+        if (tx.categories?.name === 'Gaji') {
+          // Gaji masuk ke salaryMap per bulan
+          salaryMap[m] = (salaryMap[m] || 0) + Number(tx.amount)
+        } else {
+          monthMap[m].income += Number(tx.amount)
+        }
       } else {
         monthMap[m].expense += Number(tx.amount)
         const name = tx.categories?.name || 'Lainnya'
@@ -59,11 +59,6 @@ export default function Report() {
         if (!catTotals[name]) catTotals[name] = { total: 0, color, icon }
         catTotals[name].total += Number(tx.amount)
       }
-    })
-
-    // Include salary-only months
-    Object.keys(salaryMap).forEach(m => {
-      if (!monthMap[m]) monthMap[m] = { income: 0, expense: 0 }
     })
 
     const sortedMonths = Object.keys(monthMap).sort().reverse().map(m => {

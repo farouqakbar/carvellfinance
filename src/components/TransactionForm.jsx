@@ -3,28 +3,44 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
 import CurrencyInput from './CurrencyInput'
+import { isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
 
-export default function TransactionForm({ onSuccess, onClose, editData }) {
+export default function TransactionForm({ onSuccess, onClose, editData, month }) {
   const { user } = useAuth()
   const toast = useToast()
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
+
+  const defaultDate = () => {
+    if (editData?.date) return editData.date
+    if (!month) return new Date().toISOString().split('T')[0]
+    const currentMonth = new Date().toISOString().substring(0, 7)
+    return month === currentMonth ? new Date().toISOString().split('T')[0] : `${month}-01`
+  }
+
   const [form, setForm] = useState({
     amount: '',
     category_id: '',
-    date: new Date().toISOString().split('T')[0],
+    date: defaultDate(),
     description: '',
     type: 'expense',
     ...editData,
   })
 
-  useEffect(() => {
-    fetchCategories()
-  }, [])
+  useEffect(() => { fetchCategories() }, [month])
 
   const fetchCategories = async () => {
-    const { data } = await supabase.from('categories').select('*').eq('user_id', user.id).order('name')
-    setCategories(data || [])
+    const [catRes, budgetRes] = await Promise.all([
+      supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+      month
+        ? supabase.from('category_budgets').select('category_id').eq('user_id', user.id).eq('month', month)
+        : Promise.resolve({ data: [] }),
+    ])
+    const all = (catRes.data || []).filter(c => !isMandatory(c) && !isMandatoryIncome(c))
+    const budgetedIds = new Set((budgetRes.data || []).map(b => b.category_id))
+    // Tampilkan hanya kategori yang punya budget bulan ini; fallback ke semua kalau kosong
+    const filtered = budgetedIds.size > 0 ? all.filter(c => budgetedIds.has(c.id)) : all
+    setCategories(filtered)
   }
 
   const handleSubmit = async (e) => {
@@ -102,7 +118,7 @@ export default function TransactionForm({ onSuccess, onClose, editData }) {
           onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
         >
           <option value="">— Tanpa kategori —</option>
-          {categories.map(c => (
+          {categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).map(c => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>

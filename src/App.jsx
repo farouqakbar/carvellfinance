@@ -5,6 +5,7 @@ import { ToastProvider } from './components/Toast'
 import Navbar from './components/Navbar'
 import OnboardingModal from './components/OnboardingModal'
 import ProfileModal from './components/ProfileModal'
+import DevOverlay from './components/DevOverlay'
 import './index.css'
 
 const Login = lazy(() => import('./pages/Login'))
@@ -94,6 +95,7 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <AppRoutes />
+        <DevOverlay />
       </ToastProvider>
     </AuthProvider>
   )

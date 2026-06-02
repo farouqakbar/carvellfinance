@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import { LogoWordmark, LogoMark } from './Logo'
 
 const navItems = [
-  { to: '/dashboard', icon: '⬡', label: 'Dashboard' },
-  { to: '/savings', icon: '◎', label: 'Rencana' },
-  { to: '/report', icon: '▤', label: 'Laporan' },
+  { to: '/dashboard', icon: '▸', label: 'Dashboard' },
+  { to: '/savings', icon: '↑', label: 'Rencana' },
+  { to: '/report', icon: '↓', label: 'Laporan' },
 ]
 
 const mobileItems = navItems

@@ -27,6 +27,7 @@ export default function ProfileModal({ onClose }) {
   const [startMonth, setStartMonth] = useState(user?.recording_start_month || '')
   const [saldoAwal, setSaldoAwal] = useState(String(user?.saldo_awal || ''))
   const [tabunganAwal, setTabunganAwal] = useState(String(user?.tabungan_awal || ''))
+  const [budgetHarian, setBudgetHarian] = useState(String(user?.budget_harian || ''))
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
@@ -37,6 +38,7 @@ export default function ProfileModal({ onClose }) {
         recording_start_month: startMonth || null,
         saldo_awal: parseFloat(saldoAwal) || 0,
         tabungan_awal: parseFloat(tabunganAwal) || 0,
+        budget_harian: parseFloat(budgetHarian) || 0,
       })
       toast('Profil disimpan', 'success')
       onClose()
@@ -107,6 +109,12 @@ export default function ProfileModal({ onClose }) {
             <label className="pf-label">Tabungan awal</label>
             <CurrencyInput value={tabunganAwal} onChange={setTabunganAwal} />
             <p className="pf-hint">Tabungan yang sudah ada sebelum mulai nyatet</p>
+          </div>
+
+          <div className="pf-group">
+            <label className="pf-label">Budget harian <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span></label>
+            <CurrencyInput value={budgetHarian} onChange={setBudgetHarian} />
+            <p className="pf-hint">Batas pengeluaran per hari — akan muncul indikator di dashboard</p>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>

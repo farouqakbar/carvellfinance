@@ -27,12 +27,11 @@ export default function Dashboard() {
   const { user } = useAuth()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
-  // Poin 4: selalu mulai dari bulan sekarang saat buka app
-  const [month, setMonth] = useState(getCurrentMonth())
+  const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
   const [data, setData] = useState({
     salary: 0, totalExpense: 0, totalIncome: 0,
     categories: [], transactions: [], savings: [], savingsLogs: [], categorySpend: [],
-    todayExpense: 0, totalTabungan: 0, nextMonthPlans: [], cumulativeBalance: 0,
+    todayExpense: 0, totalTabungan: 0, nextMonthPlans: [], cumulativeBalance: 0, cumulativeMandatoryBudget: 0,
     gajiTx: null, gajiCatId: null,
   })
   const [loading, setLoading] = useState(true)
@@ -59,11 +58,13 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const startDate = `${month}-01`
-      const endDate = `${month}-31`
+      const [ey, em] = month.split('-').map(Number)
+      const endDate = new Date(ey, em, 0).toISOString().split('T')[0]
       const today = new Date().toISOString().split('T')[0]
       const nmStr = nextMonth(month)
       const recordStart = user.recording_start_month
-      let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lte('date', endDate)
+      // Transaksi dari recording_start_month s/d sebelum bulan ini — lt(startDate) hindari invalid endDate
+      let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lt('date', startDate)
       if (recordStart) histQuery = histQuery.gte('date', `${recordStart}-01`)
 
       let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month)
@@ -129,7 +130,13 @@ export default function Dashboard() {
         nextMonthPlans: plansRes.data || [],
         gajiTx: gajiTxs[0] || null,
         gajiCatId: gajiCat?.id || null,
-        cumulativeBalance: (histRes.data || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0) + (user.saldo_awal || 0),
+        // histNet (bulan lalu) + bulan ini + saldo_awal = total kumulatif semua transaksi
+        cumulativeBalance: (histRes.data || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0)
+          + salary + totalIncome - totalExpense
+          + (user.saldo_awal || 0),
+        cumulativeMandatoryBudget: (allLogsRes.data || [])
+          .filter(cb => { const c = cats.find(cat => cat.id === cb.category_id); return c && isMandatory(c) })
+          .reduce((s, cb) => s + Number(cb.budget_limit), 0),
       })
       // Auto-set 15% untuk mandatory categories yang belum pernah punya record (bukan yang di-set 0)
       const sal = salary
@@ -212,17 +219,18 @@ export default function Dashboard() {
   const balance = data.salary + data.totalIncome - effectiveExpense
   const budgetUsed = data.salary > 0 ? (effectiveExpense / data.salary) * 100 : 0
 
-  // Bar: total pengeluaran dari gaji bulan ini
-  const spendingBudget = Math.max(0, data.salary - mandatoryBudgetTotal)
-  const nonMandatoryExpense = Math.max(0, data.totalExpense - mandatoryTransactionSpent)
-  const freeBalance = spendingBudget - nonMandatoryExpense
-  const spendingPct = data.salary > 0 ? (data.totalExpense / data.salary) * 100 : 0
-  const heroBarColor = spendingPct > 90 ? 'var(--danger)' : spendingPct > 70 ? 'var(--warning)' : 'var(--accent)'
-
   // Alokasi tabungan dari kategori mandatory "Tabungan Bulanan"
   const monthlyTabungan = data.categories
     .filter(c => c.name === 'Tabungan Bulanan' && c.budget_limit > 0)
     .reduce((s, c) => s + Number(c.budget_limit), 0)
+
+  // cumulativeBalance sudah include semua transaksi + saldo_awal
+  // cumulativeMandatoryBudget = total mandatory budget dari recording_start s/d bulan ini
+  const totalSaldo = data.cumulativeBalance - data.cumulativeMandatoryBudget
+  // Sisa belanja bulan ini
+  const freeBalance = data.salary - data.totalExpense - monthlyTabungan
+  const spendingPct = data.salary > 0 ? (data.totalExpense / data.salary) * 100 : 0
+  const heroBarColor = spendingPct > 90 ? 'var(--danger)' : spendingPct > 70 ? 'var(--warning)' : 'var(--accent)'
 
   const batasBelanja = data.salary > 0 ? data.salary - monthlyTabungan : 0
   const sisaBelanja = batasBelanja - data.totalExpense
@@ -287,7 +295,7 @@ export default function Dashboard() {
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button className="btn btn-primary btn-sm" style={{ fontSize: '0.78rem', height: 34 }} onClick={() => setShowTxForm(true)}>+ Transaksi</button>
-          <Link to="/categories" className="btn btn-secondary btn-sm" style={{ fontSize: '0.78rem', height: 34 }}>⚙ Settings</Link>
+          <Link to={`/categories?month=${month}`} className="btn btn-secondary btn-sm" style={{ fontSize: '0.78rem', height: 34 }}>⚙ Settings</Link>
         </div>
       </div>
 
@@ -310,10 +318,10 @@ export default function Dashboard() {
           <>
             <div className="hero-top">
               <div className="hero-left">
-        <span className="hero-eyebrow">Sisa Belanja</span>
-                <div className={`hero-balance ${freeBalance < 0 ? 'neg' : ''}`}>
-                  {freeBalance < 0 && <span className="hero-neg-sign">-</span>}
-                  {formatCurrency(Math.abs(freeBalance))}
+        <span className="hero-eyebrow">Total Saldo</span>
+                <div className={`hero-balance ${totalSaldo < 0 ? 'neg' : ''}`}>
+                  {totalSaldo < 0 && <span className="hero-neg-sign">-</span>}
+                  {formatCurrency(Math.abs(totalSaldo))}
                 </div>
               </div>
               <div className="hero-right">
@@ -359,19 +367,39 @@ export default function Dashboard() {
             <div className="hero-stats-row">
               <div className="hero-stat">
                 <span className="hero-stat-label">Total Pengeluaran</span>
-                <span className="hero-stat-val" style={{ color: data.totalExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                  {data.totalExpense > 0 ? `−${formatCurrency(data.totalExpense)}` : '—'}
+                <span className="hero-stat-val" style={{ color: Math.max(0, data.totalExpense - mandatoryTransactionSpent - data.totalIncome) > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                  {Math.max(0, data.totalExpense - mandatoryTransactionSpent - data.totalIncome) > 0
+                    ? `−${formatCurrency(data.totalExpense - mandatoryTransactionSpent - data.totalIncome)}`
+                    : '—'}
                 </span>
-                <span className="hero-stat-sub">bulan ini</span>
+                <span className="hero-stat-sub">diluar wajib & tabungan</span>
               </div>
               <div className="hero-stat-divider" />
-              <div className="hero-stat">
-                <span className="hero-stat-label">Hari Ini</span>
-                <span className="hero-stat-val" style={{ color: data.todayExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                  {data.todayExpense > 0 ? `−${formatCurrency(data.todayExpense)}` : '—'}
-                </span>
-                <span className="hero-stat-sub">pengeluaran</span>
-              </div>
+              {(() => {
+                const budget = user.budget_harian || 0
+                const spent = data.todayExpense
+                const pct = budget > 0 ? spent / budget : 0
+                const over = budget > 0 && spent >= budget
+                const near = budget > 0 && pct >= 0.8 && !over
+                const ok = budget > 0 && spent > 0 && pct < 0.8
+                const dayColor = over ? 'var(--danger)' : near ? 'var(--warning)' : spent > 0 ? 'var(--danger)' : 'var(--text-muted)'
+                return (
+                  <div className="hero-stat">
+                    <span className="hero-stat-label">Hari Ini</span>
+                    <span className="hero-stat-val" style={{ color: dayColor }}>
+                      {spent > 0 ? `−${formatCurrency(spent)}` : '—'}
+                    </span>
+                    {over
+                      ? <span className="hero-stat-sub" style={{ color: 'var(--danger)', fontWeight: 600 }}>melebihi budget harian</span>
+                      : near
+                        ? <span className="hero-stat-sub" style={{ color: 'var(--warning)', fontWeight: 600 }}>mendekati budget harian</span>
+                        : ok
+                          ? <span className="hero-stat-sub" style={{ color: 'var(--success)', fontWeight: 600 }}>dalam budget harian</span>
+                          : <span className="hero-stat-sub">pengeluaran</span>
+                    }
+                  </div>
+                )
+              })()}
               <div className="hero-stat-divider" />
               <div className="hero-stat hero-stat-btn" onClick={() => setShowRencanaModal(true)}>
                 <span className="hero-stat-label">Rencana Bulan Depan</span>
@@ -392,12 +420,18 @@ export default function Dashboard() {
         <div className="card">
           <div className="sect-head">
             <div>
-              <h3 className="sect-title">Budget Kategori</h3>
-              {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.budget_limit > 0).length > 0 && (
-                <p className="sect-sub">
-                  {formatCurrency(data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).reduce((s, c) => s + (c.spent || 0), 0))} dari {formatCurrency(data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.budget_limit > 0).reduce((s, c) => s + Number(c.budget_limit), 0))}
-                </p>
-              )}
+              <h3 className="sect-title">Pengeluaran Tambahan</h3>
+              {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.budget_limit > 0).length > 0 && (() => {
+                const regularSpent = data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).reduce((s, c) => s + (c.spent || 0), 0)
+                const sisa = data.salary > 0 ? data.salary - mandatoryBudgetTotal : 0
+                const pct = sisa > 0 ? ((regularSpent / sisa) * 100).toFixed(0) : null
+                return (
+                  <p className="sect-sub">
+                    {formatCurrency(regularSpent)} dari {sisa > 0 ? formatCurrency(sisa) : '—'}
+                    {pct !== null && ` — ${pct}%`}
+                  </p>
+                )
+              })()}
             </div>
             <button className="pill-link" onClick={() => setShowCatManager(true)}>Kelola</button>
           </div>
@@ -416,7 +450,7 @@ export default function Dashboard() {
                 return (
                   <div key={cat.id} className="brow">
                     <div className="brow-left">
-                      <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>−</span>
+                      <span className="brow-icon" style={{ background: `${cat.color}18`, color: cat.color }}>↓</span>
                       <span className="brow-name">{cat.name}</span>
                       {cat.overBudget && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Over</span>}
                       {isFull && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '2px 7px' }}>Penuh</span>}
@@ -513,21 +547,14 @@ export default function Dashboard() {
                 <button className="btn btn-ghost" onClick={() => setShowGajiModal(false)}>✕</button>
               </div>
 
-              {hasGaji ? (
-                <div style={{ marginBottom: 16, padding: '12px 14px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Gaji tercatat</span>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--success)', letterSpacing: '-0.02em' }}>{formatCurrency(data.salary)}</span>
-                </div>
-              ) : (
-                <div className="form-group">
-                  <label className="form-label">Jumlah Gaji</label>
-                  <CurrencyInput
-                    value={gajiForm.amount}
-                    onChange={v => setGajiForm(f => ({ ...f, amount: v }))}
-                    autoFocus
-                  />
-                </div>
-              )}
+              <div className="form-group">
+                <label className="form-label">Jumlah Gaji</label>
+                <CurrencyInput
+                  value={gajiForm.amount}
+                  onChange={v => setGajiForm(f => ({ ...f, amount: v }))}
+                  autoFocus
+                />
+              </div>
 
               <div className="form-group">
                 <label className="form-label">Catatan {!hasGaji && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span>}</label>
@@ -543,8 +570,8 @@ export default function Dashboard() {
 
               <div className="flex gap-8 mt-16">
                 <button className="btn btn-secondary" onClick={() => setShowGajiModal(false)}>Batal</button>
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveGaji} disabled={gajiSaving || (!hasGaji && !gajiForm.amount)}>
-                  {gajiSaving ? 'Menyimpan...' : hasGaji ? 'Simpan Catatan' : 'Simpan Gaji'}
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveGaji} disabled={gajiSaving || !gajiForm.amount}>
+                  {gajiSaving ? 'Menyimpan...' : 'Simpan'}
                 </button>
               </div>
             </div>
@@ -574,7 +601,7 @@ export default function Dashboard() {
                 {data.savings.map(sv => (
                   <div key={sv.id} className="wajib-row">
                     <div className="wajib-left">
-                      <span className="brow-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>−</span>
+                      <span className="brow-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>↓</span>
                       <span className="brow-name">{sv.name}</span>
                     </div>
                     <span className="wajib-amount tabular" style={{ color: sv.current_amount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
@@ -652,28 +679,13 @@ export default function Dashboard() {
             </div>
 
             <div className="wajib-rows">
-              {data.categories.filter(c => isMandatoryIncome(c)).map(cat => (
-                <div key={cat.id} className="wajib-row">
-                  <div className="wajib-left">
-                    <span className="brow-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>+</span>
-                    <span className="brow-name">{cat.name}</span>
-                    <span className="wajib-type-badge income">Pemasukan</span>
-                  </div>
-                  <span className="wajib-amount tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
-                  </span>
-                </div>
-              ))}
-
-              {data.categories.some(c => isMandatoryIncome(c)) && <div className="wajib-divider" />}
-
               {data.categories.filter(c => isMandatory(c)).map(cat => {
                 const budget = cat.budget_set ? Number(cat.budget_limit) : (data.salary > 0 ? Math.round(data.salary * 0.15) : 0)
                 const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
                 return (
                   <div key={cat.id} className="wajib-row">
                     <div className="wajib-left">
-                      <span className="brow-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
+                      <span className="brow-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>↓</span>
                       <span className="brow-name">{cat.name}</span>
                     </div>
                     <div className="wajib-right">
@@ -701,7 +713,7 @@ export default function Dashboard() {
               <h2 className="modal-title">Tambah Transaksi</h2>
               <button className="btn btn-ghost" onClick={() => setShowTxForm(false)}>✕</button>
             </div>
-            <TransactionForm onSuccess={() => { fetchDashboard(); setShowTxForm(false) }} onClose={() => setShowTxForm(false)} />
+            <TransactionForm month={month} onSuccess={() => { fetchDashboard(); setShowTxForm(false) }} onClose={() => setShowTxForm(false)} />
           </div>
         </div>
       )}
@@ -716,30 +728,8 @@ export default function Dashboard() {
                 <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{getMonthLabel(month)}</p>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="btn btn-primary btn-sm" onClick={() => { setEditCatData(null); setShowCatForm(true) }}>+ Kategori</button>
+                <button className="btn btn-primary btn-sm" onClick={() => { setEditCatData({ is_mandatory: true }); setShowCatForm(true) }}>+ Kategori</button>
                 <button className="btn btn-ghost" onClick={() => setShowCatManager(false)}>✕</button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 20 }}>
-              <p className="cat-mgr-section-title">Pemasukan Wajib</p>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {data.categories.filter(c => isMandatoryIncome(c)).map(cat => (
-                  <div key={cat.id} className="cat-mgr-row">
-                    <div className="cat-mgr-left">
-                      <span className="cat-mgr-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>+</span>
-                      <div>
-                        <span className="cat-mgr-name">{cat.name}</span>
-                        <span className="cat-mgr-sub">Wajib · pemasukan rutin</span>
-                      </div>
-                    </div>
-                    <div className="cat-mgr-right">
-                      <span className="cat-mgr-amount tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                        {data.salary > 0 ? formatCurrency(data.salary) : '—'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
 
@@ -752,7 +742,7 @@ export default function Dashboard() {
                   return (
                     <div key={cat.id} className="cat-mgr-row">
                       <div className="cat-mgr-left">
-                        <span className="cat-mgr-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
+                        <span className="cat-mgr-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>↓</span>
                         <div>
                           <span className="cat-mgr-name">{cat.name}</span>
                           <span className="cat-mgr-sub">Wajib · langsung dipotong</span>
@@ -769,40 +759,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div>
-              <p className="cat-mgr-section-title">Kategori Lainnya</p>
-              {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).length === 0 ? (
-                <div className="empty-hint">
-                  <span className="empty-hint-icon">◈</span>
-                  <span>Belum ada kategori tambahan.</span>
-                  <button className="empty-hint-link" onClick={() => { setEditCatData(null); setShowCatForm(true) }}>Tambah →</button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).map(cat => {
-                    const budget = Number(cat.budget_limit) || 0
-                    const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
-                    return (
-                      <div key={cat.id} className="cat-mgr-row">
-                        <div className="cat-mgr-left">
-                          <span className="cat-mgr-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
-                          <span className="cat-mgr-name">{cat.name}</span>
-                        </div>
-                        <div className="cat-mgr-right">
-                          {salPct && <span className="cat-mgr-pct">{salPct}%</span>}
-                          <span className="cat-mgr-amount tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
-                          <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem' }} onClick={() => openBudgetEdit(cat)}>
-                            {budget > 0 ? 'Set' : '+ Budget'}
-                          </button>
-                          <button className="btn btn-ghost btn-sm" onClick={() => { setEditCatData(cat); setShowCatForm(true) }}>✎</button>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel({ id: cat.id, name: cat.name })}>✕</button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -815,7 +771,7 @@ export default function Dashboard() {
             <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
               <div className="modal-header">
                 <div>
-                  <h2 className="modal-title">Budget — {cat?.name}</h2>
+                  <h2 className="modal-title">Pengeluaran Wajib — {cat?.name}</h2>
                   <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
                     {getMonthLabel(month)}{data.salary > 0 ? ` · Gaji ${formatCurrency(data.salary)}` : ''}
                   </p>
@@ -864,9 +820,18 @@ export default function Dashboard() {
                 />
               </div>
 
-              <div className="flex gap-8 mt-16">
-                <button className="btn btn-secondary" onClick={() => setBudgetEdit(null)}>Batal</button>
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveBudget}>Simpan</button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: 'var(--danger)', fontSize: '0.78rem' }}
+                  onClick={() => { setBudgetEdit(null); setConfirmDel({ id: cat.id, name: cat.name }) }}
+                >
+                  Hapus Kategori
+                </button>
+                <div className="flex gap-8">
+                  <button className="btn btn-secondary" onClick={() => setBudgetEdit(null)}>Batal</button>
+                  <button className="btn btn-primary" onClick={saveBudget}>Simpan</button>
+                </div>
               </div>
             </div>
           </div>
@@ -894,6 +859,8 @@ export default function Dashboard() {
             </div>
             <CategoryForm
               editData={editCatData}
+              salary={data.salary}
+              month={month}
               onSuccess={() => { fetchDashboard(); setShowCatForm(false) }}
               onClose={() => setShowCatForm(false)}
             />

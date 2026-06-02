@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
@@ -25,6 +25,7 @@ export default function Transactions() {
   const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
   const [transactions, setTransactions] = useState([])
   const [categories, setCategories] = useState([])
+  const [totalSaldo, setTotalSaldo] = useState(0)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editData, setEditData] = useState(null)
@@ -40,16 +41,33 @@ export default function Transactions() {
   const fetchAll = async () => {
     setLoading(true)
     const startDate = `${month}-01`
-    const endDate = `${month}-31`
-    const [txRes, catRes] = await Promise.all([
+    const [ey, em] = month.split('-').map(Number)
+    const endDate = new Date(ey, em, 0).toISOString().split('T')[0]
+    const recordStart = user.recording_start_month
+
+    let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lte('date', endDate)
+    if (recordStart) histQuery = histQuery.gte('date', `${recordStart}-01`)
+
+    let mandBudgetsQuery = supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month)
+    if (recordStart) mandBudgetsQuery = mandBudgetsQuery.gte('month', recordStart)
+
+    const [txRes, catRes, histRes, mandBudgetsRes] = await Promise.all([
       supabase.from('transactions').select('*, categories(name, color, icon)')
         .eq('user_id', user.id)
         .gte('date', startDate).lte('date', endDate)
         .order('date', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+      histQuery,
+      mandBudgetsQuery,
     ])
+    const cats = catRes.data || []
+    const cumBalance = (histRes.data || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0) + (user.saldo_awal || 0)
+    const cumMandatory = (mandBudgetsRes.data || [])
+      .filter(cb => cats.find(c => c.id === cb.category_id && c.is_mandatory))
+      .reduce((s, cb) => s + Number(cb.budget_limit), 0)
     setTransactions(txRes.data || [])
-    setCategories(catRes.data || [])
+    setCategories(cats)
+    setTotalSaldo(cumBalance - cumMandatory)
     setLoading(false)
   }
 
@@ -100,10 +118,10 @@ export default function Transactions() {
     const gajiCat = categories.find(c => c.name === 'Gaji')
     const acc = filtered.reduce((a, tx) => {
       const isGaji = gajiCat && tx.category_id === gajiCat.id && tx.type === 'income'
-      if (isGaji) {
-        a.gaji += Number(tx.amount)
-      } else if (tx.type === 'expense') {
+      if (tx.type === 'expense') {
         a.expense += Number(tx.amount)
+      } else if (isGaji) {
+        a.gaji += Number(tx.amount)
       } else {
         a.nonGajiIncome += Number(tx.amount)
       }
@@ -133,25 +151,24 @@ export default function Transactions() {
     <>
       <div className="animate-in">
       {/* Header */}
-      <div className="tx-page-header mb-16">
-        <div>
-          <h1 className="page-title">Transaksi</h1>
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            {filtered.length} transaksi {getMonthLabel(month)}{hasFilter ? ' (filter aktif)' : ''}
-          </p>
+      <div className="dash-header">
+        <Link to={`/dashboard?month=${month}`} className="back-btn">‹ Dashboard</Link>
+        <div className="month-nav-group">
+          <button className="month-btn" onClick={() => goToMonth(prevMonth(month))}>‹</button>
+          <span className="month-label-text">{getMonthLabel(month)}</span>
+          <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
         </div>
-        <div className="tx-header-right">
-          <div className="month-nav-group">
-            <button className="month-btn" onClick={() => goToMonth(prevMonth(month))}>‹</button>
-            <span className="month-label-sm">{getMonthLabel(month)}</span>
-            <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
-          </div>
-          <div className="flex gap-8">
-            <button className="btn btn-secondary btn-sm" onClick={handleExport}>↓ CSV</button>
-            <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
-              + Tambah
-            </button>
-          </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-secondary btn-sm" style={{ fontSize: '0.78rem', height: 34 }} onClick={handleExport}>↓ CSV</button>
+          <button className="btn btn-primary btn-sm" style={{ fontSize: '0.78rem', height: 34 }} onClick={() => { setEditData(null); setShowForm(true) }}>+ Transaksi</button>
+        </div>
+      </div>
+
+      <div className="tx-page-header">
+        <div className="tx-page-icon">↕</div>
+        <div>
+          <h1 className="tx-page-title">Transaksi</h1>
+          <p className="tx-page-sub">Riwayat pemasukan & pengeluaran</p>
         </div>
       </div>
 
@@ -197,8 +214,8 @@ export default function Transactions() {
         <div className="tx-summary-strip mb-16">
           <div className="tss-item">
             <span className="tss-label">Total Saldo</span>
-            <span className={`tss-val tabular ${totals.saldo >= 0 ? 'text-success' : 'text-danger'}`}>
-              {totals.saldo >= 0 ? '+' : ''}{formatCurrency(totals.saldo)}
+            <span className={`tss-val tabular ${totalSaldo >= 0 ? 'text-success' : 'text-danger'}`}>
+              {totalSaldo >= 0 ? '+' : ''}{formatCurrency(Math.abs(totalSaldo))}
             </span>
           </div>
           <div className="tss-divider" />
@@ -239,8 +256,11 @@ export default function Transactions() {
                 <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                   {txs.map((tx, i) => (
                     <div key={tx.id} className={`tx-row-item ${i < txs.length - 1 ? 'bordered' : ''}`}>
-                      <div className="tri-icon" style={{ background: tx.categories?.color ? `${tx.categories.color}18` : 'var(--bg-input)' }}>
-                        {tx.categories?.icon || (tx.type === 'income' ? '↑' : '↓')}
+                      <div className="tri-icon" style={{
+                        background: tx.type === 'income' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
+                        color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)',
+                      }}>
+                        {tx.type === 'income' ? '↑' : '↓'}
                       </div>
                       <div className="tri-info">
                         <span className="tri-desc">{tx.description || tx.categories?.name || 'Transaksi'}</span>
@@ -252,7 +272,7 @@ export default function Transactions() {
                       </div>
                       <div className="tri-right">
                         <span className={`tri-amount tabular ${tx.type === 'income' ? 'text-success' : 'text-danger'}`}>
-                          {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+                          {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
                         </span>
                         <div className="tri-actions">
                           <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(tx); setShowForm(true) }}>✎</button>
@@ -269,7 +289,51 @@ export default function Transactions() {
       )}
 
       <style>{`
-        .tx-page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+        .tx-page-header {
+          display: flex; align-items: center; gap: 14px;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          border-left: 3px solid var(--accent);
+          border-radius: var(--radius-lg);
+          padding: 16px 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .tx-page-icon {
+          width: 40px; height: 40px; border-radius: 10px;
+          background: var(--accent-dim); color: var(--accent);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.1rem; flex-shrink: 0;
+        }
+        .tx-page-title {
+          font-size: 1.1rem; font-weight: 800; letter-spacing: -0.03em;
+          color: var(--text-primary); line-height: 1; margin: 0 0 4px;
+        }
+        .tx-page-sub {
+          font-size: 0.72rem; color: var(--text-muted); font-weight: 500; margin: 0;
+        }
+        .back-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          font-size: 0.75rem; font-weight: 600;
+          color: var(--text-muted); text-decoration: none;
+          padding: 5px 10px; transition: all 0.15s;
+          width: fit-content; justify-self: start;
+          font-family: var(--font-sans);
+          letter-spacing: -0.01em;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .back-btn:hover { color: var(--text-primary); background: var(--bg-input); box-shadow: none; }
+        .dash-header {
+          display: grid; grid-template-columns: 1fr auto 1fr;
+          align-items: center; gap: 10px;
+          position: sticky; top: 0; z-index: 100;
+          background: var(--bg-sticky); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+          padding: 10px 0; margin-bottom: 10px;
+        }
+        .dash-header > :last-child { display: flex; justify-content: flex-end; gap: 6px; }
         .tx-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .month-nav-group { display: flex; align-items: center; gap: 2px; }
         .month-btn {
@@ -464,7 +528,7 @@ export default function Transactions() {
               <h2 className="modal-title">{editData?.id ? 'Edit Transaksi' : 'Tambah Transaksi'}</h2>
               <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
             </div>
-            <TransactionForm editData={editData} onSuccess={fetchAll} onClose={() => setShowForm(false)} />
+            <TransactionForm month={month} editData={editData} onSuccess={fetchAll} onClose={() => setShowForm(false)} />
           </div>
         </div>
       )}

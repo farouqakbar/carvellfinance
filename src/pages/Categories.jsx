@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
@@ -6,7 +7,7 @@ import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import CurrencyInput from '../components/CurrencyInput'
 import { useToast } from '../components/Toast'
-import { MANDATORY_NAMES, isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
+import { isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
 
 const DEFAULT_PCT = 15
 
@@ -32,8 +33,13 @@ export default function Categories() {
   const [editData, setEditData] = useState(null)
   const [budgetEdit, setBudgetEdit] = useState(null) // {id, nominal, pct}
   const [confirmDel, setConfirmDel] = useState(null) // { id, name }
-  const [month, setMonth] = useState(getCurrentMonth())
+  const [searchParams] = useSearchParams()
+  const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
   const [copying, setCopying] = useState(false)
+  const [gajiCatId, setGajiCatId] = useState(null)
+  const [showIncomeModal, setShowIncomeModal] = useState(false)
+  const [incomeForm, setIncomeForm] = useState({ description: '', amount: '' })
+  const [incomeSaving, setIncomeSaving] = useState(false)
   const isCurrentMonth = month === getCurrentMonth()
 
   useEffect(() => { fetchAll() }, [month])
@@ -41,7 +47,8 @@ export default function Categories() {
   const fetchAll = async () => {
     setLoading(true)
     const startDate = `${month}-01`
-    const endDate = `${month}-31`
+    const [ey, em] = month.split('-').map(Number)
+    const endDate = new Date(ey, em, 0).toISOString().split('T')[0]
     const [catRes, txRes, incomeTxRes, catBudgetsRes] = await Promise.all([
       supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
       supabase.from('transactions').select('category_id, amount').eq('user_id', user.id).eq('type', 'expense').gte('date', startDate).lte('date', endDate),
@@ -67,7 +74,34 @@ export default function Categories() {
     setCategories(cats)
     setSpendMap(spend)
     setSalary(derivedSalary)
+    setGajiCatId(gajiCat?.id || null)
     setLoading(false)
+  }
+
+  const saveIncome = async () => {
+    const amount = parseFloat(incomeForm.amount) || 0
+    if (!amount || !incomeForm.description.trim()) return
+    setIncomeSaving(true)
+    try {
+      let catId = gajiCatId
+      if (!catId) {
+        const { data: newCat } = await supabase.from('categories')
+          .insert({ user_id: user.id, name: 'Gaji', color: '#10b981', icon: '', is_mandatory: false, budget_limit: 0 })
+          .select().single()
+        catId = newCat.id
+      }
+      await supabase.from('transactions').insert({
+        user_id: user.id, category_id: catId, type: 'income',
+        amount, description: incomeForm.description.trim(),
+        date: `${month}-01`,
+      })
+      toast('Pemasukan dicatat', 'success')
+      setShowIncomeModal(false)
+      setIncomeForm({ description: '', amount: '' })
+      fetchAll()
+    } finally {
+      setIncomeSaving(false)
+    }
   }
 
   const doDelete = async () => {
@@ -131,6 +165,12 @@ export default function Categories() {
     fetchAll()
   }
 
+  const toggleMandatory = async (cat) => {
+    await supabase.from('categories').update({ is_mandatory: !cat.is_mandatory }).eq('id', cat.id)
+    toast(cat.is_mandatory ? 'Dilepas dari pengeluaran wajib' : 'Dijadikan pengeluaran wajib', 'success')
+    fetchAll()
+  }
+
   const mandatoryIncome = categories.filter(c => isMandatoryIncome(c))
   const mandatory = categories.filter(c => isMandatory(c))
   const regular = categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c))
@@ -153,27 +193,24 @@ export default function Categories() {
         <div key={cat.id} className="cat-card cat-mandatory" style={{ '--cat-color': cat.color }}>
           <div className="cat-card-top">
             <div className="cat-card-left">
-              <span className="cat-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
+              <span className="cat-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)', fontSize: '1rem' }}>↓</span>
               <div>
                 <span className="cat-name">{cat.name}</span>
                 <span className="cat-mandatory-badge">Wajib · langsung dipotong</span>
               </div>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem' }}>
-              Ubah
-            </button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem' }}>Ubah</button>
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }} onClick={() => toggleMandatory(cat)}>Lepas</button>
+            </div>
           </div>
-
           <div className="mand-budget-row">
             <div>
               <span className="mand-label">Budget per bulan</span>
               <span className="mand-val tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
             </div>
-            {salaryPct && (
-              <span className="mand-pct-chip">{salaryPct}% gaji</span>
-            )}
+            {salaryPct && <span className="mand-pct-chip">{salaryPct}% gaji</span>}
           </div>
-
         </div>
       )
     }
@@ -182,7 +219,7 @@ export default function Categories() {
       <div key={cat.id} className="cat-card" style={{ '--cat-color': cat.color }}>
         <div className="cat-card-top">
           <div className="cat-card-left">
-            <span className="cat-icon" style={{ background: `${cat.color}20`, color: cat.color }}>{cat.icon}</span>
+            <span className="cat-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)', fontSize: '1rem' }}>↓</span>
             <span className="cat-name">{cat.name}</span>
           </div>
           <div className="cat-card-actions">
@@ -190,6 +227,7 @@ export default function Categories() {
             <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
               {budget > 0 ? 'Set' : '+ Budget'}
             </button>
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.68rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }} onClick={() => toggleMandatory(cat)}>Wajibkan</button>
             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel({ id: cat.id, name: cat.name })}>✕</button>
           </div>
         </div>
@@ -228,32 +266,21 @@ export default function Categories() {
   return (
     <>
       <div className="animate-in">
-      <div className="flex-between mb-24" style={{ flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 className="page-title">Budget & Kategori</h1>
-          <p className="page-subtitle" style={{ margin: 0 }}>
-            {formatCurrency(totalSpent)} dari {formatCurrency(totalBudget)} · {getMonthLabel(month)}
-          </p>
+      <div className="dash-header">
+        <Link to={`/dashboard?month=${month}`} className="back-btn">‹ Dashboard</Link>
+        <div className="month-nav-group">
+          <button className="month-btn" onClick={() => setMonth(prevMonth(month))}>‹</button>
+          <span className="month-label-text">{getMonthLabel(month)}</span>
+          <button className="month-btn" onClick={() => setMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Month nav */}
-          <div className="month-nav-group">
-            <button className="month-btn" onClick={() => setMonth(prevMonth(month))}>‹</button>
-            <span className="month-label-text">{getMonthLabel(month)}</span>
-            <button className="month-btn" onClick={() => setMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
-          </div>
-          {/* Salin dari bulan sebelumnya */}
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={copyFromPrevMonth}
-            disabled={copying}
-            title={`Salin semua budget dari ${getMonthLabel(prevMonth(month))}`}
-          >
-            {copying ? '...' : `⎘ Salin dari ${getMonthLabel(prevMonth(month))}`}
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => { setEditData(null); setShowForm(true) }}>
-            + Kategori
-          </button>
+        <div />
+      </div>
+
+      <div className="cat-page-header">
+        <div className="cat-page-icon">⚙</div>
+        <div>
+          <h1 className="cat-page-title">Setting Kategori</h1>
+          <p className="cat-page-sub">Kelola kategori & budget bulanan</p>
         </div>
       </div>
 
@@ -267,13 +294,14 @@ export default function Categories() {
                 {salary > 0 ? `Total gaji bulan ini: ${formatCurrency(salary)}` : 'Belum ada transaksi Gaji bulan ini'}
               </span>
             </div>
+            <button className="btn btn-ghost btn-sm cat-add-btn" onClick={() => setShowIncomeModal(true)}>+</button>
           </div>
           <div className="cat-grid">
             {mandatoryIncome.map(cat => (
               <div key={cat.id} className="cat-card cat-mandatory" style={{ '--cat-color': cat.color }}>
                 <div className="cat-card-top">
                   <div className="cat-card-left">
-                    <span className="cat-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>+</span>
+                    <span className="cat-icon" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)', fontSize: '1rem' }}>↑</span>
                     <div>
                       <span className="cat-name">{cat.name}</span>
                       <span className="cat-mandatory-badge" style={{ color: 'var(--success)' }}>Wajib · pemasukan rutin</span>
@@ -305,6 +333,7 @@ export default function Categories() {
                 : 'Catat gaji di Dashboard untuk lihat persentase'}
             </span>
           </div>
+          <button className="btn btn-ghost btn-sm cat-add-btn" onClick={() => { setEditData({ is_mandatory: true }); setShowForm(true) }}>+</button>
         </div>
         {loading ? (
           <div className="cat-grid">
@@ -321,6 +350,7 @@ export default function Categories() {
       <div className="cat-section">
         <div className="cat-section-head">
           <span className="cat-section-title">Kategori Lainnya</span>
+          <button className="btn btn-ghost btn-sm cat-add-btn" onClick={() => { setEditData(null); setShowForm(true) }}>+</button>
         </div>
         {loading ? (
           <div className="cat-grid">
@@ -342,6 +372,28 @@ export default function Categories() {
       </div>
 
       <style>{`
+        .back-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          font-size: 0.75rem; font-weight: 600;
+          color: var(--text-muted); text-decoration: none;
+          padding: 5px 10px; transition: all 0.15s;
+          width: fit-content; justify-self: start;
+          font-family: var(--font-sans);
+          letter-spacing: -0.01em;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .back-btn:hover { color: var(--text-primary); background: var(--bg-input); box-shadow: none; }
+        .dash-header {
+          display: grid; grid-template-columns: 1fr auto 1fr;
+          align-items: center; gap: 10px;
+          position: sticky; top: 0; z-index: 100;
+          background: var(--bg-sticky); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+          padding: 10px 0; margin-bottom: 10px;
+        }
+        .dash-header > :last-child { display: flex; justify-content: flex-end; gap: 6px; }
         .month-nav-group {
           display: flex; align-items: center; gap: 0;
           background: var(--bg-card); border: 1px solid var(--border);
@@ -363,8 +415,49 @@ export default function Categories() {
           color: var(--text-primary); padding: 0 12px; min-width: 110px;
           text-align: center; line-height: 32px; white-space: nowrap;
         }
+        .cat-page-header {
+          display: flex; align-items: center; gap: 14px;
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          border-left: 3px solid var(--accent);
+          border-radius: var(--radius-lg);
+          padding: 16px 20px;
+          margin-bottom: 28px;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .cat-page-icon {
+          width: 40px; height: 40px; border-radius: 10px;
+          background: var(--accent-dim); color: var(--accent);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.1rem; flex-shrink: 0;
+        }
+        .cat-page-title {
+          font-size: 1.1rem; font-weight: 800; letter-spacing: -0.03em;
+          color: var(--text-primary); line-height: 1; margin: 0 0 4px;
+        }
+        .cat-page-sub {
+          font-size: 0.72rem; color: var(--text-muted); font-weight: 500; margin: 0;
+        }
+
         .cat-section { }
-        .cat-section-head { margin-bottom: 12px; }
+        .cat-section-head { margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .cat-add-btn {
+          font-size: 1rem; font-weight: 500; line-height: 1;
+          width: 28px; height: 28px; padding: 0;
+          display: flex; align-items: center; justify-content: center;
+          border-radius: 8px; flex-shrink: 0; margin-top: 1px;
+          color: var(--text-muted);
+          background: var(--bg-card);
+          border: 1px solid var(--border);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+          transition: all 0.15s;
+        }
+        .cat-add-btn:hover {
+          color: var(--accent);
+          border-color: var(--accent);
+          background: var(--accent-dim);
+          box-shadow: none;
+        }
         .cat-section-title {
           font-size: 0.8125rem; font-weight: 700; color: var(--text-primary);
           letter-spacing: -0.01em; display: block;
@@ -450,16 +543,64 @@ export default function Categories() {
         />
       )}
 
+      {/* Modal tambah pemasukan */}
+      {showIncomeModal && (
+        <div className="modal-overlay" onClick={() => setShowIncomeModal(false)}>
+          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Tambah Pemasukan</h2>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Dicatat ke bulan {month}</p>
+              </div>
+              <button className="btn btn-ghost" onClick={() => setShowIncomeModal(false)}>✕</button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Nama Pemasukan</label>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Misal: Gaji Pokok, Bonus, Freelance..."
+                value={incomeForm.description}
+                onChange={e => setIncomeForm(f => ({ ...f, description: e.target.value }))}
+                autoFocus
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Jumlah</label>
+              <CurrencyInput
+                value={incomeForm.amount}
+                onChange={v => setIncomeForm(f => ({ ...f, amount: v }))}
+              />
+            </div>
+            <div className="flex gap-8 mt-16">
+              <button className="btn btn-secondary" onClick={() => setShowIncomeModal(false)}>Batal</button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={saveIncome}
+                disabled={incomeSaving || !incomeForm.description.trim() || !incomeForm.amount}
+              >
+                {incomeSaving ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Form tambah/edit kategori */}
       {showForm && !budgetEdit && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">{editData?.id ? 'Edit Kategori' : 'Kategori Baru'}</h2>
+              <h2 className="modal-title">
+                {editData?.id ? 'Edit Kategori' : editData?.is_mandatory ? 'Pengeluaran Wajib Baru' : 'Kategori Baru'}
+              </h2>
               <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
             </div>
             <CategoryForm
               editData={editData}
+              salary={salary}
+              month={month}
               onSuccess={() => { fetchAll(); setShowForm(false) }}
               onClose={() => setShowForm(false)}
             />

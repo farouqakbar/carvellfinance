@@ -5,10 +5,10 @@ const AuthContext = createContext({});
 const STORAGE_KEY = "cashvell_user";
 
 const DEFAULT_CATEGORIES = [
-  { name: "Gaji",            icon: "💰",    color: "#22c55e", budget_limit: 0 },
-  { name: "Orang Tua",       icon: "👨‍👩‍👧", color: "#f59e0b", budget_limit: 0 },
-  { name: "Tabungan Bulanan", icon: "🏦",    color: "#6366f1", budget_limit: 0 },
-  { name: "Investasi",        icon: "📈",    color: "#10b981", budget_limit: 0 },
+  { name: "Gaji",            icon: "",  color: "#22c55e", budget_limit: 0, is_mandatory: false },
+  { name: "Keluarga",        icon: "",  color: "#f59e0b", budget_limit: 0, is_mandatory: true  },
+  { name: "Tabungan Bulanan", icon: "", color: "#6366f1", budget_limit: 0, is_mandatory: true  },
+  { name: "Investasi",        icon: "", color: "#10b981", budget_limit: 0, is_mandatory: true  },
 ];
 
 async function hashPassword(password) {
@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
   const signIn = async (username, password) => {
     const { data, error } = await supabase
       .from("user_profiles")
-      .select("id, username, full_name, password_hash, recording_start_month, saldo_awal, tabungan_awal")
+      .select("id, username, full_name, password_hash, recording_start_month, saldo_awal, tabungan_awal, budget_harian")
       .eq("username", username.toLowerCase())
       .single();
 
@@ -68,6 +68,7 @@ export function AuthProvider({ children }) {
       recording_start_month: data.recording_start_month || null,
       saldo_awal: Number(data.saldo_awal) || 0,
       tabungan_awal: Number(data.tabungan_awal) || 0,
+      budget_harian: Number(data.budget_harian) || 0,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     setUser(userData);
@@ -115,6 +116,7 @@ export function AuthProvider({ children }) {
     if (updates.recording_start_month !== undefined) allowed.recording_start_month = updates.recording_start_month;
     if (updates.saldo_awal !== undefined) allowed.saldo_awal = updates.saldo_awal;
     if (updates.tabungan_awal !== undefined) allowed.tabungan_awal = updates.tabungan_awal;
+    if (updates.budget_harian !== undefined) allowed.budget_harian = updates.budget_harian;
 
     const { error } = await supabase
       .from("user_profiles")

@@ -3,40 +3,66 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
 import CurrencyInput from './CurrencyInput'
+import { formatCurrency } from '../utils/formatCurrency'
 
-const ICONS = ['🍜','🚗','🛍️','🎮','💊','📱','✈️','📚','🏠','⚡','💰','🎓','🏋️','🎬','☕','🍔','🎁','💇','🐾','🌱']
 const COLORS = ['#6366f1','#3b82f6','#06b6d4','#10b981','#84cc16','#f59e0b','#f97316','#ef4444','#ec4899','#a855f7']
 
-export default function CategoryForm({ onSuccess, onClose, editData }) {
+export default function CategoryForm({ onSuccess, onClose, editData, salary = 0, month }) {
   const { user } = useAuth()
   const toast = useToast()
   const [loading, setLoading] = useState(false)
+  const [pct, setPct] = useState('')
+  const [nominal, setNominal] = useState(editData?.budget_limit ? String(editData.budget_limit) : '')
   const [form, setForm] = useState({
     name: '',
-    budget_limit: '',
     color: '#6366f1',
-    icon: '💰',
+    is_mandatory: false,
     ...editData,
   })
+
+  const handlePctChange = (val) => {
+    setPct(val)
+    const p = parseFloat(val) || 0
+    if (salary > 0 && p > 0) setNominal(String(Math.round((p / 100) * salary)))
+    else setNominal('')
+  }
+
+  const handleNominalChange = (raw) => {
+    setNominal(raw)
+    const nom = parseFloat(raw) || 0
+    if (salary > 0 && nom > 0) setPct(((nom / salary) * 100).toFixed(1))
+    else setPct('')
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name) return
     setLoading(true)
     try {
+      const budget = parseFloat(nominal) || 0
       const payload = {
         user_id: user.id,
         name: form.name,
-        budget_limit: parseFloat(form.budget_limit) || 0,
+        budget_limit: budget,
         color: form.color,
-        icon: form.icon,
+        icon: '',
+        is_mandatory: form.is_mandatory || false,
       }
-      if (editData?.id) {
-        await supabase.from('categories').update(payload).eq('id', editData.id)
+      let catId = editData?.id
+      if (catId) {
+        await supabase.from('categories').update(payload).eq('id', catId)
         toast('Kategori diperbarui', 'success')
       } else {
-        await supabase.from('categories').insert(payload)
+        const { data: newCat } = await supabase.from('categories').insert(payload).select('id').single()
+        catId = newCat?.id
         toast('Kategori ditambahkan', 'success')
+      }
+      // Simpan budget ke category_budgets (per-bulan) jika month tersedia
+      if (catId && month && budget > 0) {
+        await supabase.from('category_budgets').upsert(
+          { user_id: user.id, category_id: catId, month, budget_limit: budget },
+          { onConflict: 'category_id,month' }
+        )
       }
       onSuccess?.()
       onClose?.()
@@ -50,25 +76,12 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
   return (
     <form onSubmit={handleSubmit}>
 
-      {/* Preview */}
-      <div className="cf-preview">
-        <div className="cf-preview-icon" style={{ background: `${form.color}18`, color: form.color }}>
-          {form.icon}
-        </div>
-        <div className="cf-preview-info">
-          <span className="cf-preview-name">{form.name || 'Nama kategori'}</span>
-          {form.budget_limit && (
-            <span className="cf-preview-budget">Budget: Rp {Number(form.budget_limit).toLocaleString('id-ID')}/bulan</span>
-          )}
-        </div>
-      </div>
-
       <div className="form-group">
         <label className="form-label">Nama Kategori</label>
         <input
           className="form-input"
           type="text"
-          placeholder="Misal: Makan, Transportasi, Hiburan..."
+          placeholder="Misal: Cicilan, Asuransi..."
           value={form.name}
           onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
           required
@@ -77,13 +90,38 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Budget per Bulan <span style={{ color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>(opsional, 0 = tanpa batas)</span></label>
+        <label className="form-label">Budget per Bulan</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              className="form-input"
+              type="number"
+              placeholder="0"
+              value={pct}
+              onChange={e => handlePctChange(e.target.value)}
+              min="0" max="100" step="any"
+              style={{ paddingRight: 36 }}
+            />
+            <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem' }}>%</span>
+          </div>
+          {pct && salary > 0 && (
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              = {formatCurrency(Math.round((parseFloat(pct) / 100) * salary))}
+            </span>
+          )}
+        </div>
+        {!pct && salary > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+            {[10, 15, 20, 25].map(p => (
+              <button key={p} type="button" className="btn btn-secondary btn-sm" onClick={() => handlePctChange(String(p))}>{p}%</button>
+            ))}
+          </div>
+        )}
         <CurrencyInput
-          value={form.budget_limit}
-          onChange={raw => setForm(f => ({ ...f, budget_limit: raw }))}
+          value={nominal}
+          onChange={handleNominalChange}
         />
       </div>
-
 
       <div className="form-group">
         <label className="form-label">Warna</label>
@@ -109,53 +147,7 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
       </div>
 
       <style>{`
-        .cf-preview {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: var(--bg-input);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 12px 16px;
-          margin-bottom: 20px;
-        }
-        .cf-preview-icon {
-          width: 40px; height: 40px;
-          border-radius: 10px;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 1.3rem; flex-shrink: 0;
-          transition: background 0.2s, color 0.2s;
-        }
-        .cf-preview-info { display: flex; flex-direction: column; gap: 2px; }
-        .cf-preview-name {
-          font-size: 0.875rem; font-weight: 700;
-          color: var(--text-primary); letter-spacing: -0.01em;
-        }
-        .cf-preview-budget { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
-
-        .cf-icon-grid {
-          display: grid;
-          grid-template-columns: repeat(10, 1fr);
-          gap: 4px;
-        }
-        .cf-icon-btn {
-          background: var(--bg-input);
-          border: 1.5px solid transparent;
-          border-radius: 7px;
-          padding: 5px;
-          cursor: pointer;
-          font-size: 1.1rem;
-          transition: all 0.12s;
-          aspect-ratio: 1;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .cf-icon-btn:hover { border-color: var(--border-light); transform: scale(1.1); }
-        .cf-icon-btn:active { transform: scale(0.95); }
-        .cf-icon-btn.active { border-width: 1.5px; }
-
-        .cf-color-grid {
-          display: flex; gap: 8px; flex-wrap: wrap;
-        }
+        .cf-color-grid { display: flex; gap: 8px; flex-wrap: wrap; }
         .cf-color-btn {
           width: 32px; height: 32px;
           border-radius: 50%;
@@ -163,17 +155,12 @@ export default function CategoryForm({ onSuccess, onClose, editData }) {
           cursor: pointer;
           transition: all 0.12s;
           outline: none;
-          position: relative;
         }
         .cf-color-btn:hover { transform: scale(1.15); }
         .cf-color-btn:active { transform: scale(0.95); }
         .cf-color-btn.active {
           box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 4px currentColor;
           transform: scale(1.1);
-        }
-
-        @media (max-width: 480px) {
-          .cf-icon-grid { grid-template-columns: repeat(8, 1fr); }
         }
       `}</style>
     </form>

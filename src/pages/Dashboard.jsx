@@ -124,7 +124,6 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const startDate = `${month}-01`
-      const [ey, em] = month.split('-').map(Number)
       const endDate = getMonthEndDate(month)
       const today = getToday()
       const nmStr = nextMonth(month)
@@ -152,18 +151,40 @@ export default function Dashboard() {
       const txs = txRes.data || []
       const catBudgetMap = {}
       ;(catBudgetsRes.data || []).forEach(cb => { catBudgetMap[cb.category_id] = Number(cb.budget_limit) })
-      // Semua kategori (untuk cross-month calcs)
-      const cats = (catRes.data || []).map(cat => ({
+
+      let cats = (catRes.data || []).map(cat => ({
         ...cat,
         budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : (cat.budget_limit || 0),
         budget_set: catBudgetMap[cat.id] !== undefined || (cat.budget_limit || 0) > 0,
       }))
-      // Kategori bulan ini saja (untuk display budget section)
-      const currentMonthCats = cats.filter(c => c.month === month)
-      // Gaji: cari dari kategori bulan ini
+
+      // Kategori bulan ini saja
+      let currentMonthCats = cats.filter(c => c.month === month)
       const gajiCat = currentMonthCats.find(c => c.name === 'Pemasukan Bulanan')
       const gajiTxs = gajiCat ? txs.filter(t => t.type === 'income' && t.category_id === gajiCat.id) : []
       const salary = gajiTxs.reduce((s, t) => s + Number(t.amount), 0)
+
+      // Auto-set 15% untuk mandatory yang belum punya budget record — SEBELUM setData
+      if (salary > 0) {
+        const unset = currentMonthCats.filter(c => isMandatory(c) && catBudgetMap[c.id] === undefined)
+        if (unset.length > 0) {
+          const def = Math.round(salary * 0.15)
+          await Promise.all(unset.map(c =>
+            supabase.from('category_budgets').upsert(
+              { user_id: user.id, category_id: c.id, month, budget_limit: def },
+              { onConflict: 'category_id,month' }
+            )
+          ))
+          // Update in-memory agar display langsung benar tanpa re-fetch
+          unset.forEach(c => { catBudgetMap[c.id] = def })
+          cats = cats.map(c => unset.find(u => u.id === c.id)
+            ? { ...c, budget_limit: def, budget_set: true }
+            : c
+          )
+          currentMonthCats = cats.filter(c => c.month === month)
+        }
+      }
+
       const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
       const totalIncome = txs.filter(t => t.type === 'income' && t.category_id !== gajiCat?.id).reduce((s, t) => s + Number(t.amount), 0)
       const catSpendMap = {}
@@ -203,7 +224,6 @@ export default function Dashboard() {
         gajiCatId: gajiCat?.id || null,
         hutangList: hutangRes.data || [],
         hutangTabunganList: hutangTabunganRes.data || [],
-        // histNet (bulan lalu) + bulan ini + saldo_awal = total kumulatif semua transaksi
         cumulativeBalance: (histRes.data || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0)
           + salary + totalIncome - totalExpense
           + (user.saldo_awal || 0),
@@ -211,23 +231,6 @@ export default function Dashboard() {
           .filter(cb => { const c = cats.find(cat => cat.id === cb.category_id); return c && isMandatory(c) })
           .reduce((s, cb) => s + Number(cb.budget_limit), 0),
       })
-      // Auto-set 15% untuk mandatory categories yang belum pernah punya record (bukan yang di-set 0)
-      const sal = salary
-      if (sal > 0) {
-        const unset = cats.filter(c => isMandatory(c) && catBudgetMap[c.id] === undefined)
-        if (unset.length > 0) {
-          const def = Math.round(Number(sal) * 0.15)
-          await Promise.all(unset.map(c =>
-            supabase.from('category_budgets').upsert(
-              { user_id: user.id, category_id: c.id, month, budget_limit: def },
-              { onConflict: 'category_id,month' }
-            )
-          ))
-          // Reload categories dengan budget yang sudah diupdate
-          const { data: catRefresh } = await supabase.from('categories').select('*').eq('user_id', user.id).order('name')
-          catRes.data = catRefresh
-        }
-      }
     } finally { setLoading(false) }
   }
 
@@ -409,7 +412,7 @@ export default function Dashboard() {
                   {data.nextMonthPlans.length > 0 ? formatCurrency(data.nextMonthPlans.reduce((s, p) => s + Number(p.amount), 0)) : '—'}
                 </span>
                 <span className="hero-stat-sub" style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                  {data.nextMonthPlans.length > 0 ? `${data.nextMonthPlans.length} item · See Detail` : 'Belum ada'}
+                  {data.nextMonthPlans.length > 0 ? `${data.nextMonthPlans.length} item · Lihat detail` : 'Belum ada'}
                 </span>
               </div>
             </div>

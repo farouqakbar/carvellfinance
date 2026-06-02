@@ -87,12 +87,12 @@ export default function Categories() {
     let { data: rawCats } = await supabase.from('categories')
       .select('*').eq('user_id', user.id).eq('month', month).order('name')
 
-    // Auto-copy dari bulan sebelumnya jika bulan ini kosong
+    // Auto-copy dari bulan sebelumnya (atau null-month default) jika bulan ini kosong
     if (!rawCats || rawCats.length === 0) {
       const { data: allPrevCats } = await supabase.from('categories')
         .select('*').eq('user_id', user.id)
-        .not('month', 'is', null).neq('month', month)
-        .order('month', { ascending: false })
+        .or(`month.is.null,month.neq.${month}`)
+        .order('month', { ascending: false, nullsFirst: false })
       if (allPrevCats && allPrevCats.length > 0) {
         // Dedupe by nama, ambil yang paling recent
         const byName = {}

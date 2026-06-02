@@ -321,7 +321,7 @@ export default function Report() {
                           const c = categories.find(c => c.name === name)
                           return (
                             <span key={name} className="rpt-month-cat-chip" style={{ background: `${c?.color || '#6366f1'}18`, color: c?.color || '#6366f1' }}>
-                              {c?.icon} {formatCurrency(amt)}
+                              {name}: {formatCurrency(amt)}
                             </span>
                           )
                         })}

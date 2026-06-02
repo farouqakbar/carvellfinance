@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "../services/supabaseClient";
+import { getCurrentMonth } from "../utils/formatCurrency";
 
 const AuthContext = createContext({});
 const STORAGE_KEY = "cashvell_user";
@@ -17,16 +18,20 @@ async function hashPassword(password) {
 }
 
 async function seedDefaultCategories(userId) {
+  const month = getCurrentMonth()
+
+  // Cek kategori yang sudah ada di bulan ini
   const { data: existing } = await supabase
     .from("categories")
     .select("name")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("month", month);
 
   const existingNames = new Set((existing || []).map(c => c.name));
 
   const toInsert = DEFAULT_CATEGORIES
     .filter(c => !existingNames.has(c.name))
-    .map(c => ({ ...c, user_id: userId }));
+    .map(c => ({ ...c, user_id: userId, month }));
 
   if (toInsert.length > 0) {
     await supabase.from("categories").insert(toInsert);
@@ -88,7 +93,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase
       .from("user_profiles")
       .insert({ username: username.toLowerCase(), password_hash, full_name: username })
-      .select("id, username, full_name, recording_start_month, saldo_awal, tabungan_awal")
+      .select("id, username, full_name, recording_start_month, saldo_awal, tabungan_awal, budget_harian")
       .single();
 
     if (error) {
@@ -103,6 +108,7 @@ export function AuthProvider({ children }) {
       recording_start_month: null,
       saldo_awal: 0,
       tabungan_awal: 0,
+      budget_harian: 0,
       isNewUser: true,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));

@@ -283,12 +283,33 @@ body::before {
     align-items: flex-end;
   }
   .modal-header { margin-bottom: 18px; }
+
+  /* Toast di atas bottom nav */
+  .toast-container { bottom: 80px; right: 12px; }
+
+  /* Page header banner lebih compact */
+  .page-header-banner { padding: 12px 14px; margin-bottom: 14px; gap: 10px; }
+  .page-header-icon { width: 34px; height: 34px; border-radius: 8px; }
+  .page-header-title { font-size: 1rem; }
 }
 
 @media (max-width: 480px) {
-  .main-content { padding: 12px 12px; padding-top: 94px; padding-bottom: 88px; }
+  .main-content { padding: 12px; padding-top: 94px; padding-bottom: 88px; }
+  .main-wrapper.has-page-topbar .main-content { padding-top: 144px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; gap: 8px; }
   .card { padding: 12px; }
+
+  /* Topbar compact — sembunyikan label text & CSV btn di layar kecil */
+  .back-label { display: none; }
+  .topbar-back-btn { padding: 5px 8px; margin-right: 6px; }
+  .btn-csv { display: none; }
+  .topbar-actions { gap: 4px; }
+
+  /* Hero chip label bisa wrap tanpa overflow */
+  .hero-chip-label { word-break: break-word; }
+
+  /* Modal touch target lebih besar */
+  .btn-sm { padding: 7px 12px; }
 }
 
 /* ========================

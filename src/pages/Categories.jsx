@@ -65,7 +65,7 @@ export default function Categories() {
   useEffect(() => {
     setHeader(
       <>
-        <Link to={`/dashboard?month=${month}`} className="topbar-back-btn">‹ Dashboard</Link>
+        <Link to={`/dashboard?month=${month}`} className="topbar-back-btn">‹ <span className="back-label">Dashboard</span></Link>
         <div className="month-nav-group">
           <button className="month-btn" onClick={() => setMonth(prevMonth(month))} disabled={isAtStart}>‹</button>
           <span className="month-label-text">{getMonthLabel(month)}</span>
@@ -895,6 +895,13 @@ export default function Categories() {
 
         @media (max-width: 640px) {
           .cat-grid { grid-template-columns: 1fr; }
+          .cat-card { padding: 12px 14px; }
+        }
+        @media (max-width: 400px) {
+          /* cat-card-actions wrap ke bawah kalau terlalu penuh */
+          .cat-card-top { flex-wrap: wrap; gap: 6px; }
+          .cat-card-actions { flex-wrap: wrap; gap: 4px; }
+          .cat-plan-btn { font-size: 0.55rem !important; padding: 2px 5px !important; }
         }
       `}</style>
       </div>

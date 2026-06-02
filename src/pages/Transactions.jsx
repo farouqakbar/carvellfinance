@@ -45,14 +45,14 @@ export default function Transactions() {
   useEffect(() => {
     setHeader(
       <>
-        <Link to={`/dashboard?month=${month}`} className="topbar-back-btn">‹ Dashboard</Link>
+        <Link to={`/dashboard?month=${month}`} className="topbar-back-btn">‹ <span className="back-label">Dashboard</span></Link>
         <div className="month-nav-group">
           <button className="month-btn" onClick={() => goToMonth(prevMonth(month))} disabled={isAtStart}>‹</button>
           <span className="month-label-text">{getMonthLabel(month)}</span>
           <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-secondary btn-sm" style={{ height: 34, gap: 5 }} onClick={handleExport}><IconDownload size={13} /> CSV</button>
+          <button className="btn btn-secondary btn-sm btn-csv" style={{ height: 34, gap: 5 }} onClick={handleExport}><IconDownload size={13} /> CSV</button>
           <button className="btn btn-primary btn-sm" style={{ height: 34, gap: 5 }} onClick={() => { setEditData(null); setShowForm(true) }}><IconPlus size={13} /> Transaksi</button>
         </div>
       </>
@@ -450,13 +450,31 @@ export default function Transactions() {
           .tss-val { font-size: 0.8rem; }
           .tx-row-item { padding: 12px 14px; }
           .tx-group-date { font-size: 0.68rem; }
+          /* Filter bar lebih compact — search + select sejajar, type filter di bawah */
+          .tx-filter-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+          .tx-filter-bar .form-input { grid-column: span 2; }
+          .tx-filter-bar .form-select { grid-column: span 1; }
+          .type-filter-btns { grid-column: span 1; width: 100%; }
+          .tx-filter-bar .btn-ghost { grid-column: span 2; }
         }
 
         @media (max-width: 400px) {
+          .tx-filter-bar { grid-template-columns: 1fr; }
+          .tx-filter-bar .form-input,
+          .tx-filter-bar .form-select,
+          .type-filter-btns,
+          .tx-filter-bar .btn-ghost { grid-column: span 1; }
+          .type-filter-btns { width: 100%; }
           .tx-summary-strip { padding: 8px 10px; }
           .tss-val { font-size: 0.75rem; }
           .tss-label { font-size: 0.6rem; }
           .tri-amount { font-size: 0.8rem; }
+          .tri-icon { width: 32px; height: 32px; }
+          .tx-row-item { padding: 10px 12px; gap: 10px; }
         }
       `}</style>
       </div>

@@ -693,6 +693,7 @@ export default function Report() {
         /* Mobile */
         @media (max-width: 768px) {
           .rpt-summary { grid-template-columns: 1fr 1fr; }
+          .rpt-summary .rpt-sum-card:last-child { grid-column: span 2; }
           .rpt-sum-val { font-size: 1rem; }
           .rpt-chart-wrap { height: 200px; }
           .rpt-cat-left { width: 110px; }

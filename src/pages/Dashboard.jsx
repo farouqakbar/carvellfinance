@@ -1473,15 +1473,21 @@ export default function Dashboard() {
           .hero-top { flex-direction: column; gap: 0; margin-bottom: 10px; }
           /* Chips tampil sebagai row horizontal di bawah balance */
           .hero-right {
-            display: flex; flex-direction: row; gap: 8px;
+            display: flex; flex-direction: row; gap: 6px;
             align-items: stretch; margin-top: 10px;
           }
           .hero-chip {
             flex: 1; min-width: 0; align-items: flex-start;
-            padding: 7px 10px;
+            padding: 7px 8px;
           }
-          .hero-chip-val { font-size: 0.8rem; }
-          .hero-balance { font-size: 1.6rem; }
+          .hero-chip-val { font-size: 0.78rem; }
+          .hero-chip-label { font-size: 0.55rem; letter-spacing: 0.04em; }
+          .hero-chip-cta { font-size: 0.55rem; }
+          .hero-balance { font-size: 1.55rem; }
+          .hero-stats-row { gap: 0; }
+          .hero-stat { padding: 0 8px; }
+          .hero-stat-val { font-size: 0.78rem; }
+          .hero-stat-sub { font-size: 0.56rem; }
           .stats-strip { border-radius: var(--radius-sm); }
           .stat-col { padding: 12px 14px; }
           .stat-col-val { font-size: 0.875rem; }
@@ -1501,7 +1507,10 @@ export default function Dashboard() {
           .stats-strip { grid-template-columns: 1fr; }
           .stat-col { border-right: none; border-bottom: 1px solid var(--border); flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 14px; }
           .stat-col:last-child { border-bottom: none; }
-          .hero-balance { font-size: 1.4rem; }
+          .hero-balance { font-size: 1.35rem; }
+          .hero-right { gap: 4px; }
+          .hero-chip { padding: 6px 7px; }
+          .hero-chip-val { font-size: 0.72rem; }
         }
       `}</style>
     </div>

@@ -923,16 +923,23 @@ export default function Plans() {
         .plan-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
         @media (max-width: 640px) {
-          .plans-stat-bar { gap: 6px; padding: 12px 14px; }
-          .plans-stat { padding: 0 8px; }
-          .plans-stat-val { font-size: 0.875rem; }
+          .plans-stat-bar { gap: 0; padding: 10px 14px; flex-wrap: nowrap; }
+          .plans-stat { padding: 0 10px; }
+          .plans-stat:first-child { padding-left: 0; }
+          .plans-stat:last-child { padding-right: 0; }
+          .plans-stat-val { font-size: 0.8rem; }
+          .plans-stat-label { font-size: 0.6rem; }
           .plans-form-grid { grid-template-columns: 1fr; }
           .plans-form-grid .form-group[style*="span 2"] { grid-column: span 1; }
-          .plan-card { padding: 12px; gap: 8px; flex-wrap: wrap; }
-          .plan-card-amount { display: block; font-size: 0.8rem; }
-          .plan-card-body { flex: 1; min-width: 140px; }
-          .plan-card-right { width: 100%; justify-content: space-between; }
+          .plan-card { padding: 12px; gap: 8px; }
+          .plan-card-amount { font-size: 0.8rem; }
+          .plan-card-body { flex: 1; min-width: 0; }
           .plan-card-actions { gap: 6px; }
+        }
+        @media (max-width: 400px) {
+          .plans-stat-bar { flex-wrap: wrap; gap: 8px; }
+          .plans-stat-divider { display: none; }
+          .plans-stat { padding: 0; flex: 1 1 auto; }
         }
 
         /* ── Done modal ──────────────────────── */

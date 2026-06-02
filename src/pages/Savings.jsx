@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel, getToday } from '../utils/formatCurrency'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
-import { IconBookmark, IconShoppingBag, IconCheck, IconPiggyBank, IconPlus, IconTrash, IconUndo, IconCreditCard, IconTarget } from '../components/Icons'
+import { IconBookmark, IconShoppingBag, IconCheck, IconPiggyBank, IconPlus, IconTrash, IconUndo, IconCreditCard, IconTarget, IconX } from '../components/Icons'
 
 function getMonthOptions() {
   const opts = []
@@ -525,7 +525,7 @@ export default function Plans() {
           <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{topupModal.name}</h2>
-              <button type="button" className="btn btn-ghost" onClick={() => setTopupModal(null)} disabled={topupSaving}>✕</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setTopupModal(null)} disabled={topupSaving}><IconX size={16} /></button>
             </div>
             <div className="done-plan-info" style={{ marginBottom: 16 }}>
               <div className="done-plan-icon"><IconPiggyBank size={18} /></div>
@@ -597,7 +597,7 @@ export default function Plans() {
           <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Tandai Selesai</h2>
-              <button type="button" className="btn btn-ghost" onClick={() => setDoneModal(null)} disabled={confirming}>✕</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setDoneModal(null)} disabled={confirming}><IconX size={16} /></button>
             </div>
 
             {/* Info plan */}

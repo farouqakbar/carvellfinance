@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import CurrencyInput from './CurrencyInput'
 import { useToast } from './Toast'
+import { IconX } from './Icons'
 
 function getPastMonthOptions() {
   const opts = []
@@ -69,7 +70,7 @@ export default function ProfileModal({ onClose }) {
               </p>
             </div>
           </div>
-          <button className="btn btn-ghost" onClick={onClose}>✕</button>
+          <button className="btn btn-ghost" onClick={onClose}><IconX size={16} /></button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

@@ -7,7 +7,7 @@ import { formatCurrency, getCurrentMonth, getMonthLabel, getMonthEndDate } from 
 import TransactionForm from '../components/TransactionForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
-import { IconList, IconArrowUp, IconArrowDown, IconEdit, IconTrash, IconDownload, IconPlus } from '../components/Icons'
+import { IconList, IconArrowUp, IconArrowDown, IconEdit, IconTrash, IconDownload, IconPlus, IconX } from '../components/Icons'
 
 function prevMonth(m) {
   const [y, mo] = m.split('-').map(Number)
@@ -496,7 +496,7 @@ export default function Transactions() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{editData?.id ? 'Edit Transaksi' : 'Tambah Transaksi'}</h2>
-              <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowForm(false)}><IconX size={16} /></button>
             </div>
             <TransactionForm month={month} editData={editData} onSuccess={fetchAll} onClose={() => setShowForm(false)} />
           </div>

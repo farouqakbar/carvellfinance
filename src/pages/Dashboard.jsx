@@ -10,7 +10,7 @@ import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
 import { isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
-import { IconAlertTriangle, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconSettings, IconPlus } from '../components/Icons'
+import { IconAlertTriangle, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconSettings, IconPlus, IconX } from '../components/Icons'
 
 const DEFAULT_PCT = 15
 
@@ -652,7 +652,7 @@ export default function Dashboard() {
                     {hasGaji ? 'Edit jumlah atau catatan' : 'Catat pemasukan bulan ini'}
                   </p>
                 </div>
-                <button className="btn btn-ghost" onClick={() => setShowGajiModal(false)}>✕</button>
+                <button className="btn btn-ghost" onClick={() => setShowGajiModal(false)}><IconX size={16} /></button>
               </div>
 
               <div className="form-group">
@@ -696,7 +696,7 @@ export default function Dashboard() {
                 <h2 className="modal-title">Total Tabungan</h2>
                 <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Akumulasi s/d {getMonthLabel(month)}</p>
               </div>
-              <button className="btn btn-ghost" onClick={() => setShowTabunganModal(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowTabunganModal(false)}><IconX size={16} /></button>
             </div>
 
             <div className="wajib-rows">
@@ -786,7 +786,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <Link to="/savings" className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => setShowRencanaModal(false)}>Kelola →</Link>
-                <button className="btn btn-ghost" onClick={() => setShowRencanaModal(false)}>✕</button>
+                <button className="btn btn-ghost" onClick={() => setShowRencanaModal(false)}><IconX size={16} /></button>
               </div>
             </div>
             {data.nextMonthPlans.length === 0 ? (
@@ -827,7 +827,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => { setShowWajibModal(false); setShowCatManager(true) }}>Kelola</button>
-                <button className="btn btn-ghost" onClick={() => setShowWajibModal(false)}>✕</button>
+                <button className="btn btn-ghost" onClick={() => setShowWajibModal(false)}><IconX size={16} /></button>
               </div>
             </div>
 
@@ -864,7 +864,7 @@ export default function Dashboard() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Tambah Transaksi</h2>
-              <button className="btn btn-ghost" onClick={() => setShowTxForm(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowTxForm(false)}><IconX size={16} /></button>
             </div>
             <TransactionForm month={month} onSuccess={() => { fetchDashboard(); setShowTxForm(false) }} onClose={() => setShowTxForm(false)} />
           </div>
@@ -882,7 +882,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="btn btn-primary btn-sm" onClick={() => { setEditCatData({ is_mandatory: true }); setShowCatForm(true) }}>+ Kategori</button>
-                <button className="btn btn-ghost" onClick={() => setShowCatManager(false)}>✕</button>
+                <button className="btn btn-ghost" onClick={() => setShowCatManager(false)}><IconX size={16} /></button>
               </div>
             </div>
 
@@ -929,7 +929,7 @@ export default function Dashboard() {
                     {getMonthLabel(month)}{data.salary > 0 ? ` · ${formatCurrency(data.salary)}` : ''}
                   </p>
                 </div>
-                <button className="btn btn-ghost" onClick={() => setBudgetEdit(null)}>✕</button>
+                <button className="btn btn-ghost" onClick={() => setBudgetEdit(null)}><IconX size={16} /></button>
               </div>
 
               {data.salary > 0 && (
@@ -1008,7 +1008,7 @@ export default function Dashboard() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{editCatData?.id ? 'Edit Kategori' : 'Kategori Baru'}</h2>
-              <button className="btn btn-ghost" onClick={() => setShowCatForm(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowCatForm(false)}><IconX size={16} /></button>
             </div>
             <CategoryForm
               editData={editCatData}

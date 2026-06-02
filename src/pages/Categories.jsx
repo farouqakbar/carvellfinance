@@ -931,7 +931,7 @@ export default function Categories() {
           <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">Catat {hutangForm.jenis === 'hutang' ? 'Hutang' : 'Piutang'}</h2>
-              <button className="btn btn-ghost" onClick={() => setShowHutangModal(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowHutangModal(false)}><IconX size={16} /></button>
             </div>
 
             <div className="form-group">
@@ -1035,7 +1035,7 @@ export default function Categories() {
                   {gajiTx ? 'Edit jumlah atau catatan' : 'Catat pemasukan bulan ini'}
                 </p>
               </div>
-              <button className="btn btn-ghost" onClick={() => setShowPemasukanModal(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowPemasukanModal(false)}><IconX size={16} /></button>
             </div>
             <div className="form-group">
               <label className="form-label">Jumlah Pemasukan</label>
@@ -1074,7 +1074,7 @@ export default function Categories() {
                 <h2 className="modal-title">Tambah Pemasukan</h2>
                 <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Dicatat ke bulan {month}</p>
               </div>
-              <button className="btn btn-ghost" onClick={() => setShowIncomeModal(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowIncomeModal(false)}><IconX size={16} /></button>
             </div>
             <div className="form-group">
               <label className="form-label">Nama Pemasukan</label>
@@ -1122,7 +1122,7 @@ export default function Categories() {
                       ? 'Pengeluaran Rutin Baru'
                       : 'Kategori Baru'}
               </h2>
-              <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕</button>
+              <button className="btn btn-ghost" onClick={() => setShowForm(false)}><IconX size={16} /></button>
             </div>
             <CategoryForm
               editData={editData}
@@ -1145,7 +1145,7 @@ export default function Categories() {
                   <h2 className="modal-title">Budget — {cat?.name}</h2>
                   {salary > 0 && <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Gaji: {formatCurrency(salary)}</p>}
                 </div>
-                <button className="btn btn-ghost" onClick={() => setBudgetEdit(null)}>✕</button>
+                <button className="btn btn-ghost" onClick={() => setBudgetEdit(null)}><IconX size={16} /></button>
               </div>
               {salary > 0 && (
                 <div className="form-group">

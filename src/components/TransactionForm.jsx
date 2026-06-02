@@ -184,6 +184,7 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
         }
         .tf-type-btn {
           padding: 10px 12px;
+          min-height: 44px;
           border: 1.5px solid var(--border);
           border-radius: var(--radius-sm);
           cursor: pointer;

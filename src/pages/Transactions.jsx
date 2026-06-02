@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
+import { usePageHeader } from '../context/PageHeaderContext'
+import { formatCurrency, getCurrentMonth, getMonthLabel, getMonthEndDate } from '../utils/formatCurrency'
 import TransactionForm from '../components/TransactionForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
+import { IconList, IconArrowUp, IconArrowDown, IconEdit, IconTrash, IconDownload, IconPlus } from '../components/Icons'
 
 function prevMonth(m) {
   const [y, mo] = m.split('-').map(Number)
@@ -20,6 +22,7 @@ function nextMonth(m) {
 
 export default function Transactions() {
   const { user } = useAuth()
+  const { setHeader } = usePageHeader()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
@@ -33,16 +36,34 @@ export default function Transactions() {
   const [filter, setFilter] = useState({ category: '', type: '', search: '' })
 
   const isCurrentMonth = month === getCurrentMonth()
+  const isAtStart = !!user.recording_start_month && month <= user.recording_start_month
 
   const goToMonth = (m) => { setMonth(m); setSearchParams({ month: m }) }
 
   useEffect(() => { fetchAll() }, [month])
 
+  useEffect(() => {
+    setHeader(
+      <>
+        <Link to={`/dashboard?month=${month}`} className="topbar-back-btn">‹ Dashboard</Link>
+        <div className="month-nav-group">
+          <button className="month-btn" onClick={() => goToMonth(prevMonth(month))} disabled={isAtStart}>‹</button>
+          <span className="month-label-text">{getMonthLabel(month)}</span>
+          <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
+        </div>
+        <div className="topbar-actions">
+          <button className="btn btn-secondary btn-sm" style={{ height: 34, gap: 5 }} onClick={handleExport}><IconDownload size={13} /> CSV</button>
+          <button className="btn btn-primary btn-sm" style={{ height: 34, gap: 5 }} onClick={() => { setEditData(null); setShowForm(true) }}><IconPlus size={13} /> Transaksi</button>
+        </div>
+      </>
+    )
+    return () => setHeader(null)
+  }, [month, isCurrentMonth, isAtStart])
+
   const fetchAll = async () => {
     setLoading(true)
     const startDate = `${month}-01`
-    const [ey, em] = month.split('-').map(Number)
-    const endDate = new Date(ey, em, 0).toISOString().split('T')[0]
+    const endDate = getMonthEndDate(month)
     const recordStart = user.recording_start_month
 
     let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lte('date', endDate)
@@ -115,7 +136,7 @@ export default function Transactions() {
   }, [filtered])
 
   const totals = useMemo(() => {
-    const gajiCat = categories.find(c => c.name === 'Gaji')
+    const gajiCat = categories.find(c => c.name === 'Pemasukan Bulanan')
     const acc = filtered.reduce((a, tx) => {
       const isGaji = gajiCat && tx.category_id === gajiCat.id && tx.type === 'income'
       if (tx.type === 'expense') {
@@ -150,25 +171,11 @@ export default function Transactions() {
   return (
     <>
       <div className="animate-in">
-      {/* Header */}
-      <div className="dash-header">
-        <Link to={`/dashboard?month=${month}`} className="back-btn">‹ Dashboard</Link>
-        <div className="month-nav-group">
-          <button className="month-btn" onClick={() => goToMonth(prevMonth(month))}>‹</button>
-          <span className="month-label-text">{getMonthLabel(month)}</span>
-          <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-secondary btn-sm" style={{ fontSize: '0.78rem', height: 34 }} onClick={handleExport}>↓ CSV</button>
-          <button className="btn btn-primary btn-sm" style={{ fontSize: '0.78rem', height: 34 }} onClick={() => { setEditData(null); setShowForm(true) }}>+ Transaksi</button>
-        </div>
-      </div>
-
-      <div className="tx-page-header">
-        <div className="tx-page-icon">↕</div>
+      <div className="page-header-banner">
+        <div className="page-header-icon"><IconList size={18} /></div>
         <div>
-          <h1 className="tx-page-title">Transaksi</h1>
-          <p className="tx-page-sub">Riwayat pemasukan & pengeluaran</p>
+          <h1 className="page-header-title">Transaksi</h1>
+          <p className="page-header-sub">Riwayat pemasukan &amp; pengeluaran</p>
         </div>
       </div>
 
@@ -236,9 +243,9 @@ export default function Transactions() {
       ) : filtered.length === 0 ? (
         <div className="card">
           <div className="empty-state">
-            <div className="empty-state-icon">↕</div>
+            <div className="empty-state-icon"><IconList size={22} /></div>
             <strong>{hasFilter ? 'Tidak ada yang cocok' : 'Belum ada transaksi'}</strong>
-            <p>{hasFilter ? 'Coba ubah atau reset filter' : 'Tap "+ Tambah" untuk mulai mencatat'}</p>
+            <p>{hasFilter ? 'Coba ubah atau reset filter' : 'Tap "+ Transaksi" untuk mulai mencatat'}</p>
           </div>
         </div>
       ) : (
@@ -260,7 +267,7 @@ export default function Transactions() {
                         background: tx.type === 'income' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
                         color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)',
                       }}>
-                        {tx.type === 'income' ? '↑' : '↓'}
+                        {tx.type === 'income' ? <IconArrowUp size={14} /> : <IconArrowDown size={14} />}
                       </div>
                       <div className="tri-info">
                         <span className="tri-desc">{tx.description || tx.categories?.name || 'Transaksi'}</span>
@@ -275,8 +282,8 @@ export default function Transactions() {
                           {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
                         </span>
                         <div className="tri-actions">
-                          <button className="btn btn-ghost btn-sm" onClick={() => { setEditData(tx); setShowForm(true) }}>✎</button>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel(tx.id)}>✕</button>
+                          <button className="btn btn-ghost btn-sm icon-btn" onClick={() => { setEditData(tx); setShowForm(true) }} title="Edit"><IconEdit size={13} /></button>
+                          <button className="btn btn-ghost btn-sm icon-btn" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel(tx.id)} title="Hapus"><IconTrash size={13} /></button>
                         </div>
                       </div>
                     </div>
@@ -289,62 +296,7 @@ export default function Transactions() {
       )}
 
       <style>{`
-        .tx-page-header {
-          display: flex; align-items: center; gap: 14px;
-          background: var(--bg-card);
-          border: 1px solid var(--border);
-          border-left: 3px solid var(--accent);
-          border-radius: var(--radius-lg);
-          padding: 16px 20px;
-          margin-bottom: 20px;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-        }
-        .tx-page-icon {
-          width: 40px; height: 40px; border-radius: 10px;
-          background: var(--accent-dim); color: var(--accent);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 1.1rem; flex-shrink: 0;
-        }
-        .tx-page-title {
-          font-size: 1.1rem; font-weight: 800; letter-spacing: -0.03em;
-          color: var(--text-primary); line-height: 1; margin: 0 0 4px;
-        }
-        .tx-page-sub {
-          font-size: 0.72rem; color: var(--text-muted); font-weight: 500; margin: 0;
-        }
-        .back-btn {
-          display: inline-flex; align-items: center; gap: 4px;
-          font-size: 0.75rem; font-weight: 600;
-          color: var(--text-muted); text-decoration: none;
-          padding: 5px 10px; transition: all 0.15s;
-          width: fit-content; justify-self: start;
-          font-family: var(--font-sans);
-          letter-spacing: -0.01em;
-          background: var(--bg-card);
-          border: 1px solid var(--border);
-          border-radius: 8px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-        }
-        .back-btn:hover { color: var(--text-primary); background: var(--bg-input); box-shadow: none; }
-        .dash-header {
-          display: grid; grid-template-columns: 1fr auto 1fr;
-          align-items: center; gap: 10px;
-          position: sticky; top: 0; z-index: 100;
-          background: var(--bg-sticky); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-          padding: 10px 0; margin-bottom: 10px;
-        }
-        .dash-header > :last-child { display: flex; justify-content: flex-end; gap: 6px; }
-        .tx-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .month-nav-group { display: flex; align-items: center; gap: 2px; }
-        .month-btn {
-          width: 28px; height: 28px; border: none; background: none; color: var(--text-muted);
-          font-size: 1.1rem; cursor: pointer; border-radius: var(--radius-sm);
-          display: flex; align-items: center; justify-content: center;
-          font-family: var(--font-sans); transition: all 0.15s;
-        }
-        .month-btn:hover { background: var(--bg-input); color: var(--text-primary); }
-        .month-btn:disabled { opacity: 0.25; cursor: not-allowed; }
-        .month-label-sm { font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); padding: 0 6px; white-space: nowrap; }
+        .icon-btn { padding: 5px 6px !important; }
 
         .tx-filter-bar {
           display: flex;

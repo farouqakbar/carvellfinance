@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LogoWordmark, LogoMark } from '../components/Logo'
+import { IconGrid, IconTag, IconPiggyBank, IconBarChart } from '../components/Icons'
 
 export default function Login() {
   const { signIn, signUp } = useAuth()
@@ -62,13 +63,13 @@ export default function Login() {
 
           <ul className="login-features">
             {[
-              { icon: '↗', text: 'Dashboard keuangan per bulan' },
-              { icon: '◈', text: 'Budget per kategori + alert overbudget' },
-              { icon: '◎', text: 'Target tabungan dengan progress' },
-              { icon: '▤', text: 'Laporan bulanan dengan grafik tren' },
+              { Icon: IconGrid, text: 'Dashboard keuangan per bulan' },
+              { Icon: IconTag, text: 'Budget per kategori + alert overbudget' },
+              { Icon: IconPiggyBank, text: 'Target tabungan dengan progress' },
+              { Icon: IconBarChart, text: 'Laporan bulanan dengan grafik tren' },
             ].map(f => (
               <li key={f.text} className="login-feature-item">
-                <span className="login-feature-icon">{f.icon}</span>
+                <span className="login-feature-icon"><f.Icon size={15} /></span>
                 <span>{f.text}</span>
               </li>
             ))}

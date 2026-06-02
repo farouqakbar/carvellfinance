@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
 import CurrencyInput from './CurrencyInput'
 import { isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
+import { getCurrentMonth, getToday } from '../utils/formatCurrency'
+import { IconArrowUp, IconArrowDown } from './Icons'
 
 export default function TransactionForm({ onSuccess, onClose, editData, month }) {
   const { user } = useAuth()
@@ -13,9 +15,8 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
 
   const defaultDate = () => {
     if (editData?.date) return editData.date
-    if (!month) return new Date().toISOString().split('T')[0]
-    const currentMonth = new Date().toISOString().substring(0, 7)
-    return month === currentMonth ? new Date().toISOString().split('T')[0] : `${month}-01`
+    if (!month) return getToday()
+    return month === getCurrentMonth() ? getToday() : `${month}-01`
   }
 
   const [form, setForm] = useState({
@@ -30,17 +31,13 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
   useEffect(() => { fetchCategories() }, [month])
 
   const fetchCategories = async () => {
-    const [catRes, budgetRes] = await Promise.all([
-      supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
-      month
-        ? supabase.from('category_budgets').select('category_id').eq('user_id', user.id).eq('month', month)
-        : Promise.resolve({ data: [] }),
-    ])
-    const all = (catRes.data || []).filter(c => !isMandatory(c) && !isMandatoryIncome(c))
-    const budgetedIds = new Set((budgetRes.data || []).map(b => b.category_id))
-    // Tampilkan hanya kategori yang punya budget bulan ini; fallback ke semua kalau kosong
-    const filtered = budgetedIds.size > 0 ? all.filter(c => budgetedIds.has(c.id)) : all
-    setCategories(filtered)
+    if (!month) {
+      setCategories([])
+      return
+    }
+    const { data } = await supabase.from('categories').select('*')
+      .eq('user_id', user.id).eq('month', month).order('name')
+    setCategories((data || []).filter(c => !isMandatory(c) && !isMandatoryIncome(c)))
   }
 
   const handleSubmit = async (e) => {
@@ -85,7 +82,7 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
           data-type="expense"
           onClick={() => setForm(f => ({ ...f, type: 'expense' }))}
         >
-          <span className="tf-type-icon">↓</span> Pengeluaran
+          <span className="tf-type-icon"><IconArrowDown size={14} /></span> Pengeluaran
         </button>
         <button
           type="button"
@@ -93,7 +90,7 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
           data-type="income"
           onClick={() => setForm(f => ({ ...f, type: 'income' }))}
         >
-          <span className="tf-type-icon">↑</span> Pemasukan
+          <span className="tf-type-icon"><IconArrowUp size={14} /></span> Pemasukan
         </button>
       </div>
 
@@ -118,9 +115,24 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
           onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
         >
           <option value="">— Tanpa kategori —</option>
-          {categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c)).map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
+          {(() => {
+            const rutin = categories.filter(c => c.is_monthly)
+            const lainnya = categories.filter(c => !c.is_monthly)
+            return (
+              <>
+                {rutin.length > 0 && (
+                  <optgroup label="Pengeluaran Rutin">
+                    {rutin.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                )}
+                {lainnya.length > 0 && (
+                  <optgroup label="Kategori Lainnya">
+                    {lainnya.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </optgroup>
+                )}
+              </>
+            )
+          })()}
         </select>
       </div>
 
@@ -198,7 +210,7 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
           border-color: var(--success);
           color: var(--success);
         }
-        .tf-type-icon { font-size: 0.9rem; }
+        .tf-type-icon { display: flex; align-items: center; }
 
         .tf-row-2 {
           display: flex;

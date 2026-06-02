@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
-import { formatCurrency, getCurrentMonth, getMonthLabel } from '../utils/formatCurrency'
+import { formatCurrency, getCurrentMonth, getMonthLabel, getToday } from '../utils/formatCurrency'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
+import { IconBookmark, IconShoppingBag, IconCheck, IconPiggyBank, IconPlus, IconTrash, IconUndo, IconCreditCard, IconTarget } from '../components/Icons'
 
 function getMonthOptions() {
   const opts = []
@@ -18,7 +19,7 @@ function getMonthOptions() {
 
 const MONTH_OPTS = getMonthOptions()
 
-const TODAY = new Date().toISOString().split('T')[0]
+const TODAY = getToday()
 
 export default function Plans() {
   const { user } = useAuth()
@@ -41,6 +42,16 @@ export default function Plans() {
   const [doneCatId, setDoneCatId] = useState('')
   const [doneDate, setDoneDate] = useState(TODAY)
   const [confirming, setConfirming] = useState(false)
+
+  // Kantong Tabungan
+  const [showKantongForm, setShowKantongForm] = useState(false)
+  const [kantongForm, setKantongForm] = useState({ name: '', amount: '' })
+  const [kantongSaving, setKantongSaving] = useState(false)
+  const [deletingKantongId, setDeletingKantongId] = useState(null)
+  const [topupModal, setTopupModal] = useState(null) // savings object
+  const [topupAmount, setTopupAmount] = useState('')
+  const [topupMode, setTopupMode] = useState('setor') // 'setor' | 'tarik'
+  const [topupSaving, setTopupSaving] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -68,6 +79,59 @@ export default function Plans() {
       .order('target_month', { ascending: true })
       .order('created_at', { ascending: true })
     setPlans(data || [])
+  }
+
+  const fetchSavings = async () => {
+    const { data } = await supabase.from('savings').select('*').eq('user_id', user.id).order('name')
+    setSavings(data || [])
+  }
+
+  const addKantong = async () => {
+    if (!kantongForm.name.trim()) return
+    setKantongSaving(true)
+    const { error } = await supabase.from('savings').insert({
+      user_id: user.id,
+      name: kantongForm.name.trim(),
+      current_amount: parseFloat(kantongForm.amount) || 0,
+    })
+    if (!error) {
+      toast('Kantong ditambahkan', 'success')
+      setKantongForm({ name: '', amount: '' })
+      setShowKantongForm(false)
+      fetchSavings()
+    } else {
+      toast('Gagal menyimpan', 'error')
+    }
+    setKantongSaving(false)
+  }
+
+  const deleteKantong = async (id) => {
+    setDeletingKantongId(id)
+    const { error } = await supabase.from('savings').delete().eq('id', id)
+    if (!error) {
+      setSavings(ss => ss.filter(s => s.id !== id))
+      toast('Kantong dihapus', 'success')
+    }
+    setDeletingKantongId(null)
+  }
+
+  const doTopup = async () => {
+    if (!topupModal || !topupAmount) return
+    setTopupSaving(true)
+    const delta = parseFloat(topupAmount) || 0
+    const newAmount = topupMode === 'setor'
+      ? Number(topupModal.current_amount) + delta
+      : Math.max(0, Number(topupModal.current_amount) - delta)
+    const { error } = await supabase.from('savings').update({ current_amount: newAmount }).eq('id', topupModal.id)
+    if (!error) {
+      setSavings(ss => ss.map(s => s.id === topupModal.id ? { ...s, current_amount: newAmount } : s))
+      toast(topupMode === 'setor' ? 'Berhasil setor' : 'Berhasil tarik', 'success')
+      setTopupModal(null)
+      setTopupAmount('')
+    } else {
+      toast('Gagal update', 'error')
+    }
+    setTopupSaving(false)
   }
 
   const addPlan = async () => {
@@ -175,15 +239,19 @@ export default function Plans() {
       <div className="animate-in">
       {/* Header */}
       <div className="flex-between" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        <div>
-          <h1 className="page-title">Rencana</h1>
-          <p className="page-subtitle" style={{ marginBottom: 0 }}>Catat apa saja yang ingin dibeli, berapa, dan kapan</p>
+        <div className="page-header-banner" style={{ flex: 1, marginBottom: 0 }}>
+          <div className="page-header-icon" style={{ background: 'rgba(251,191,36,0.1)', color: 'var(--warning)' }}><IconBookmark size={18} /></div>
+          <div>
+            <h1 className="page-header-title">Rencana</h1>
+            <p className="page-header-sub">Catat apa saja yang ingin dibeli, berapa, dan kapan</p>
+          </div>
         </div>
         <button
           className="btn btn-primary"
+          style={{ flexShrink: 0, gap: 6 }}
           onClick={() => setShowForm(v => !v)}
         >
-          {showForm ? '✕ Tutup' : '+ Tambah Rencana'}
+          {showForm ? '✕ Tutup' : <><IconPlus size={13} /> Tambah Rencana</>}
         </button>
       </div>
 
@@ -287,7 +355,7 @@ export default function Plans() {
         </div>
       ) : sortedMonths.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📋</div>
+          <div className="empty-state-icon"><IconBookmark size={22} /></div>
           <strong>
             {filter === 'aktif' ? 'Belum ada rencana aktif' :
              filter === 'selesai' ? 'Belum ada rencana selesai' :
@@ -317,7 +385,7 @@ export default function Plans() {
                   {items.map(plan => (
                     <div key={plan.id} className={`plan-card ${plan.done ? 'plan-card-done' : ''}`}>
                       <div className="plan-card-icon">
-                        {plan.done ? '✓' : '🛒'}
+                        {plan.done ? <IconCheck size={15} /> : <IconShoppingBag size={16} />}
                       </div>
                       <div className="plan-card-body">
                         <div className="plan-card-name">{plan.name}</div>
@@ -333,7 +401,7 @@ export default function Plans() {
                             onClick={() => toggleDone(plan)}
                             title={plan.done ? 'Tandai aktif' : 'Tandai selesai'}
                           >
-                            {plan.done ? '↩' : '✓'}
+                            {plan.done ? <IconUndo size={12} /> : <IconCheck size={12} />}
                           </button>
                           <button
                             className="plan-action-btn plan-action-del"
@@ -341,7 +409,7 @@ export default function Plans() {
                             disabled={deletingId === plan.id}
                             title="Hapus"
                           >
-                            ✕
+                            <IconTrash size={12} />
                           </button>
                         </div>
                       </div>
@@ -351,6 +419,175 @@ export default function Plans() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ── Kantong Tabungan ─────────────────── */}
+      <div style={{ marginTop: 40 }}>
+        <div className="flex-between" style={{ marginBottom: 16, alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(52,211,153,0.1)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconPiggyBank size={16} /></div>
+            <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Kantong Tabungan</h2>
+          </div>
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '3px 0 0' }}>
+              Total: <span className="tabular" style={{ color: 'var(--success)', fontWeight: 700 }}>
+                {formatCurrency(savings.reduce((s, sv) => s + Number(sv.current_amount || 0), 0))}
+              </span>
+            </p>
+          </div>
+          <button className="btn btn-secondary" style={{ fontSize: '0.78rem', gap: 5 }} onClick={() => setShowKantongForm(v => !v)}>
+            {showKantongForm ? '✕ Tutup' : <><IconPlus size={12} /> Tambah Kantong</>}
+          </button>
+        </div>
+
+        {showKantongForm && (
+          <div className="card plans-form-card animate-in" style={{ marginBottom: 16, borderColor: 'var(--success)' }}>
+            <p className="plans-form-title">Kantong Baru</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Nama kantong</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="contoh: Dana Darurat, Liburan..."
+                  value={kantongForm.name}
+                  onChange={e => setKantongForm(f => ({ ...f, name: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Saldo awal <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opsional)</span></label>
+                <CurrencyInput value={kantongForm.amount} onChange={raw => setKantongForm(f => ({ ...f, amount: raw }))} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-secondary" onClick={() => setShowKantongForm(false)}>Batal</button>
+              <button
+                className="btn btn-primary"
+                onClick={addKantong}
+                disabled={!kantongForm.name.trim() || kantongSaving}
+              >
+                {kantongSaving ? 'Menyimpan...' : '+ Simpan'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {savings.length === 0 && !showKantongForm ? (
+          <div className="empty-state" style={{ padding: '32px 20px' }}>
+            <div className="empty-state-icon"><IconPiggyBank size={22} /></div>
+            <strong>Belum ada kantong tabungan</strong>
+            <p>Buat kantong untuk memisahkan dana berdasarkan tujuan.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {savings.map(sv => (
+              <div key={sv.id} className="plan-card">
+                <div className="plan-card-icon" style={{ background: 'rgba(52,211,153,0.12)', borderColor: 'rgba(52,211,153,0.3)', color: 'var(--success)' }}>
+                  <IconPiggyBank size={16} />
+                </div>
+                <div className="plan-card-body">
+                  <div className="plan-card-name">{sv.name}</div>
+                </div>
+                <div className="plan-card-right">
+                  <span className="plan-card-amount tabular" style={{ color: sv.current_amount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+                    {formatCurrency(sv.current_amount || 0)}
+                  </span>
+                  <div className="plan-card-actions">
+                    <button
+                      className="plan-action-btn"
+                      style={{ width: 'auto', padding: '0 8px', fontSize: '0.7rem', gap: 3 }}
+                      onClick={() => { setTopupModal(sv); setTopupAmount(''); setTopupMode('setor') }}
+                      title="Setor / Tarik"
+                    >
+                      <IconPlus size={12} />
+                    </button>
+                    <button
+                      className="plan-action-btn plan-action-del"
+                      onClick={() => deleteKantong(sv.id)}
+                      disabled={deletingKantongId === sv.id}
+                      title="Hapus"
+                    >
+                      <IconTrash size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Modal: Setor / Tarik Kantong ─────── */}
+      {topupModal && (
+        <div className="modal-overlay" onClick={() => !topupSaving && setTopupModal(null)}>
+          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{topupModal.name}</h2>
+              <button type="button" className="btn btn-ghost" onClick={() => setTopupModal(null)} disabled={topupSaving}>✕</button>
+            </div>
+            <div className="done-plan-info" style={{ marginBottom: 16 }}>
+              <div className="done-plan-icon"><IconPiggyBank size={18} /></div>
+              <div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Saldo saat ini</div>
+                <div className="done-plan-amount tabular" style={{ color: 'var(--success)', fontWeight: 700, fontSize: '1rem' }}>
+                  {formatCurrency(topupModal.current_amount || 0)}
+                </div>
+              </div>
+            </div>
+
+            <div className="done-source-toggle" style={{ marginBottom: 16 }}>
+              <button
+                type="button"
+                className={`done-src-btn ${topupMode === 'setor' ? 'active' : ''}`}
+                onClick={() => setTopupMode('setor')}
+              >
+                <span className="done-src-icon"><IconPlus size={16} /></span>
+                <span className="done-src-label">Setor</span>
+                <span className="done-src-sub">Tambah saldo</span>
+              </button>
+              <button
+                type="button"
+                className={`done-src-btn ${topupMode === 'tarik' ? 'active' : ''}`}
+                onClick={() => setTopupMode('tarik')}
+              >
+                <span className="done-src-icon" style={{ fontSize: '1.2rem', fontWeight: 700 }}>−</span>
+                <span className="done-src-label">Tarik</span>
+                <span className="done-src-sub">Kurangi saldo</span>
+              </button>
+            </div>
+
+            <div className="form-group" style={{ margin: '0 0 16px' }}>
+              <label className="form-label">Jumlah</label>
+              <CurrencyInput value={topupAmount} onChange={setTopupAmount} />
+            </div>
+
+            {topupAmount > 0 && (
+              <div className="done-preview-box" style={{ marginBottom: 16 }}>
+                <span>Saldo setelah {topupMode === 'setor' ? 'setor' : 'tarik'}</span>
+                <span className="tabular" style={{ fontWeight: 700, color: 'var(--success)' }}>
+                  {formatCurrency(topupMode === 'setor'
+                    ? Number(topupModal.current_amount) + parseFloat(topupAmount)
+                    : Math.max(0, Number(topupModal.current_amount) - parseFloat(topupAmount))
+                  )}
+                </span>
+              </div>
+            )}
+
+            <div className="flex gap-8">
+              <button type="button" className="btn btn-secondary" onClick={() => setTopupModal(null)} disabled={topupSaving}>Batal</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={doTopup}
+                disabled={!topupAmount || topupSaving}
+              >
+                {topupSaving ? 'Menyimpan...' : topupMode === 'setor' ? '+ Setor' : '− Tarik'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -365,7 +602,7 @@ export default function Plans() {
 
             {/* Info plan */}
             <div className="done-plan-info">
-              <div className="done-plan-icon">🛒</div>
+              <div className="done-plan-icon"><IconShoppingBag size={18} /></div>
               <div>
                 <div className="done-plan-name">{doneModal.name}</div>
                 <div className="done-plan-amount tabular">{formatCurrency(doneModal.amount)}</div>
@@ -381,7 +618,7 @@ export default function Plans() {
                 className={`done-src-btn ${doneSource === 'gaji' ? 'active' : ''}`}
                 onClick={() => setDoneSource('gaji')}
               >
-                <span className="done-src-icon">💳</span>
+                <span className="done-src-icon"><IconCreditCard size={16} /></span>
                 <span className="done-src-label">Potongan Gaji</span>
                 <span className="done-src-sub">Dicatat sebagai pengeluaran</span>
               </button>
@@ -390,7 +627,7 @@ export default function Plans() {
                 className={`done-src-btn ${doneSource === 'tabungan' ? 'active' : ''}`}
                 onClick={() => setDoneSource('tabungan')}
               >
-                <span className="done-src-icon">🏦</span>
+                <span className="done-src-icon"><IconPiggyBank size={16} /></span>
                 <span className="done-src-label">Dari Tabungan</span>
                 <span className="done-src-sub">Kurangi saldo tabungan</span>
               </button>

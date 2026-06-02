@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LogoWordmark, LogoMark } from './Logo'
+import { IconGrid, IconBookmark, IconBarChart, IconMoon, IconSun, IconUser } from './Icons'
 
 const navItems = [
-  { to: '/dashboard', icon: '▸', label: 'Dashboard' },
-  { to: '/savings', icon: '↑', label: 'Rencana' },
-  { to: '/report', icon: '↓', label: 'Laporan' },
+  { to: '/dashboard', icon: IconGrid, label: 'Dashboard' },
+  { to: '/savings', icon: IconBookmark, label: 'Rencana' },
+  { to: '/report', icon: IconBarChart, label: 'Laporan' },
 ]
 
 const mobileItems = navItems
@@ -47,7 +48,7 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
             onClick={() => setDarkMode(v => !v)}
             title={darkMode ? 'Mode Gelap' : 'Mode Terang'}
           >
-            <span className="weather-icon">{darkMode ? '◑' : '☀'}</span>
+            <span className="weather-icon">{darkMode ? <IconMoon size={15} /> : <IconSun size={15} />}</span>
             {darkMode && <span className="weather-star">✦</span>}
           </button>
         </div>
@@ -59,7 +60,7 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
               to={item.to}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
-              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-icon"><item.icon size={16} /></span>
               <span>{item.label}</span>
             </NavLink>
           ))}
@@ -98,13 +99,13 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
                 className={`mtp-theme-btn mtp-night ${darkMode ? 'active' : ''}`}
                 onClick={() => setDarkMode(true)}
                 title="Gelap"
-              >◑</button>
+              ><IconMoon size={13} /></button>
               <button
                 type="button"
                 className={`mtp-theme-btn mtp-day ${!darkMode ? 'active' : ''}`}
                 onClick={() => setDarkMode(false)}
                 title="Terang"
-              >☀</button>
+              ><IconSun size={13} /></button>
             </div>
 
             {/* Profile avatar */}
@@ -129,7 +130,7 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
             to={item.to}
             className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
           >
-            <span className="mobile-nav-icon">{item.icon}</span>
+            <span className="mobile-nav-icon"><item.icon size={18} /></span>
             <span className="mobile-nav-label">{item.label}</span>
           </NavLink>
         ))}
@@ -193,9 +194,11 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
           border-radius: 0 3px 3px 0;
         }
         .nav-icon {
-          font-size: 0.95rem;
-          width: 18px;
-          text-align: center;
+          width: 20px;
+          height: 20px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           flex-shrink: 0;
         }
 
@@ -483,7 +486,7 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
         }
         .mobile-nav-item.active { color: var(--accent); }
         .mobile-nav-item:active { background: var(--bg-input); }
-        .mobile-nav-icon { font-size: 1.1rem; line-height: 1; }
+        .mobile-nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
         .mobile-nav-label { font-size: 0.58rem; font-weight: 600; letter-spacing: 0.02em; }
 
         @media (max-width: 768px) {

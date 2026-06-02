@@ -8,6 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { IconBarChart, IconTrendingUp, IconArrowUp, IconArrowDown, IconActivity } from '../components/Icons'
 
 const fmt = v =>
   v >= 1e9 ? `${(v / 1e9).toFixed(1)}M` :
@@ -44,8 +45,8 @@ export default function Report() {
       if (!monthCatMap[m]) monthCatMap[m] = {}
 
       if (tx.type === 'income') {
-        if (tx.categories?.name === 'Gaji') {
-          // Gaji masuk ke salaryMap per bulan
+        if (tx.categories?.name === 'Pemasukan Bulanan') {
+          // Pemasukan Bulanan masuk ke salaryMap per bulan
           salaryMap[m] = (salaryMap[m] || 0) + Number(tx.amount)
         } else {
           monthMap[m].income += Number(tx.amount)
@@ -120,9 +121,12 @@ export default function Report() {
 
   return (
     <div className="animate-in">
-      <div style={{ marginBottom: 20 }}>
-        <h1 className="page-title">Laporan</h1>
-        <p className="page-subtitle" style={{ marginBottom: 0 }}>Statistik keuangan lengkap</p>
+      <div className="page-header-banner" style={{ marginBottom: 20 }}>
+        <div className="page-header-icon" style={{ background: 'rgba(96,165,250,0.1)', color: 'var(--info)' }}><IconBarChart size={18} /></div>
+        <div>
+          <h1 className="page-header-title">Laporan</h1>
+          <p className="page-header-sub">Statistik keuangan lengkap</p>
+        </div>
       </div>
 
       {loading ? (
@@ -132,7 +136,7 @@ export default function Report() {
       ) : months.length === 0 ? (
         <div className="card">
           <div className="empty-state">
-            <div className="empty-state-icon">▤</div>
+            <div className="empty-state-icon"><IconBarChart size={22} /></div>
             <strong>Belum ada data</strong>
             <p>Mulai catat transaksi untuk melihat statistik keuangan</p>
           </div>
@@ -141,22 +145,25 @@ export default function Report() {
         <>
           {/* ── Summary ──────────────────────────── */}
           <div className="rpt-summary">
-            <div className="rpt-sum-card">
-              <span className="rpt-sum-label">Pemasukan</span>
+            <div className="rpt-sum-card rpt-sum-income">
+              <div className="rpt-sum-icon"><IconArrowUp size={14} /></div>
+              <span className="rpt-sum-label">Total Pemasukan</span>
               <span className="rpt-sum-val text-success tabular">{formatCurrency(totalIncome)}</span>
-              <span className="rpt-sum-sub">{months.length} bulan</span>
+              <span className="rpt-sum-sub">{months.length} bulan tercatat</span>
             </div>
-            <div className="rpt-sum-card">
-              <span className="rpt-sum-label">Pengeluaran</span>
+            <div className="rpt-sum-card rpt-sum-expense">
+              <div className="rpt-sum-icon"><IconArrowDown size={14} /></div>
+              <span className="rpt-sum-label">Total Pengeluaran</span>
               <span className="rpt-sum-val text-danger tabular">{formatCurrency(totalExpense)}</span>
               <span className="rpt-sum-sub">rata-rata {formatCurrency(avgExpense)}/bln</span>
             </div>
-            <div className="rpt-sum-card">
+            <div className="rpt-sum-card rpt-sum-net">
+              <div className="rpt-sum-icon"><IconActivity size={14} /></div>
               <span className="rpt-sum-label">Selisih Bersih</span>
               <span className={`rpt-sum-val tabular ${net >= 0 ? 'text-success' : 'text-danger'}`}>
                 {net >= 0 ? '+' : ''}{formatCurrency(net)}
               </span>
-              {topCat && <span className="rpt-sum-sub">terbesar: {topCat.icon} {topCat.name}</span>}
+              {topCat && <span className="rpt-sum-sub">terbesar: {topCat.name}</span>}
             </div>
           </div>
 
@@ -273,7 +280,9 @@ export default function Report() {
                     <div key={cat.name} className="rpt-cat-row">
                       <div className="rpt-cat-left">
                         <span className="rpt-cat-rank">{i + 1}</span>
-                        <span className="rpt-cat-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>−</span>
+                        <span className="rpt-cat-icon" style={{ background: `${cat.color}18` }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, display: 'block' }} />
+                        </span>
                         <span className="rpt-cat-name">{cat.name}</span>
                       </div>
                       <div className="rpt-cat-mid">
@@ -304,7 +313,7 @@ export default function Report() {
                   <div className="rpt-month-left">
                     <span className="rpt-month-name">{m.label}</span>
                     {m.salary > 0 && (
-                      <span className="rpt-month-salary tabular">Gaji {formatCurrency(m.salary)}</span>
+                      <span className="rpt-month-salary tabular">Pemasukan {formatCurrency(m.salary)}</span>
                     )}
                     {topCats.length > 0 && (
                       <div className="rpt-month-cats">
@@ -347,7 +356,7 @@ export default function Report() {
                         background: m.net >= 0 ? 'var(--success)' : 'var(--danger)',
                       }} />
                     </div>
-                    <span className="rpt-arrow">→</span>
+                    <span className="rpt-arrow" style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>›</span>
                   </div>
                 </div>
               )
@@ -372,7 +381,32 @@ export default function Report() {
           display: flex;
           flex-direction: column;
           gap: 3px;
+          position: relative;
+          overflow: hidden;
         }
+        .rpt-sum-card::before {
+          content: '';
+          position: absolute;
+          left: 0; top: 0; bottom: 0;
+          width: 3px;
+          border-radius: 0 2px 2px 0;
+        }
+        .rpt-sum-income::before { background: var(--success); }
+        .rpt-sum-expense::before { background: var(--danger); }
+        .rpt-sum-net::before { background: var(--accent); }
+        .rpt-sum-icon {
+          width: 28px;
+          height: 28px;
+          border-radius: 7px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 4px;
+          flex-shrink: 0;
+        }
+        .rpt-sum-income .rpt-sum-icon { background: var(--success-dim); color: var(--success); }
+        .rpt-sum-expense .rpt-sum-icon { background: var(--danger-dim); color: var(--danger); }
+        .rpt-sum-net .rpt-sum-icon { background: var(--accent-dim); color: var(--accent); }
         .rpt-sum-label {
           font-size: 0.65rem;
           text-transform: uppercase;

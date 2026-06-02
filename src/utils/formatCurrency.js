@@ -22,6 +22,19 @@ export function getCurrentMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+export function toLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function getToday() {
+  return toLocalDateStr(new Date())
+}
+
+export function getMonthEndDate(month) {
+  const [ey, em] = month.split('-').map(Number)
+  return toLocalDateStr(new Date(ey, em, 0))
+}
+
 export function getMonthLabel(monthStr) {
   if (!monthStr) return ''
   const [year, month] = monthStr.split('-')

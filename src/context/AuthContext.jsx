@@ -5,7 +5,7 @@ const AuthContext = createContext({});
 const STORAGE_KEY = "cashvell_user";
 
 const DEFAULT_CATEGORIES = [
-  { name: "Gaji",            icon: "",  color: "#22c55e", budget_limit: 0, is_mandatory: false },
+  { name: "Pemasukan Bulanan", icon: "", color: "#22c55e", budget_limit: 0, is_mandatory: false },
   { name: "Keluarga",        icon: "",  color: "#f59e0b", budget_limit: 0, is_mandatory: true  },
   { name: "Tabungan Bulanan", icon: "", color: "#6366f1", budget_limit: 0, is_mandatory: true  },
   { name: "Investasi",        icon: "", color: "#10b981", budget_limit: 0, is_mandatory: true  },

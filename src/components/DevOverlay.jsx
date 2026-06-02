@@ -19,38 +19,43 @@ function getElementInfo(el) {
   const tag = el.tagName.toLowerCase()
   const id = el.id ? `#${el.id}` : ''
   const classes = Array.from(el.classList).slice(0, 4).join('.')
-  const text = (el.innerText || el.value || '').slice(0, 60).replace(/\s+/g, ' ').trim()
+  const text = (el.innerText || el.value || '').slice(0, 80).replace(/\s+/g, ' ').trim()
   const component = getReactComponentName(el)
   const parent = el.parentElement
   const parentComponent = parent ? getReactComponentName(parent) : null
   const parentTag = parent?.tagName?.toLowerCase() || ''
-  const parentClasses = parent ? Array.from(parent.classList).slice(0, 2).join('.') : ''
+  const parentClasses = parent ? Array.from(parent.classList).slice(0, 3).join('.') : ''
   return { tag, id, classes, text, component, parentTag, parentClasses, parentComponent }
+}
+
+function formatElement(info) {
+  const lines = []
+  if (info.component) lines.push(`Komponen: ${info.component}`)
+  lines.push(`Element: <${info.tag}${info.id}${info.classes ? ' .' + info.classes : ''}>${info.text || ''}`)
+  if (info.parentTag) lines.push(`Parent: <${info.parentTag}${info.parentClasses ? ' .' + info.parentClasses : ''}>`)
+  return lines.join('\n')
 }
 
 function formatPrompt(selections, instruction) {
   const lines = []
   if (selections.length === 1) {
-    const { info } = selections[0]
-    if (info.component) lines.push(`Komponen: ${info.component}`)
-    if (info.parentComponent && info.parentComponent !== info.component) lines.push(`Di dalam: ${info.parentComponent}`)
-    lines.push(`Element: <${info.tag}${info.id}${info.classes ? ' .' + info.classes : ''}>${info.text || ''}`)
-    if (info.parentTag) lines.push(`Parent: <${info.parentTag}${info.parentClasses ? ' .' + info.parentClasses : ''}>`)
+    lines.push(formatElement(selections[0].info))
   } else {
     lines.push(`Elements (${selections.length} dipilih):`)
     selections.forEach((s, i) => {
-      const { info } = s
-      const comp = info.component ? ` [${info.component}]` : ''
-      lines.push(`  ${i + 1}.${comp} <${info.tag}${info.id}${info.classes ? ' .' + info.classes : ''}>${info.text ? ` "${info.text.slice(0, 40)}"` : ''}`)
+      const comp = s.info.component ? ` [${s.info.component}]` : ''
+      lines.push(`  ${i + 1}.${comp} <${s.info.tag}${s.info.id}${s.info.classes ? ' .' + s.info.classes : ''}>${s.info.text ? ` "${s.info.text.slice(0, 40)}"` : ''}`)
     })
   }
-  lines.push('')
-  lines.push(`Instruksi: ${instruction}`)
+  if (instruction.trim()) {
+    lines.push('')
+    lines.push(`Instruksi: ${instruction.trim()}`)
+  }
   return lines.join('\n')
 }
 
-function useDrag(initialPos) {
-  const [pos, setPos] = useState(initialPos)
+function useDrag(initial) {
+  const [pos, setPos] = useState(initial)
   const dragging = useRef(false)
   const startRef = useRef({ mx: 0, my: 0, px: 0, py: 0 })
 
@@ -62,59 +67,36 @@ function useDrag(initialPos) {
 
     const onMove = (e) => {
       if (!dragging.current) return
-      const dx = e.clientX - startRef.current.mx
-      const dy = e.clientY - startRef.current.my
       setPos({
-        x: Math.max(0, Math.min(window.innerWidth - 40, startRef.current.px + dx)),
-        y: Math.max(0, Math.min(window.innerHeight - 40, startRef.current.py + dy)),
+        x: Math.max(0, Math.min(window.innerWidth - 60, startRef.current.px + e.clientX - startRef.current.mx)),
+        y: Math.max(0, Math.min(window.innerHeight - 60, startRef.current.py + e.clientY - startRef.current.my)),
       })
     }
-    const onUp = () => { dragging.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    const onUp = () => {
+      dragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
   }, [pos])
 
-  return [pos, onMouseDown]
-}
-
-function useDragPanel(initialX) {
-  const [x, setX] = useState(initialX)
-  const dragging = useRef(false)
-  const startRef = useRef({ mx: 0, px: 0 })
-
-  const onMouseDown = useCallback((e) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    dragging.current = true
-    startRef.current = { mx: e.clientX, px: x }
-
-    const onMove = (e) => {
-      if (!dragging.current) return
-      const dx = e.clientX - startRef.current.mx
-      const newX = Math.max(0, Math.min(window.innerWidth - 300, startRef.current.px - dx))
-      setX(newX)
-    }
-    const onUp = () => { dragging.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [x])
-
-  return [x, onMouseDown]
+  return [pos, onMouseDown, setPos]
 }
 
 export default function DevOverlay() {
   const [enabled, setEnabled] = useState(false)
   const [selections, setSelections] = useState([])
   const [instruction, setInstruction] = useState('')
+  const [flash, setFlash] = useState(false) // auto-copy flash indicator
   const [copied, setCopied] = useState(false)
   const textareaRef = useRef(null)
 
-  // Draggable toggle button (bottom-right default)
   const [btnPos, onBtnDrag] = useDrag({ x: window.innerWidth - 90, y: window.innerHeight - 100 })
   const btnDragged = useRef(false)
 
-  // Draggable panel (right edge, offset from right)
-  const [panelRight, onPanelDrag] = useDragPanel(0)
+  const [panelPos, onPanelDrag, setPanelPos] = useDrag({ x: window.innerWidth - 320, y: 64 })
+  const panelDragged = useRef(false)
 
   useEffect(() => {
     if (!enabled) {
@@ -122,6 +104,16 @@ export default function DevOverlay() {
       setInstruction('')
     }
   }, [enabled])
+
+  // Auto-copy when a new element is added
+  useEffect(() => {
+    if (selections.length === 0) return
+    const last = selections[selections.length - 1]
+    const text = formatElement(last.info)
+    navigator.clipboard.writeText(text).catch(() => {})
+    setFlash(true)
+    setTimeout(() => setFlash(false), 1200)
+  }, [selections.length])
 
   useEffect(() => {
     if (!enabled) return
@@ -152,10 +144,6 @@ export default function DevOverlay() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  useEffect(() => {
-    if (selections.length > 0) setTimeout(() => textareaRef.current?.focus(), 80)
-  }, [selections.length === 1])
-
   const clearAll = () => {
     setSelections(prev => { prev.forEach(s => { if (s.el) delete s.el.dataset.devSelected }); return [] })
     setInstruction('')
@@ -178,7 +166,7 @@ export default function DevOverlay() {
 
   if (!import.meta.env.DEV) return null
 
-  const panelOpen = selections.length > 0
+  const panelOpen = enabled && selections.length > 0
 
   return (
     <div data-dev-overlay="true">
@@ -218,50 +206,63 @@ export default function DevOverlay() {
           zIndex: 99998,
           padding: '5px 11px', borderRadius: 7,
           border: enabled ? '1.5px solid #6366f1' : '1.5px solid #333',
-          background: enabled ? 'rgba(99,102,241,0.15)' : 'rgba(15,15,28,0.92)',
-          color: enabled ? '#a5b4fc' : '#555',
+          background: flash
+            ? 'rgba(52,211,153,0.25)'
+            : enabled ? 'rgba(99,102,241,0.15)' : 'rgba(15,15,28,0.92)',
+          color: flash ? '#34d399' : enabled ? '#a5b4fc' : '#555',
           fontSize: 11, fontFamily: 'monospace', cursor: 'grab', fontWeight: 700,
           backdropFilter: 'blur(8px)',
           boxShadow: enabled ? '0 0 16px rgba(99,102,241,0.3)' : '0 2px 8px #0004',
           letterSpacing: '0.05em', userSelect: 'none',
+          transition: 'background 0.2s, color 0.2s',
         }}
       >
-        {enabled ? (selections.length > 0 ? `◈ ${selections.length} dipilih` : '◈ DEV ON') : '◈ DEV'}
+        {flash ? '✓ Copied!' : enabled ? (selections.length > 0 ? `◈ ${selections.length} sel` : '◈ ON') : '◈ DEV'}
       </button>
 
-      {/* Side panel — draggable via header grip */}
-      {enabled && panelOpen && (
+      {/* Floating panel — freely draggable */}
+      {panelOpen && (
         <div
           data-dev-overlay="true"
           style={{
-            position: 'fixed', top: 0, bottom: 0,
-            right: panelRight, width: 300,
-            zIndex: 99997, background: '#0e0e1c',
-            borderLeft: '1.5px solid #6366f1',
-            borderRight: panelRight > 0 ? '1.5px solid #6366f1' : 'none',
+            position: 'fixed',
+            left: panelPos.x,
+            top: panelPos.y,
+            width: 290,
+            zIndex: 99997,
+            background: '#0e0e1c',
+            border: '1.5px solid #6366f1',
+            borderRadius: 10,
             display: 'flex', flexDirection: 'column',
             fontFamily: 'monospace',
-            boxShadow: '-8px 0 32px rgba(0,0,0,0.6)',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
+            maxHeight: 'calc(100vh - 80px)',
+            overflow: 'hidden',
           }}
         >
-          {/* Drag grip */}
+          {/* Drag handle / header */}
           <div
-            onMouseDown={onPanelDrag}
+            onMouseDown={(e) => {
+              panelDragged.current = true
+              onPanelDrag(e)
+            }}
             style={{
-              padding: '10px 14px 8px',
+              padding: '9px 12px 8px',
               borderBottom: '1px solid #1e1e35',
-              cursor: 'ew-resize',
+              cursor: 'grab',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               userSelect: 'none',
+              background: '#0a0a18',
+              borderRadius: '8px 8px 0 0',
             }}
           >
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#a5b4fc', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ color: '#333', letterSpacing: 1 }}>⠿</span>
-                ◈ DEV MODE
-              </div>
-              <div style={{ fontSize: 10, color: '#444', marginTop: 2 }}>
-                {selections.length} dipilih · drag header untuk geser
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 13, color: '#2a2a45', letterSpacing: 1, lineHeight: 1 }}>⠿</span>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#a5b4fc', letterSpacing: '0.05em' }}>◈ DEV MODE</div>
+                <div style={{ fontSize: 9, color: '#2a2a45', marginTop: 1 }}>
+                  {flash ? '✓ auto-copied ke clipboard' : `${selections.length} dipilih · pilih = auto-copy`}
+                </div>
               </div>
             </div>
             <button
@@ -269,35 +270,45 @@ export default function DevOverlay() {
               onClick={clearAll}
               style={{
                 background: 'transparent', border: '1px solid #2a2a45',
-                borderRadius: 5, color: '#555', fontSize: 10,
-                padding: '3px 8px', cursor: 'pointer', fontFamily: 'monospace',
+                borderRadius: 5, color: '#444', fontSize: 9,
+                padding: '3px 7px', cursor: 'pointer', fontFamily: 'monospace',
               }}
             >
-              Clear ESC
+              ESC
             </button>
           </div>
 
           {/* Selections list */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ overflowY: 'auto', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 260 }}>
             {selections.map((s, i) => (
-              <div key={s.uid} style={{ background: '#12121f', border: '1px solid #1e1e35', borderRadius: 7, padding: '8px 10px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <span style={{ width: 18, height: 18, borderRadius: 4, background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+              <div
+                key={s.uid}
+                style={{ background: '#12121f', border: '1px solid #1e1e35', borderRadius: 6, padding: '7px 9px', display: 'flex', gap: 7, alignItems: 'flex-start', cursor: 'pointer' }}
+                onClick={(e) => { e.stopPropagation(); const text = formatElement(s.info); navigator.clipboard.writeText(text).catch(() => {}); setFlash(true); setTimeout(() => setFlash(false), 1200) }}
+                title="Klik untuk copy element ini"
+              >
+                <span style={{ width: 16, height: 16, borderRadius: 3, background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {s.info.component && <div style={{ fontSize: 10, color: '#a5b4fc', marginBottom: 2, fontWeight: 700 }}>&lt;{s.info.component} /&gt;</div>}
-                  <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.5 }}>
+                  {s.info.component && <div style={{ fontSize: 9, color: '#a5b4fc', marginBottom: 2, fontWeight: 700 }}>{s.info.component}</div>}
+                  <div style={{ fontSize: 9, color: '#475569', lineHeight: 1.5 }}>
                     <span style={{ color: '#6366f1' }}>{s.info.tag}</span>
                     {s.info.id && <span style={{ color: '#f472b6' }}>{s.info.id}</span>}
                     {s.info.classes && <span style={{ color: '#34d399' }}>.{s.info.classes}</span>}
                   </div>
-                  {s.info.text && <div style={{ fontSize: 9, color: '#333', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>"{s.info.text}"</div>}
+                  {s.info.text && <div style={{ fontSize: 8, color: '#333', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>"{s.info.text.slice(0, 50)}"</div>}
+                  {s.info.parentTag && <div style={{ fontSize: 8, color: '#2a2a45', marginTop: 1 }}>↑ {s.info.parentTag}{s.info.parentClasses ? '.' + s.info.parentClasses : ''}</div>}
                 </div>
-                <button onMouseDown={e => e.stopPropagation()} onClick={() => removeOne(s.uid)} style={{ background: 'transparent', border: 'none', color: '#333', fontSize: 12, cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0 }}>×</button>
+                <button
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); removeOne(s.uid) }}
+                  style={{ background: 'transparent', border: 'none', color: '#333', fontSize: 12, cursor: 'pointer', padding: '0 2px', lineHeight: 1, flexShrink: 0 }}
+                >×</button>
               </div>
             ))}
           </div>
 
-          {/* Instruction + copy */}
-          <div style={{ padding: '10px 14px 14px', borderTop: '1px solid #1e1e35' }}>
+          {/* Instruction + copy with instruction */}
+          <div style={{ padding: '8px 10px 10px', borderTop: '1px solid #1e1e35' }}>
             <textarea
               ref={textareaRef}
               value={instruction}
@@ -306,16 +317,21 @@ export default function DevOverlay() {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleCopy()
                 if (e.key === 'Escape') { e.stopPropagation(); clearAll() }
               }}
-              placeholder="Instruksi ke Claude... (Ctrl+Enter = copy)"
-              rows={4}
-              style={{ width: '100%', background: '#0a0a18', border: '1px solid #1e1e35', borderRadius: 6, color: '#e2e8f0', fontSize: 11, padding: '8px 10px', resize: 'none', fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box', lineHeight: 1.5 }}
+              placeholder="Tambah instruksi... (Ctrl+Enter = copy all)"
+              rows={3}
+              style={{ width: '100%', background: '#0a0a18', border: '1px solid #1e1e35', borderRadius: 5, color: '#e2e8f0', fontSize: 10, padding: '7px 9px', resize: 'none', fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box', lineHeight: 1.5 }}
             />
             <button
               onClick={handleCopy}
-              disabled={!instruction.trim()}
-              style={{ width: '100%', marginTop: 8, padding: '9px 0', background: copied ? '#22c55e' : instruction.trim() ? '#6366f1' : '#1e1e35', color: instruction.trim() ? '#fff' : '#333', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: instruction.trim() ? 'pointer' : 'default', fontFamily: 'monospace', transition: 'background 0.2s', letterSpacing: '0.03em' }}
+              style={{
+                width: '100%', marginTop: 6, padding: '7px 0',
+                background: copied ? '#22c55e' : '#6366f1',
+                color: '#fff', border: 'none', borderRadius: 5,
+                fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                fontFamily: 'monospace', transition: 'background 0.2s', letterSpacing: '0.03em',
+              }}
             >
-              {copied ? '✓ Copied ke clipboard!' : `⎘ Copy Prompt (${selections.length} element)`}
+              {copied ? '✓ Copied!' : `⎘ Copy semua + instruksi`}
             </button>
           </div>
         </div>

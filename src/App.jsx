@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './components/Toast'
+import { PageHeaderProvider, usePageHeader } from './context/PageHeaderContext'
 import Navbar from './components/Navbar'
 import OnboardingModal from './components/OnboardingModal'
 import ProfileModal from './components/ProfileModal'
@@ -33,6 +34,7 @@ function PageLoader() {
 
 function AppRoutes() {
   const { user } = useAuth()
+  const { header } = usePageHeader()
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') !== 'light'
   })
@@ -64,17 +66,20 @@ function AppRoutes() {
                   setDarkMode={setDarkMode}
                   onProfileClick={() => setShowProfile(true)}
                 />
-                <main className="main-content">
-                  <Routes>
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/transactions" element={<Transactions />} />
-                    <Route path="/categories" element={<Categories />} />
-                    <Route path="/savings" element={<Savings />} />
-                    <Route path="/report" element={<Report />} />
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                  </Routes>
-                </main>
+                <div className={`main-wrapper${header ? ' has-page-topbar' : ''}`}>
+                  {header && <div className="page-topbar-slot">{header}</div>}
+                  <main className="main-content">
+                    <Routes>
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/transactions" element={<Transactions />} />
+                      <Route path="/categories" element={<Categories />} />
+                      <Route path="/savings" element={<Savings />} />
+                      <Route path="/report" element={<Report />} />
+                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    </Routes>
+                  </main>
+                </div>
               </div>
               {showOnboarding && (
                 <OnboardingModal onClose={() => setShowOnboarding(false)} />
@@ -94,8 +99,10 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <AppRoutes />
-        <DevOverlay />
+        <PageHeaderProvider>
+          <AppRoutes />
+          <DevOverlay />
+        </PageHeaderProvider>
       </ToastProvider>
     </AuthProvider>
   )

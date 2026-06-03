@@ -375,38 +375,33 @@ export default function Report() {
         }
         .rpt-sum-card {
           background: var(--bg-card);
-          border: 1px solid var(--border);
+          backdrop-filter: var(--glass-blur);
+          -webkit-backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--border-glass);
           border-radius: var(--radius-lg);
-          padding: 16px 18px;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          position: relative;
-          overflow: hidden;
+          padding: 18px 20px;
+          display: flex; flex-direction: column; gap: 4px;
+          position: relative; overflow: hidden;
+          box-shadow: var(--shadow);
+          transition: all 0.2s;
         }
+        .rpt-sum-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
         .rpt-sum-card::before {
           content: '';
-          position: absolute;
-          left: 0; top: 0; bottom: 0;
-          width: 3px;
-          border-radius: 0 2px 2px 0;
+          position: absolute; left: 0; top: 0; bottom: 0;
+          width: 3px; border-radius: 0 2px 2px 0;
         }
-        .rpt-sum-income::before { background: var(--success); }
-        .rpt-sum-expense::before { background: var(--danger); }
-        .rpt-sum-net::before { background: var(--accent); }
+        .rpt-sum-income::before { background: linear-gradient(180deg, #34d399, #10b981); box-shadow: 0 0 8px rgba(52,211,153,0.6); }
+        .rpt-sum-expense::before { background: linear-gradient(180deg, #f87171, #ef4444); box-shadow: 0 0 8px rgba(248,113,113,0.6); }
+        .rpt-sum-net::before { background: var(--gradient-accent); box-shadow: 0 0 8px rgba(99,102,241,0.6); }
         .rpt-sum-icon {
-          width: 28px;
-          height: 28px;
-          border-radius: 7px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 4px;
-          flex-shrink: 0;
+          width: 30px; height: 30px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          margin-bottom: 6px; flex-shrink: 0;
         }
-        .rpt-sum-income .rpt-sum-icon { background: var(--success-dim); color: var(--success); }
-        .rpt-sum-expense .rpt-sum-icon { background: var(--danger-dim); color: var(--danger); }
-        .rpt-sum-net .rpt-sum-icon { background: var(--accent-dim); color: var(--accent); }
+        .rpt-sum-income .rpt-sum-icon { background: var(--success-dim); color: var(--success); box-shadow: var(--glow-success); }
+        .rpt-sum-expense .rpt-sum-icon { background: var(--danger-dim); color: var(--danger); box-shadow: var(--glow-danger); }
+        .rpt-sum-net .rpt-sum-icon { background: var(--accent-dim); color: var(--accent); box-shadow: var(--glow-sm); }
         .rpt-sum-label {
           font-size: 0.65rem;
           text-transform: uppercase;
@@ -594,23 +589,23 @@ export default function Report() {
         }
 
         /* Monthly list */
-        .rpt-month-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
+        .rpt-month-list { display: flex; flex-direction: column; gap: 8px; }
         .rpt-month-row {
           background: var(--bg-card);
-          border: 1px solid var(--border);
+          backdrop-filter: var(--glass-blur);
+          -webkit-backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--border-glass);
           border-radius: var(--radius-lg);
           padding: 14px 18px;
-          display: flex;
-          align-items: flex-start;
-          gap: 16px;
-          cursor: pointer;
-          transition: border-color 0.15s, background 0.15s;
+          display: flex; align-items: flex-start; gap: 16px;
+          cursor: pointer; transition: all 0.18s;
+          box-shadow: var(--shadow);
         }
-        .rpt-month-row:hover { border-color: var(--border-light); background: var(--bg-card-hover); }
+        .rpt-month-row:hover {
+          border-color: rgba(99,102,241,0.25);
+          transform: translateY(-1px);
+          box-shadow: var(--shadow-lg);
+        }
         .rpt-month-left {
           display: flex;
           flex-direction: column;

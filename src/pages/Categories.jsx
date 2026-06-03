@@ -841,15 +841,23 @@ export default function Categories() {
 
         .cat-card {
           background: var(--bg-card);
-          border: 1px solid var(--border);
+          backdrop-filter: var(--glass-blur);
+          -webkit-backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--border-glass);
           border-radius: var(--radius-lg);
           padding: 16px 18px;
           display: flex; flex-direction: column; gap: 10px;
-          border-top: 3px solid var(--cat-color);
-          transition: opacity 0.2s, filter 0.2s;
+          border-top: 2px solid var(--cat-color);
+          transition: all 0.2s;
+          box-shadow: var(--shadow);
         }
-        .cat-mandatory { background: color-mix(in srgb, var(--cat-color) 5%, var(--bg-card)); }
-        .cat-planned { opacity: 0.5; filter: grayscale(0.55); }
+        .cat-card:hover { border-color: var(--cat-color); box-shadow: 0 4px 20px rgba(0,0,0,0.3), 0 0 0 1px var(--cat-color); transform: translateY(-1px); }
+        .cat-mandatory {
+          background: linear-gradient(135deg, rgba(8,8,22,0.8) 0%, rgba(12,12,32,0.75) 100%);
+          border-top-width: 2px;
+        }
+        [data-theme="light"] .cat-mandatory { background: rgba(255,255,255,0.75); }
+        .cat-planned { opacity: 0.45; filter: grayscale(0.6); transform: none !important; }
 
         .cat-card-top { display: flex; justify-content: space-between; align-items: flex-start; }
         .cat-card-left { display: flex; align-items: center; gap: 10px; }

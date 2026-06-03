@@ -306,41 +306,32 @@ export default function Transactions() {
           flex-wrap: wrap;
         }
         .type-filter-btns {
-          display: flex;
-          gap: 3px;
-          background: var(--bg-input);
+          display: flex; gap: 3px;
+          background: var(--bg-glass);
+          backdrop-filter: var(--glass-blur);
           border: 1px solid var(--border);
           border-radius: var(--radius-sm);
-          padding: 3px;
-          flex-shrink: 0;
+          padding: 3px; flex-shrink: 0;
         }
         .type-filter-btn {
-          padding: 5px 11px;
-          border: none;
-          border-radius: 4px;
-          background: transparent;
-          color: var(--text-muted);
-          font-family: var(--font-sans);
-          font-size: 0.76rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.15s;
-          white-space: nowrap;
+          padding: 5px 12px; border: none; border-radius: 5px;
+          background: transparent; color: var(--text-muted);
+          font-family: var(--font-sans); font-size: 0.76rem; font-weight: 600;
+          cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
         .type-filter-btn.active {
-          background: var(--bg-card);
-          color: var(--text-primary);
-          box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+          background: var(--gradient-accent); color: #fff;
+          box-shadow: var(--glow-sm);
         }
 
         .tx-summary-strip {
-          display: flex;
-          align-items: center;
+          display: flex; align-items: center;
           background: var(--bg-card);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 12px 20px;
-          gap: 0;
+          backdrop-filter: var(--glass-blur);
+          border: 1px solid var(--border-glass);
+          border-radius: var(--radius-lg);
+          padding: 14px 22px; gap: 0;
+          box-shadow: var(--shadow);
         }
         .tss-item {
           flex: 1;
@@ -389,20 +380,18 @@ export default function Transactions() {
         }
 
         .tx-row-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 13px 18px;
-          transition: background 0.1s;
+          display: flex; align-items: center; gap: 12px;
+          padding: 12px 16px; transition: background 0.15s;
+          border-radius: 10px; margin: 1px 2px;
         }
-        .tx-row-item:hover { background: var(--bg-input); }
-        .tx-row-item.bordered { border-bottom: 1px solid var(--border); }
+        .tx-row-item:hover { background: rgba(99,102,241,0.05); }
+        .tx-row-item.bordered { border-bottom: 1px solid rgba(99,102,241,0.06); border-radius: 0; margin: 0; }
+        .tx-row-item.bordered:last-child { border-bottom: none; }
 
         .tri-icon {
-          width: 36px; height: 36px;
-          border-radius: var(--radius-sm);
+          width: 38px; height: 38px;
+          border-radius: 10px;
           display: flex; align-items: center; justify-content: center;
-          font-size: 0.95rem;
           flex-shrink: 0;
         }
         .tri-info { flex: 1; min-width: 0; }

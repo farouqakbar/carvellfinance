@@ -7,6 +7,7 @@ import Navbar from './components/Navbar'
 import OnboardingModal from './components/OnboardingModal'
 import ProfileModal from './components/ProfileModal'
 import DevOverlay from './components/DevOverlay'
+import Aurora from './components/ui/Aurora'
 import './index.css'
 
 const Login = lazy(() => import('./pages/Login'))
@@ -100,6 +101,7 @@ export default function App() {
     <AuthProvider>
       <ToastProvider>
         <PageHeaderProvider>
+          <Aurora />
           <AppRoutes />
           <DevOverlay />
         </PageHeaderProvider>

@@ -53,19 +53,21 @@ export default function CategoryForm({ onSuccess, onClose, editData, salary = 0,
       }
       let catId = editData?.id
       if (catId) {
-        // Edit: jangan ubah month
-        await supabase.from('categories').update(payload).eq('id', catId)
+        const { error } = await supabase.from('categories').update(payload).eq('id', catId)
+        if (error) throw error
         toast('Kategori diperbarui', 'success')
       } else {
-        const { data: newCat } = await supabase.from('categories').insert({ ...payload, month: month || null }).select('id').single()
+        const { data: newCat, error } = await supabase.from('categories').insert({ ...payload, month: month || null }).select('id').single()
+        if (error) throw error
         catId = newCat?.id
         toast('Kategori ditambahkan', 'success')
       }
       if (catId && month && budget > 0) {
-        await supabase.from('category_budgets').upsert(
+        const { error } = await supabase.from('category_budgets').upsert(
           { user_id: user.id, category_id: catId, month, budget_limit: budget },
           { onConflict: 'category_id,month' }
         )
+        if (error) throw error
       }
       onSuccess?.()
       onClose?.()

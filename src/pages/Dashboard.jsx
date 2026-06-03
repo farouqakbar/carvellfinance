@@ -256,17 +256,19 @@ export default function Dashboard() {
 
   const saveBudget = async () => {
     const amount = parseFloat(budgetEdit.nominal) || 0
-    await supabase.from('category_budgets').upsert(
+    const { error } = await supabase.from('category_budgets').upsert(
       { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
       { onConflict: 'category_id,month' }
     )
+    if (error) { toast(error.message, 'error'); return }
     toast('Budget disimpan', 'success')
     setBudgetEdit(null)
     fetchDashboard()
   }
 
   const doDeleteCat = async () => {
-    await supabase.from('categories').delete().eq('id', confirmDel.id)
+    const { error } = await supabase.from('categories').delete().eq('id', confirmDel.id)
+    if (error) { toast(error.message, 'error'); return }
     toast('Kategori dihapus', 'success')
     setConfirmDel(null)
     fetchDashboard()
@@ -630,16 +632,23 @@ export default function Dashboard() {
           const amount = parseFloat(gajiForm.amount.replace(/\D/g, '')) || 0
           if (!amount) return
           setGajiSaving(true)
-          const txDate = `${month}-01`
-          if (data.gajiTx) {
-            await supabase.from('transactions').update({ amount, description: gajiForm.note, date: txDate }).eq('id', data.gajiTx.id)
-          } else {
-            await supabase.from('transactions').insert({ user_id: user.id, category_id: data.gajiCatId, type: 'income', amount, description: gajiForm.note, date: txDate })
+          try {
+            const txDate = `${month}-01`
+            if (data.gajiTx) {
+              const { error } = await supabase.from('transactions').update({ amount, description: gajiForm.note, date: txDate }).eq('id', data.gajiTx.id)
+              if (error) throw error
+            } else {
+              const { error } = await supabase.from('transactions').insert({ user_id: user.id, category_id: data.gajiCatId, type: 'income', amount, description: gajiForm.note, date: txDate })
+              if (error) throw error
+            }
+            toast('Pemasukan disimpan', 'success')
+            setShowGajiModal(false)
+            fetchDashboard()
+          } catch (err) {
+            toast(err.message, 'error')
+          } finally {
+            setGajiSaving(false)
           }
-          toast('Pemasukan disimpan', 'success')
-          setGajiSaving(false)
-          setShowGajiModal(false)
-          fetchDashboard()
         }
 
         return (

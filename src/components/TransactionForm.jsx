@@ -54,10 +54,12 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
         type: form.type,
       }
       if (editData?.id) {
-        await supabase.from('transactions').update(payload).eq('id', editData.id)
+        const { error } = await supabase.from('transactions').update(payload).eq('id', editData.id)
+        if (error) throw error
         toast('Transaksi diperbarui', 'success')
       } else {
-        await supabase.from('transactions').insert(payload)
+        const { error } = await supabase.from('transactions').insert(payload)
+        if (error) throw error
         toast('Transaksi ditambahkan', 'success')
       }
       onSuccess?.()

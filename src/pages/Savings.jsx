@@ -158,12 +158,10 @@ export default function Plans() {
 
   const toggleDone = (plan) => {
     if (plan.done) {
-      // Undo langsung tanpa modal
       supabase.from('plans').update({ done: false }).eq('id', plan.id).then(({ error }) => {
-        if (!error) {
-          setPlans(ps => ps.map(p => p.id === plan.id ? { ...p, done: false } : p))
-          toast('Ditandai aktif kembali', 'success')
-        }
+        if (error) { toast(error.message, 'error'); return }
+        setPlans(ps => ps.map(p => p.id === plan.id ? { ...p, done: false } : p))
+        toast('Ditandai aktif kembali', 'success')
       })
       return
     }
@@ -199,8 +197,8 @@ export default function Plans() {
       if (error) { toast('Gagal catat transaksi', 'error'); setConfirming(false); return }
     }
 
-    // Tandai plan selesai
-    await supabase.from('plans').update({ done: true }).eq('id', plan.id)
+    const { error: doneErr } = await supabase.from('plans').update({ done: true }).eq('id', plan.id)
+    if (doneErr) { toast(doneErr.message, 'error'); setConfirming(false); return }
     setPlans(ps => ps.map(p => p.id === plan.id ? { ...p, done: true } : p))
     toast('Rencana selesai dicatat ✓', 'success')
     setDoneModal(null)

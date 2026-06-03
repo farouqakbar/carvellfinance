@@ -148,20 +148,24 @@ export default function Categories() {
     try {
       let catId = gajiCatId
       if (!catId) {
-        const { data: newCat } = await supabase.from('categories')
-          .insert({ user_id: user.id, name: 'Pemasukan Bulanan', color: '#10b981', icon: '', is_mandatory: false, budget_limit: 0 })
+        const { data: newCat, error: catErr } = await supabase.from('categories')
+          .insert({ user_id: user.id, name: 'Pemasukan Bulanan', color: '#10b981', icon: '', is_mandatory: false, budget_limit: 0, month })
           .select().single()
+        if (catErr) throw catErr
         catId = newCat.id
       }
-      await supabase.from('transactions').insert({
+      const { error } = await supabase.from('transactions').insert({
         user_id: user.id, category_id: catId, type: 'income',
         amount, description: incomeForm.description.trim(),
         date: `${month}-01`,
       })
+      if (error) throw error
       toast('Pemasukan dicatat', 'success')
       setShowIncomeModal(false)
       setIncomeForm({ description: '', amount: '' })
       fetchAll()
+    } catch (err) {
+      toast(err.message, 'error')
     } finally {
       setIncomeSaving(false)
     }
@@ -170,7 +174,8 @@ export default function Categories() {
   const doDelete = async () => {
     const cat = categories.find(c => c.id === confirmDel.id)
     if (cat && isProtected(cat)) { toast('Kategori ini tidak bisa dihapus', 'error'); setConfirmDel(null); return }
-    await supabase.from('categories').delete().eq('id', confirmDel.id)
+    const { error } = await supabase.from('categories').delete().eq('id', confirmDel.id)
+    if (error) { toast(error.message, 'error'); return }
     toast('Kategori dihapus', 'success')
     setConfirmDel(null)
     fetchAll()
@@ -198,13 +203,15 @@ export default function Categories() {
 
   const saveBudget = async () => {
     const amount = parseFloat(budgetEdit.nominal) || 0
-    await Promise.all([
+    const [r1, r2] = await Promise.all([
       supabase.from('category_budgets').upsert(
         { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
         { onConflict: 'category_id,month' }
       ),
       supabase.from('categories').update({ budget_limit: amount }).eq('id', budgetEdit.id),
     ])
+    const err = r1.error || r2.error
+    if (err) { toast(err.message, 'error'); return }
     toast('Budget disimpan', 'success')
     setBudgetEdit(null)
     fetchAll()
@@ -290,23 +297,26 @@ export default function Categories() {
 
     if (sumber === 'saldo') {
       if (linked_tx_id) {
-        await supabase.from('transactions').delete().eq('id', linked_tx_id)
+        const { error } = await supabase.from('transactions').delete().eq('id', linked_tx_id)
+        if (error) throw error
       } else {
-        // Fallback: buat tx balik
-        await supabase.from('transactions').insert({
+        const { error } = await supabase.from('transactions').insert({
           user_id: user.id, amount, category_id: null,
           type: wasIncoming ? 'expense' : 'income',
           description: wasIncoming ? `Bayar hutang ke ${nama}` : `Terima piutang dari ${nama}`,
           date: today,
         })
+        if (error) throw error
       }
     } else if (sumber === 'tabungan' && savings_id) {
-      const { data: sav } = await supabase.from('savings').select('current_amount').eq('id', savings_id).single()
+      const { data: sav, error: savErr } = await supabase.from('savings').select('current_amount').eq('id', savings_id).single()
+      if (savErr) throw savErr
       if (sav) {
         const next = wasIncoming
           ? Math.max(0, Number(sav.current_amount) - amount)
           : Number(sav.current_amount) + amount
-        await supabase.from('savings').update({ current_amount: next }).eq('id', savings_id)
+        const { error } = await supabase.from('savings').update({ current_amount: next }).eq('id', savings_id)
+        if (error) throw error
       }
     }
   }
@@ -348,9 +358,9 @@ export default function Categories() {
     const h = hutangList.find(x => x.id === id)
     if (!h) return
     try {
-      // Lunas = balikkan finansial (bayar hutang / terima piutang)
       await reverseFinancial(h.jenis, h.sumber, h.savings_id, Number(h.amount), h.nama, null)
-      await supabase.from('hutang').update({ lunas: true }).eq('id', id)
+      const { error } = await supabase.from('hutang').update({ lunas: true }).eq('id', id)
+      if (error) throw error
       toast(h.jenis === 'hutang' ? 'Hutang ditandai lunas' : 'Piutang diterima', 'success')
       fetchHutang()
       fetchAll()
@@ -366,7 +376,8 @@ export default function Categories() {
       if (!h.lunas) {
         await reverseFinancial(h.jenis, h.sumber, h.savings_id, Number(h.amount), h.nama, h.linked_tx_id)
       }
-      await supabase.from('hutang').delete().eq('id', confirmDelHutang.id)
+      const { error } = await supabase.from('hutang').delete().eq('id', confirmDelHutang.id)
+      if (error) throw error
       toast('Dihapus', 'success')
       setConfirmDelHutang(null)
       fetchHutang()
@@ -392,20 +403,28 @@ export default function Categories() {
     const amount = parseFloat(pemasukanForm.amount.replace(/\D/g, '')) || 0
     if (!gajiCatId) return
     setPemasukanSaving(true)
-    const txDate = `${month}-01`
-    if (gajiTx) {
-      await supabase.from('transactions').update({ amount, description: pemasukanForm.note, date: txDate }).eq('id', gajiTx.id)
-    } else {
-      await supabase.from('transactions').insert({ user_id: user.id, category_id: gajiCatId, type: 'income', amount, description: pemasukanForm.note, date: txDate })
+    try {
+      const txDate = `${month}-01`
+      if (gajiTx) {
+        const { error } = await supabase.from('transactions').update({ amount, description: pemasukanForm.note, date: txDate }).eq('id', gajiTx.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('transactions').insert({ user_id: user.id, category_id: gajiCatId, type: 'income', amount, description: pemasukanForm.note, date: txDate })
+        if (error) throw error
+      }
+      toast('Pemasukan disimpan', 'success')
+      setShowPemasukanModal(false)
+      fetchAll()
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setPemasukanSaving(false)
     }
-    toast('Pemasukan disimpan', 'success')
-    setPemasukanSaving(false)
-    setShowPemasukanModal(false)
-    fetchAll()
   }
 
   const togglePlanned = async (cat) => {
-    await supabase.from('categories').update({ is_planned: !cat.is_planned }).eq('id', cat.id)
+    const { error } = await supabase.from('categories').update({ is_planned: !cat.is_planned }).eq('id', cat.id)
+    if (error) { toast(error.message, 'error'); return }
     toast(cat.is_planned ? 'Kategori diaktifkan' : 'Dipindah ke perencanaan', 'success')
     fetchAll()
   }

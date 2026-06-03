@@ -93,7 +93,8 @@ export default function Transactions() {
   }
 
   const doDelete = async () => {
-    await supabase.from('transactions').delete().eq('id', confirmDel)
+    const { error } = await supabase.from('transactions').delete().eq('id', confirmDel)
+    if (error) { toast(error.message, 'error'); return }
     toast('Transaksi dihapus', 'success')
     setConfirmDel(null)
     fetchAll()

@@ -3,13 +3,13 @@ import { useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { usePageHeader } from '../context/PageHeaderContext'
-import { formatCurrency, getCurrentMonth, getMonthLabel, getMonthEndDate } from '../utils/formatCurrency'
+import { formatCurrency, getCurrentMonth, getMonthLabel, getMonthEndDate, getToday } from '../utils/formatCurrency'
 import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import CurrencyInput from '../components/CurrencyInput'
 import { useToast } from '../components/Toast'
 import { isMandatory, isMandatoryIncome, isProtected } from '../constants/mandatoryCategories'
-import { IconSettings, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconEdit, IconTrash, IconPlus, IconCheck } from '../components/Icons'
+import { IconSettings, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconEdit, IconTrash, IconPlus, IconCheck, IconX } from '../components/Icons'
 
 const DEFAULT_PCT = 15
 const PALETTE = ['#6366f1','#3b82f6','#06b6d4','#10b981','#f59e0b','#f97316','#ef4444','#ec4899','#a855f7']
@@ -39,14 +39,13 @@ export default function Categories() {
   const [confirmDel, setConfirmDel] = useState(null)
   const [searchParams] = useSearchParams()
   const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
-  const [copying, setCopying] = useState(false)
   const [gajiCatId, setGajiCatId] = useState(null)
   const [gajiTx, setGajiTx] = useState(null)
   const [showPemasukanModal, setShowPemasukanModal] = useState(false)
-  const [pemasukanForm, setPemasukanForm] = useState({ amount: '', note: '' })
+  const [pemasukanForm, setPemasukanForm] = useState({ amount: '', note: '', date: '' })
   const [pemasukanSaving, setPemasukanSaving] = useState(false)
   const [showIncomeModal, setShowIncomeModal] = useState(false)
-  const [incomeForm, setIncomeForm] = useState({ description: '', amount: '' })
+  const [incomeForm, setIncomeForm] = useState({ description: '', amount: '', date: '' })
   const [incomeSaving, setIncomeSaving] = useState(false)
   const isCurrentMonth = month === getCurrentMonth()
   const isAtStart = !!user.recording_start_month && month <= user.recording_start_month
@@ -57,6 +56,9 @@ export default function Categories() {
   const [hutangForm, setHutangForm] = useState({ jenis: 'hutang', nama: '', amount: '', due_date: '', sumber: 'saldo' })
   const [hutangSaving, setHutangSaving] = useState(false)
   const [confirmDelHutang, setConfirmDelHutang] = useState(null)
+  const [quickAddCatId, setQuickAddCatId] = useState(null)
+  const [quickAddForm, setQuickAddForm] = useState({ date: '', amount: '' })
+  const [showPct, setShowPct] = useState(false)
 
   useEffect(() => { fetchAll() }, [month])
   useEffect(() => { fetchHutang() }, [month])
@@ -83,39 +85,26 @@ export default function Categories() {
     const startDate = `${month}-01`
     const endDate = getMonthEndDate(month)
 
-    // Fetch categories untuk bulan ini
-    let { data: rawCats } = await supabase.from('categories')
-      .select('*').eq('user_id', user.id).eq('month', month).order('name')
-
-    // Auto-copy dari bulan sebelumnya (atau null-month default) jika bulan ini kosong
-    if (!rawCats || rawCats.length === 0) {
-      const { data: allPrevCats } = await supabase.from('categories')
-        .select('*').eq('user_id', user.id)
-        .or(`month.is.null,month.neq.${month}`)
-        .order('month', { ascending: false, nullsFirst: false })
-      if (allPrevCats && allPrevCats.length > 0) {
-        // Dedupe by nama, ambil yang paling recent
-        const byName = {}
-        allPrevCats.forEach(c => {
-          if (!byName[c.name] || (c.month || '0000') > (byName[c.name].month || '0000')) {
-            byName[c.name] = c
-          }
-        })
-        const toCopy = Object.values(byName)
-        const { data: inserted } = await supabase.from('categories').insert(
-          toCopy.map(({ id: _id, created_at: _ca, ...rest }) => ({
-            ...rest,
-            month,
-            budget_limit: 0, // budget tidak di-copy, harus di-set manual per bulan
-          }))
-        ).select()
-        rawCats = inserted || []
-      }
-    }
+    const [globalRes, monthRes] = await Promise.all([
+      supabase.from('categories').select('*').eq('user_id', user.id).is('month', null),
+      supabase.from('categories').select('*').eq('user_id', user.id).eq('month', month),
+    ])
+    // Global: hanya yang protected (Pemasukan Bulanan + Tabungan Bulanan)
+    // Month-specific: semua kategori bulan ini
+    const merged = [
+      ...(globalRes.data || []).filter(c => isProtected(c)),
+      ...(monthRes.data || []),
+    ].sort((a, b) => a.name.localeCompare(b.name))
+    const seen = new Set()
+    const rawCats = merged.filter(c => {
+      if (seen.has(c.name)) return false
+      seen.add(c.name)
+      return true
+    })
 
     const [txRes, incomeTxRes, catBudgetsRes, savingsRes] = await Promise.all([
       supabase.from('transactions').select('category_id, amount').eq('user_id', user.id).eq('type', 'expense').gte('date', startDate).lte('date', endDate),
-      supabase.from('transactions').select('id, category_id, amount, description').eq('user_id', user.id).eq('type', 'income').gte('date', startDate).lte('date', endDate),
+      supabase.from('transactions').select('id, category_id, amount, description, date').eq('user_id', user.id).eq('type', 'income').gte('date', startDate).lte('date', endDate),
       supabase.from('category_budgets').select('category_id, budget_limit').eq('user_id', user.id).eq('month', month),
       supabase.from('savings').select('id, name, current_amount').eq('user_id', user.id).order('name'),
     ])
@@ -127,11 +116,12 @@ export default function Categories() {
     })
     const cats = (rawCats || []).map(cat => ({
       ...cat,
-      budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : (cat.budget_limit || 0),
+      budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : 0,
     }))
-    const gajiCat = (rawCats || []).find(c => c.name === 'Pemasukan Bulanan')
+    const gajiCat = (rawCats || []).find(c => isMandatoryIncome(c))
     const gajiTxList = gajiCat ? (incomeTxRes.data || []).filter(t => t.category_id === gajiCat.id) : []
     const derivedSalary = gajiTxList.reduce((s, t) => s + Number(t.amount), 0)
+
     setCategories(cats)
     setSpendMap(spend)
     setSalary(derivedSalary)
@@ -149,7 +139,7 @@ export default function Categories() {
       let catId = gajiCatId
       if (!catId) {
         const { data: newCat, error: catErr } = await supabase.from('categories')
-          .insert({ user_id: user.id, name: 'Pemasukan Bulanan', color: '#10b981', icon: '', is_mandatory: false, budget_limit: 0, month })
+          .insert({ user_id: user.id, name: 'Pemasukan Bulanan', color: '#22c55e', icon: '', is_mandatory: false, budget_limit: 0 })
           .select().single()
         if (catErr) throw catErr
         catId = newCat.id
@@ -157,12 +147,12 @@ export default function Categories() {
       const { error } = await supabase.from('transactions').insert({
         user_id: user.id, category_id: catId, type: 'income',
         amount, description: incomeForm.description.trim(),
-        date: `${month}-01`,
+        date: incomeForm.date || `${month}-01`,
       })
       if (error) throw error
       toast('Pemasukan dicatat', 'success')
       setShowIncomeModal(false)
-      setIncomeForm({ description: '', amount: '' })
+      setIncomeForm({ description: '', amount: '', date: `${month}-01` })
       fetchAll()
     } catch (err) {
       toast(err.message, 'error')
@@ -174,6 +164,14 @@ export default function Categories() {
   const doDelete = async () => {
     const cat = categories.find(c => c.id === confirmDel.id)
     if (cat && isProtected(cat)) { toast('Kategori ini tidak bisa dihapus', 'error'); setConfirmDel(null); return }
+    // Hapus transaksi + budget bulan ini saja — tidak menyentuh bulan lain
+    const startDate = `${month}-01`
+    const endDate = getMonthEndDate(month)
+    const [r1, r2] = await Promise.all([
+      supabase.from('transactions').delete().eq('category_id', confirmDel.id).gte('date', startDate).lte('date', endDate),
+      supabase.from('category_budgets').delete().eq('category_id', confirmDel.id).eq('month', month),
+    ])
+    if (r1.error || r2.error) { toast((r1.error || r2.error).message, 'error'); return }
     const { error } = await supabase.from('categories').delete().eq('id', confirmDel.id)
     if (error) { toast(error.message, 'error'); return }
     toast('Kategori dihapus', 'success')
@@ -203,61 +201,35 @@ export default function Categories() {
 
   const saveBudget = async () => {
     const amount = parseFloat(budgetEdit.nominal) || 0
-    const [r1, r2] = await Promise.all([
-      supabase.from('category_budgets').upsert(
+    const r2 = await supabase.from('categories').update({ budget_limit: amount }).eq('id', budgetEdit.id)
+    if (r2.error) { toast(r2.error.message, 'error'); return }
+    let r1err = null
+    if (amount > 0) {
+      const { error } = await supabase.from('category_budgets').upsert(
         { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
         { onConflict: 'category_id,month' }
-      ),
-      supabase.from('categories').update({ budget_limit: amount }).eq('id', budgetEdit.id),
-    ])
-    const err = r1.error || r2.error
-    if (err) { toast(err.message, 'error'); return }
+      )
+      r1err = error
+    } else {
+      const { error } = await supabase.from('category_budgets').delete()
+        .eq('user_id', user.id).eq('category_id', budgetEdit.id).eq('month', month)
+      r1err = error
+    }
+    if (r1err) { toast(r1err.message, 'error'); return }
     toast('Budget disimpan', 'success')
     setBudgetEdit(null)
     fetchAll()
   }
 
-  const copyFromPrevMonth = async () => {
-    setCopying(true)
-    const pm = prevMonth(month)
-    // Ambil kategori bulan lalu + budgetnya, match ke bulan ini by NAME
-    const [{ data: prevCats }, { data: prevBudgets }] = await Promise.all([
-      supabase.from('categories').select('id, name').eq('user_id', user.id).eq('month', pm),
-      supabase.from('category_budgets').select('category_id, budget_limit').eq('user_id', user.id).eq('month', pm),
-    ])
-    if (!prevBudgets || prevBudgets.length === 0) {
-      toast(`Tidak ada budget di ${getMonthLabel(pm)}`, 'error')
-      setCopying(false)
-      return
-    }
-    // Map name → budget dari bulan lalu
-    const budgetByName = {}
-    ;(prevBudgets || []).forEach(b => {
-      const cat = (prevCats || []).find(c => c.id === b.category_id)
-      if (cat) budgetByName[cat.name] = Number(b.budget_limit)
-    })
-    // Apply ke kategori bulan ini yang namanya cocok
-    const toUpsert = categories.filter(c => budgetByName[c.name] !== undefined)
-    if (toUpsert.length === 0) {
-      toast(`Tidak ada kategori cocok dari ${getMonthLabel(pm)}`, 'error')
-      setCopying(false)
-      return
-    }
-    await Promise.all(toUpsert.map(c =>
-      supabase.from('category_budgets').upsert(
-        { user_id: user.id, category_id: c.id, month, budget_limit: budgetByName[c.name] },
-        { onConflict: 'category_id,month' }
-      )
-    ))
-    toast(`Budget disalin dari ${getMonthLabel(pm)}`, 'success')
-    setCopying(false)
-    fetchAll()
-  }
 
   const fetchHutang = async () => {
-    const { data, error } = await supabase.from('hutang').select('*').eq('user_id', user.id).eq('month', month).order('due_date', { ascending: true, nullsFirst: false })
-    if (error) console.error('Hutang fetch:', error.message)
-    setHutangList(data || [])
+    const [currRes, prevRes] = await Promise.all([
+      supabase.from('hutang').select('*').eq('user_id', user.id).eq('month', month)
+        .order('due_date', { ascending: true, nullsFirst: false }),
+      supabase.from('hutang').select('*').eq('user_id', user.id).lt('month', month).eq('lunas', false)
+        .order('due_date', { ascending: true, nullsFirst: false }),
+    ])
+    setHutangList([...(prevRes.data || []), ...(currRes.data || [])])
   }
 
   // Helper: apply finansial effect saat tambah/hapus hutang atau piutang
@@ -404,7 +376,7 @@ export default function Categories() {
     if (!gajiCatId) return
     setPemasukanSaving(true)
     try {
-      const txDate = `${month}-01`
+      const txDate = pemasukanForm.date || `${month}-01`
       if (gajiTx) {
         const { error } = await supabase.from('transactions').update({ amount, description: pemasukanForm.note, date: txDate }).eq('id', gajiTx.id)
         if (error) throw error
@@ -429,6 +401,24 @@ export default function Categories() {
     fetchAll()
   }
 
+  const saveQuickAdd = async (catId, catName) => {
+    const amount = parseFloat(quickAddForm.amount) || 0
+    if (!amount) return
+    const { error } = await supabase.from('transactions').insert({
+      user_id: user.id,
+      category_id: catId,
+      type: 'expense',
+      amount,
+      description: catName,
+      date: quickAddForm.date || `${month}-01`,
+    })
+    if (error) { toast(error.message, 'error'); return }
+    toast('Transaksi dicatat', 'success')
+    setQuickAddCatId(null)
+    setQuickAddForm({ date: '', amount: '' })
+    fetchAll()
+  }
+
   const incomeCategories = categories.filter(c => isMandatoryIncome(c))
   const mandatory = categories.filter(c => isMandatory(c))
     .sort((a, b) => {
@@ -442,13 +432,15 @@ export default function Categories() {
   const renderPlanToggle = (cat) => {
     const isPlanned = !!cat.is_planned
     return (
-      <button
-        className={`btn btn-ghost btn-sm cat-plan-btn${isPlanned ? ' planned' : ''}`}
-        onClick={() => togglePlanned(cat)}
-        title={isPlanned ? 'Aktifkan kembali' : 'Tandai sebagai rencana'}
-      >
-        {isPlanned ? 'Direncanakan' : 'Aktif'}
-      </button>
+      <div className="cat-card-bottom">
+        <button
+          className={`cat-status-toggle${isPlanned ? ' planned' : ''}`}
+          onClick={() => togglePlanned(cat)}
+        >
+          <span className="cat-status-dot" />
+          {isPlanned ? 'Direncanakan · klik untuk aktifkan' : 'Aktif · klik untuk rencanakan'}
+        </button>
+      </div>
     )
   }
 
@@ -474,22 +466,21 @@ export default function Categories() {
             <span className="cat-name">{cat.name}</span>
           </div>
           <div className="cat-card-actions">
-            {renderPlanToggle(cat)}
             <button className="btn btn-ghost btn-sm icon-btn" title="Edit" onClick={() => { setEditData(cat); setShowForm(true) }}><IconEdit size={13} /></button>
-            <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
-              {budget > 0 ? 'Budget' : '+ Budget'}
-            </button>
             <button className="btn btn-ghost btn-sm icon-btn" style={{ color: 'var(--danger)' }} title="Hapus" onClick={() => setConfirmDel({ id: cat.id, name: cat.name })}><IconTrash size={13} /></button>
           </div>
         </div>
 
         {budget > 0 ? (
           <>
-            <div className="cat-amounts">
+            <div className="cat-amounts" onClick={() => salary > 0 && salaryPct && setShowPct(v => !v)} style={{ cursor: salary > 0 && salaryPct ? 'pointer' : 'default' }}>
               <span className="cat-spent tabular" style={{ color: over ? 'var(--danger)' : 'var(--text-primary)' }}>{formatCurrency(spent)}</span>
               <div style={{ textAlign: 'right' }}>
-                <span className="cat-budget tabular">/ {formatCurrency(budget)}</span>
-                {salaryPct && <span className="cat-pct-label">{salaryPct}% gaji</span>}
+                {showPct && salaryPct ? (
+                  <span className="cat-pct-label" style={{ fontSize: '0.85rem', color: 'var(--accent)' }}>{salaryPct}% gaji</span>
+                ) : (
+                  <span className="cat-budget tabular">/ {formatCurrency(budget)}</span>
+                )}
               </div>
             </div>
             <div className="progress-bar" style={{ height: 6 }}>
@@ -502,14 +493,51 @@ export default function Categories() {
               {!over && !full && !near && <span className="cat-sisa">Sisa {formatCurrency(budget - spent)}</span>}
             </div>
           </>
-        ) : (
-          <div className="cat-no-budget">
-            <span>Belum ada budget</span>
-            {salary > 0 && (
-              <span className="cat-no-budget-hint">Default: {formatCurrency(Math.round(salary * DEFAULT_PCT / 100))} ({DEFAULT_PCT}%)</span>
-            )}
+        ) : spent > 0 ? (
+          /* Nominal mode: ada transaksi tapi tidak ada budget */
+          <div className="cat-amounts" style={{ cursor: 'default' }}>
+            <span className="cat-spent tabular" style={{ color: 'var(--danger)' }}>{formatCurrency(spent)}</span>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>tercatat</span>
           </div>
+        ) : (
+          quickAddCatId === cat.id ? (
+            <div className="cat-quick-form">
+              <input
+                className="form-input"
+                type="date"
+                value={quickAddForm.date}
+                max={getMonthEndDate(month)}
+                min={`${month}-01`}
+                onChange={e => setQuickAddForm(f => ({ ...f, date: e.target.value }))}
+                autoFocus
+              />
+              <CurrencyInput
+                value={quickAddForm.amount}
+                onChange={v => setQuickAddForm(f => ({ ...f, amount: v }))}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setQuickAddCatId(null)}>Batal</button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  style={{ flex: 1 }}
+                  onClick={() => saveQuickAdd(cat.id, cat.name)}
+                  disabled={!quickAddForm.amount}
+                >
+                  Catat
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="cat-no-budget cat-no-budget-cta"
+              onClick={() => { setQuickAddCatId(cat.id); setQuickAddForm({ date: getToday(), amount: '' }) }}
+            >
+              <span>Belum ada budget</span>
+              <span className="cat-quick-hint">+ catat transaksi</span>
+            </div>
+          )
         )}
+        {renderPlanToggle(cat)}
       </div>
     )
   }
@@ -532,7 +560,6 @@ export default function Categories() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {renderPlanToggle(cat)}
             <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem' }}>Ubah</button>
             {!isProtected(cat) && (
               <button
@@ -552,6 +579,7 @@ export default function Categories() {
           </div>
           {salaryPct && <span className="mand-pct-chip">{salaryPct}% gaji</span>}
         </div>
+        {renderPlanToggle(cat)}
       </div>
     )
   }
@@ -570,7 +598,7 @@ export default function Categories() {
           <button
             className="btn btn-ghost btn-sm"
             style={{ fontSize: '0.72rem', color: 'var(--accent)' }}
-            onClick={() => { setPemasukanForm({ amount: gajiTx ? String(gajiTx.amount) : '', note: gajiTx?.description || '' }); setShowPemasukanModal(true) }}
+            onClick={() => { setPemasukanForm({ amount: gajiTx ? String(gajiTx.amount) : '', note: gajiTx?.description || '', date: gajiTx?.date || `${month}-01` }); setShowPemasukanModal(true) }}
           >
             {salary > 0 ? '✎ Edit' : '+ Catat'}
           </button>
@@ -607,7 +635,7 @@ export default function Categories() {
               {salary > 0 ? `Total bulan ini: ${formatCurrency(salary)}` : 'Belum ada transaksi pemasukan bulan ini'}
             </span>
           </div>
-          <button className="btn btn-ghost btn-sm cat-add-btn" onClick={() => setShowIncomeModal(true)}><IconPlus size={13} /></button>
+          <button className="btn btn-ghost btn-sm cat-add-btn" onClick={() => { setIncomeForm({ description: '', amount: '', date: `${month}-01` }); setShowIncomeModal(true) }}><IconPlus size={13} /></button>
         </div>
         <div className="cat-grid">
           {incomeCategories.map(cat => renderIncomeCard(cat))}
@@ -873,24 +901,32 @@ export default function Categories() {
         }
         .cat-card-actions { display: flex; gap: 2px; flex-shrink: 0; align-items: center; }
 
-        /* Planned toggle pill */
-        .cat-plan-btn {
-          font-size: 0.6rem !important;
-          padding: 2px 7px !important;
-          height: auto !important;
-          border-radius: 99px !important;
-          font-weight: 700 !important;
-          letter-spacing: 0.02em !important;
-          white-space: nowrap;
-          transition: all 0.15s;
-          color: var(--success) !important;
-          border: 1px solid rgba(52,211,153,0.3) !important;
-          background: rgba(52,211,153,0.08) !important;
+        /* Plan toggle — bottom of card */
+        .cat-card-bottom {
+          border-top: 1px solid var(--border);
+          padding-top: 8px;
+          margin-top: 2px;
         }
-        .cat-plan-btn.planned {
-          color: var(--text-muted) !important;
-          border-color: var(--border) !important;
-          background: var(--bg-input) !important;
+        .cat-status-toggle {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 0.62rem; font-weight: 700; letter-spacing: 0.02em;
+          padding: 4px 10px; border-radius: 99px;
+          border: 1px solid rgba(52,211,153,0.25);
+          background: rgba(52,211,153,0.07);
+          cursor: pointer; color: var(--success);
+          font-family: var(--font-sans);
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+        .cat-status-toggle:hover { opacity: 0.75; }
+        .cat-status-toggle.planned {
+          color: var(--text-muted);
+          border-color: var(--border);
+          background: transparent;
+        }
+        .cat-status-dot {
+          width: 5px; height: 5px; border-radius: 50%;
+          background: currentColor; flex-shrink: 0;
         }
 
         .cat-amounts { display: flex; justify-content: space-between; align-items: baseline; }
@@ -905,7 +941,14 @@ export default function Categories() {
           padding: 4px 0; display: flex; flex-direction: column; gap: 3px;
         }
         .cat-no-budget span:first-child { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
-        .cat-no-budget-hint { font-size: 0.7rem; color: var(--accent); font-weight: 600; }
+        .cat-no-budget-cta { cursor: pointer; border-radius: 6px; padding: 6px 4px; transition: background 0.15s; }
+        .cat-no-budget-cta:hover { background: var(--bg-input); }
+        .cat-quick-hint { font-size: 0.68rem; color: var(--accent); font-weight: 600; opacity: 0; transition: opacity 0.15s; }
+        .cat-no-budget-cta:hover .cat-quick-hint { opacity: 1; }
+        .cat-quick-form {
+          display: flex; flex-direction: column; gap: 8px; padding: 4px 0;
+        }
+        .cat-quick-form .form-input { font-size: 0.8rem; padding: 7px 10px; height: auto; }
 
         .mand-budget-row {
           display: flex; justify-content: space-between; align-items: center;
@@ -928,7 +971,7 @@ export default function Categories() {
           /* cat-card-actions wrap ke bawah kalau terlalu penuh */
           .cat-card-top { flex-wrap: wrap; gap: 6px; }
           .cat-card-actions { flex-wrap: wrap; gap: 4px; }
-          .cat-plan-btn { font-size: 0.55rem !important; padding: 2px 5px !important; }
+
         }
       `}</style>
       </div>
@@ -936,7 +979,7 @@ export default function Categories() {
       {confirmDel && (
         <ConfirmModal
           title="Hapus Kategori"
-          message={`Hapus "${confirmDel.name}"? Kategori ini akan hilang dari semua bulan.`}
+          message={`Hapus "${confirmDel.name}"? Transaksi bulan ini untuk kategori ini juga akan terhapus.`}
           confirmLabel="Hapus"
           onConfirm={doDelete}
           onCancel={() => setConfirmDel(null)}
@@ -1073,6 +1116,17 @@ export default function Categories() {
               />
             </div>
             <div className="form-group">
+              <label className="form-label">Tanggal Diterima</label>
+              <input
+                className="form-input"
+                type="date"
+                value={pemasukanForm.date}
+                min={`${month}-01`}
+                max={(() => { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).toISOString().split('T')[0] })()}
+                onChange={e => setPemasukanForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
               <label className="form-label">Catatan <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span></label>
               <textarea
                 className="form-input"
@@ -1119,6 +1173,17 @@ export default function Categories() {
               <CurrencyInput
                 value={incomeForm.amount}
                 onChange={v => setIncomeForm(f => ({ ...f, amount: v }))}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Tanggal</label>
+              <input
+                className="form-input"
+                type="date"
+                value={incomeForm.date || `${month}-01`}
+                min={`${month}-01`}
+                max={(() => { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).toISOString().split('T')[0] })()}
+                onChange={e => setIncomeForm(f => ({ ...f, date: e.target.value }))}
               />
             </div>
             <div className="flex gap-8 mt-16">

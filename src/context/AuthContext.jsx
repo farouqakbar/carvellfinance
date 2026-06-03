@@ -7,10 +7,10 @@ const STORAGE_KEY = "cashvell_user";
 
 const DEFAULT_CATEGORIES = [
   { name: "Pemasukan Bulanan", icon: "", color: "#22c55e", budget_limit: 0, is_mandatory: false },
-  { name: "Keluarga",        icon: "",  color: "#f59e0b", budget_limit: 0, is_mandatory: true  },
-  { name: "Tabungan Bulanan", icon: "", color: "#6366f1", budget_limit: 0, is_mandatory: true  },
-  { name: "Investasi",        icon: "", color: "#10b981", budget_limit: 0, is_mandatory: true  },
+  { name: "Tabungan Bulanan",  icon: "", color: "#6366f1", budget_limit: 0, is_mandatory: true  },
 ];
+
+const DEPRECATED_CATEGORY_NAMES = ["Keluarga", "Investasi"];
 
 async function hashPassword(password) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
@@ -18,20 +18,24 @@ async function hashPassword(password) {
 }
 
 async function seedDefaultCategories(userId) {
-  const month = getCurrentMonth()
+  await supabase.from("categories")
+    .delete()
+    .eq("user_id", userId)
+    .in("name", DEPRECATED_CATEGORY_NAMES)
+    .eq("budget_limit", 0)
+    .is("month", null);
 
-  // Cek kategori yang sudah ada di bulan ini
   const { data: existing } = await supabase
     .from("categories")
     .select("name")
     .eq("user_id", userId)
-    .eq("month", month);
+    .is("month", null);
 
   const existingNames = new Set((existing || []).map(c => c.name));
 
   const toInsert = DEFAULT_CATEGORIES
     .filter(c => !existingNames.has(c.name))
-    .map(c => ({ ...c, user_id: userId, month }));
+    .map(c => ({ ...c, user_id: userId }));
 
   if (toInsert.length > 0) {
     await supabase.from("categories").insert(toInsert);
@@ -47,8 +51,17 @@ export function AuthProvider({ children }) {
     if (stored) {
       try {
         const u = JSON.parse(stored);
-        setUser(u);
-        seedDefaultCategories(u.id);
+        supabase.from("user_profiles").select("id").eq("id", u.id).maybeSingle()
+          .then(({ data }) => {
+            if (data) {
+              setUser(u);
+              seedDefaultCategories(u.id);
+            } else {
+              localStorage.removeItem(STORAGE_KEY);
+            }
+            setLoading(false);
+          });
+        return;
       } catch { localStorage.removeItem(STORAGE_KEY); }
     }
     setLoading(false);

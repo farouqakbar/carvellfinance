@@ -3,7 +3,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
 import CurrencyInput from './CurrencyInput'
-import { isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
+import { isMandatory, isMandatoryIncome, isProtected } from '../constants/mandatoryCategories'
 import { getCurrentMonth, getToday } from '../utils/formatCurrency'
 import { IconArrowUp, IconArrowDown } from './Icons'
 
@@ -31,13 +31,17 @@ export default function TransactionForm({ onSuccess, onClose, editData, month })
   useEffect(() => { fetchCategories() }, [month])
 
   const fetchCategories = async () => {
-    if (!month) {
-      setCategories([])
-      return
-    }
-    const { data } = await supabase.from('categories').select('*')
-      .eq('user_id', user.id).eq('month', month).order('name')
-    setCategories((data || []).filter(c => !isMandatory(c) && !isMandatoryIncome(c)))
+    const [globalRes, monthRes] = await Promise.all([
+      supabase.from('categories').select('*').eq('user_id', user.id).is('month', null),
+      month ? supabase.from('categories').select('*').eq('user_id', user.id).eq('month', month) : Promise.resolve({ data: [] }),
+    ])
+    const merged = [
+      ...(globalRes.data || []).filter(c => isProtected(c)),
+      ...(monthRes.data || []),
+    ].sort((a, b) => a.name.localeCompare(b.name))
+    const seen = new Set()
+    const all = merged.filter(c => { if (seen.has(c.name)) return false; seen.add(c.name); return true })
+    setCategories(all.filter(c => !isMandatory(c) && !isMandatoryIncome(c)))
   }
 
   const handleSubmit = async (e) => {

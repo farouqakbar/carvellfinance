@@ -52,8 +52,7 @@ export default function Transactions() {
           <button className="month-btn" onClick={() => goToMonth(nextMonth(month))} disabled={isCurrentMonth}>›</button>
         </div>
         <div className="topbar-actions">
-          <button className="btn btn-secondary btn-sm btn-csv" style={{ height: 34, gap: 5 }} onClick={handleExport}><IconDownload size={13} /> CSV</button>
-          <button className="btn btn-primary btn-sm" style={{ height: 34, gap: 5 }} onClick={() => { setEditData(null); setShowForm(true) }}><IconPlus size={13} /> Transaksi</button>
+<button className="btn btn-primary btn-sm" style={{ height: 34, gap: 5 }} onClick={() => { setEditData(null); setShowForm(true) }}><IconPlus size={13} /> Transaksi</button>
         </div>
       </>
     )
@@ -72,22 +71,29 @@ export default function Transactions() {
     let mandBudgetsQuery = supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month)
     if (recordStart) mandBudgetsQuery = mandBudgetsQuery.gte('month', recordStart)
 
-    const [txRes, catRes, histRes, mandBudgetsRes] = await Promise.all([
+    const [txRes, catRes, histRes, mandBudgetsRes, curMonthBudgetsRes] = await Promise.all([
       supabase.from('transactions').select('*, categories(name, color, icon)')
         .eq('user_id', user.id)
         .gte('date', startDate).lte('date', endDate)
         .order('date', { ascending: false }).order('created_at', { ascending: false }),
-      supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('categories').select('*').eq('user_id', user.id).is('month', null).order('name'),
       histQuery,
       mandBudgetsQuery,
+      supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).eq('month', month),
     ])
     const cats = catRes.data || []
+    const curBudgetMap = {}
+    ;(curMonthBudgetsRes.data || []).forEach(cb => { curBudgetMap[cb.category_id] = Number(cb.budget_limit) })
+    const catsWithBudget = cats.map(cat => ({
+      ...cat,
+      budget_limit: curBudgetMap[cat.id] !== undefined ? curBudgetMap[cat.id] : (cat.budget_limit || 0),
+    }))
     const cumBalance = (histRes.data || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0) + (user.saldo_awal || 0)
     const cumMandatory = (mandBudgetsRes.data || [])
       .filter(cb => cats.find(c => c.id === cb.category_id && c.is_mandatory))
       .reduce((s, cb) => s + Number(cb.budget_limit), 0)
     setTransactions(txRes.data || [])
-    setCategories(cats)
+    setCategories(catsWithBudget)
     setTotalSaldo(cumBalance - cumMandatory)
     setLoading(false)
   }
@@ -137,22 +143,26 @@ export default function Transactions() {
   }, [filtered])
 
   const totals = useMemo(() => {
-    const gajiCat = categories.find(c => c.name === 'Pemasukan Bulanan')
-    const acc = filtered.reduce((a, tx) => {
-      const isGaji = gajiCat && tx.category_id === gajiCat.id && tx.type === 'income'
-      if (tx.type === 'expense') {
-        a.expense += Number(tx.amount)
-      } else if (isGaji) {
-        a.gaji += Number(tx.amount)
-      } else {
-        a.nonGajiIncome += Number(tx.amount)
-      }
+    return filtered.reduce((a, tx) => {
+      if (tx.type === 'expense') a.expense += Number(tx.amount)
+      else a.income += Number(tx.amount)
       return a
-    }, { gaji: 0, expense: 0, nonGajiIncome: 0 })
-    acc.pengeluaran = Math.max(0, acc.expense - acc.nonGajiIncome)
-    acc.saldo = acc.gaji - acc.pengeluaran
-    return acc
-  }, [filtered, categories])
+    }, { expense: 0, income: 0 })
+  }, [filtered])
+
+  const allTotals = useMemo(() => {
+    return transactions.reduce((a, tx) => {
+      if (tx.type === 'expense') a.expense += Number(tx.amount)
+      else a.income += Number(tx.amount)
+      return a
+    }, { expense: 0, income: 0 })
+  }, [transactions])
+
+  const salary = useMemo(() => {
+    const gajiCat = categories.find(c => c.name === 'Pemasukan Bulanan')
+    return transactions.filter(tx => tx.type === 'income' && tx.category_id === gajiCat?.id)
+      .reduce((s, tx) => s + Number(tx.amount), 0)
+  }, [transactions, categories])
 
   const hasFilter = filter.category || filter.type || filter.search
 
@@ -179,6 +189,28 @@ export default function Transactions() {
           <p className="page-header-sub">Riwayat pemasukan &amp; pengeluaran</p>
         </div>
       </div>
+
+      {/* Summary strip */}
+      {transactions.length > 0 && (() => {
+        const mandatory = categories.filter(c => c.is_mandatory).reduce((s, c) => s + Number(c.budget_limit || 0), 0)
+        const net = allTotals.income - allTotals.expense - mandatory
+        const totalPengeluaran = salary - net
+        return (
+          <div className="tx-summary-strip mb-16">
+            <div className="tss-item">
+              <span className="tss-label">Total Saldo</span>
+              <span className={`tss-val tabular ${net >= 0 ? 'text-success' : 'text-danger'}`}>
+                {net >= 0 ? '+' : '-'}{formatCurrency(Math.abs(net))}
+              </span>
+            </div>
+            <div className="tss-divider" />
+            <div className="tss-item">
+              <span className="tss-label">Total Pengeluaran</span>
+              <span className="tss-val text-danger tabular">-{formatCurrency(Math.max(0, totalPengeluaran))}</span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Filter bar */}
       <div className="tx-filter-bar mb-16">
@@ -210,29 +242,7 @@ export default function Transactions() {
             </button>
           ))}
         </div>
-        {hasFilter && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setFilter({ category: '', type: '', search: '' })}>
-            Reset
-          </button>
-        )}
       </div>
-
-      {/* Summary strip */}
-      {filtered.length > 0 && (
-        <div className="tx-summary-strip mb-16">
-          <div className="tss-item">
-            <span className="tss-label">Total Saldo</span>
-            <span className={`tss-val tabular ${totalSaldo >= 0 ? 'text-success' : 'text-danger'}`}>
-              {totalSaldo >= 0 ? '+' : ''}{formatCurrency(Math.abs(totalSaldo))}
-            </span>
-          </div>
-          <div className="tss-divider" />
-          <div className="tss-item">
-            <span className="tss-label">Pengeluaran</span>
-            <span className="tss-val text-danger tabular">-{formatCurrency(totals.pengeluaran)}</span>
-          </div>
-        </div>
-      )}
 
       {/* Transaction list */}
       {loading ? (
@@ -293,6 +303,36 @@ export default function Transactions() {
               </div>
             )
           })}
+          {(!filter.type || filter.type === 'expense') && (() => {
+            const mandCats = categories.filter(c => c.is_mandatory && Number(c.budget_limit) > 0)
+            if (!mandCats.length) return null
+            return (
+              <div className="tx-group">
+                <div className="tx-group-header">
+                  <span className="tx-group-date">Pengeluaran Wajib</span>
+                  <span className="tx-group-total tabular text-danger">
+                    −{formatCurrency(mandCats.reduce((s, c) => s + Number(c.budget_limit), 0))}
+                  </span>
+                </div>
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {mandCats.map((cat, i) => (
+                    <div key={cat.id} className={`tx-row-item ${i < mandCats.length - 1 ? 'bordered' : ''}`}>
+                      <div className="tri-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>
+                        <IconArrowDown size={14} />
+                      </div>
+                      <div className="tri-info">
+                        <span className="tri-desc">{cat.name}</span>
+                        <span className="tri-cat" style={{ color: 'var(--danger)' }}>Wajib · langsung dipotong</span>
+                      </div>
+                      <div className="tri-right">
+                        <span className="tri-amount tabular text-danger">−{formatCurrency(cat.budget_limit)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 

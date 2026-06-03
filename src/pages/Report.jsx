@@ -4,7 +4,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getMonthLabel } from '../utils/formatCurrency'
 import {
-  BarChart, Bar, AreaChart, Area,
+  AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
@@ -19,11 +19,9 @@ export default function Report() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [months, setMonths] = useState([])
-  const [categories, setCategories] = useState([])   // [{ name, color, icon, total }]
-  const [chartData, setChartData] = useState([])     // stacked bar data
-  const [trendData, setTrendData] = useState([])     // area chart data
+  const [categories, setCategories] = useState([])
+  const [trendData, setTrendData] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('kategori')         // 'kategori' | 'tren'
 
   useEffect(() => { fetchReport() }, [])
 
@@ -83,30 +81,15 @@ export default function Report() {
       .sort((a, b) => b[1].total - a[1].total)
       .map(([name, info]) => ({ name, ...info }))
 
-    // Chart: last 6 months ascending
-    const chart6 = [...sortedMonths].reverse().slice(-6)
-    const chartRows = chart6.map(m => {
-      const row = { label: m.shortLabel }
-      cats.forEach(c => { row[c.name] = m.catBreakdown[c.name] || 0 })
-      return row
-    })
-
-    // Trend: all months ascending (income sudah include salary)
+    // Trend: all months ascending
     const trendRows = [...sortedMonths].reverse().map(m => ({
       label: m.shortLabel,
       Pemasukan: m.income,
       Pengeluaran: m.expense,
     }))
 
-    // Chart: last 6 months ascending — income per bulan (gaji+tx)
-    // Tambahkan kolom income ke chartData untuk referensi tooltip
-    chartRows.forEach((row, i) => {
-      row._income = chart6[i]?.income || 0
-    })
-
     setMonths(sortedMonths)
     setCategories(cats)
-    setChartData(chartRows)
     setTrendData(trendRows)
     setLoading(false)
   }
@@ -171,102 +154,46 @@ export default function Report() {
           <div className="card rpt-chart-card">
             <div className="rpt-chart-head">
               <div>
-                <h3 className="rpt-chart-title">
-                  {tab === 'kategori' ? 'Pengeluaran per Bulan per Kategori' : 'Tren Pemasukan vs Pengeluaran'}
-                </h3>
-                <p className="rpt-chart-sub">6 bulan terakhir</p>
-              </div>
-              <div className="rpt-tabs">
-                <button className={`rpt-tab ${tab === 'kategori' ? 'active' : ''}`} onClick={() => setTab('kategori')}>
-                  Kategori
-                </button>
-                <button className={`rpt-tab ${tab === 'tren' ? 'active' : ''}`} onClick={() => setTab('tren')}>
-                  Tren
-                </button>
+                <h3 className="rpt-chart-title">Tren Pemasukan vs Pengeluaran</h3>
+                <p className="rpt-chart-sub">semua bulan tercatat</p>
               </div>
             </div>
 
             <div className="rpt-chart-wrap">
-              {tab === 'kategori' ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} barCategoryGap="28%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="label"
-                      tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <YAxis
-                      tickFormatter={fmt}
-                      tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-                      axisLine={false} tickLine={false} width={40}
-                    />
-                    <Tooltip
-                      formatter={(v, name) => [formatCurrency(v), name]}
-                      contentStyle={{
-                        background: 'var(--bg-card)', border: '1px solid var(--border)',
-                        borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
-                      }}
-                      cursor={{ fill: 'var(--bg-input)' }}
-                    />
-                    {categories.slice(0, 8).map((cat, i) => (
-                      <Bar
-                        key={cat.name}
-                        dataKey={cat.name}
-                        stackId="a"
-                        fill={cat.color}
-                        radius={i === Math.min(categories.length, 8) - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
-                      />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#34d399" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="label"
-                      tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <YAxis
-                      tickFormatter={fmt}
-                      tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-                      axisLine={false} tickLine={false} width={40}
-                    />
-                    <Tooltip
-                      formatter={(v, name) => [formatCurrency(v), name]}
-                      contentStyle={{
-                        background: 'var(--bg-card)', border: '1px solid var(--border)',
-                        borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
-                      }}
-                    />
-                    <Area type="monotone" dataKey="Pemasukan" stroke="#34d399" strokeWidth={2} fill="url(#gInc)" dot={{ r: 3, fill: '#34d399' }} />
-                    <Area type="monotone" dataKey="Pengeluaran" stroke="#f87171" strokeWidth={2} fill="url(#gExp)" dot={{ r: 3, fill: '#f87171' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#34d399" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="label"
+                    tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                    axisLine={false} tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={fmt}
+                    tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                    axisLine={false} tickLine={false} width={40}
+                  />
+                  <Tooltip
+                    formatter={(v, name) => [formatCurrency(v), name]}
+                    contentStyle={{
+                      background: 'var(--bg-card)', border: '1px solid var(--border)',
+                      borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
+                    }}
+                  />
+                  <Area type="monotone" dataKey="Pemasukan" stroke="#34d399" strokeWidth={2} fill="url(#gInc)" dot={{ r: 3, fill: '#34d399' }} />
+                  <Area type="monotone" dataKey="Pengeluaran" stroke="#f87171" strokeWidth={2} fill="url(#gExp)" dot={{ r: 3, fill: '#f87171' }} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
-
-            {/* Legend kategori */}
-            {tab === 'kategori' && categories.length > 0 && (
-              <div className="rpt-legend">
-                {categories.slice(0, 8).map(cat => (
-                  <div key={cat.name} className="rpt-legend-item">
-                    <span className="rpt-legend-dot" style={{ background: cat.color }} />
-                    <span className="rpt-legend-name">{cat.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* ── Kategori Breakdown ───────────────── */}

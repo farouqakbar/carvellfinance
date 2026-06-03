@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { usePageHeader } from '../context/PageHeaderContext'
@@ -9,7 +9,7 @@ import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
-import { isMandatory, isMandatoryIncome } from '../constants/mandatoryCategories'
+import { isMandatory, isMandatoryIncome, isProtected } from '../constants/mandatoryCategories'
 import { IconAlertTriangle, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconSettings, IconPlus, IconX } from '../components/Icons'
 import SpotlightCard from '../components/ui/SpotlightCard'
 
@@ -49,10 +49,11 @@ export default function Dashboard() {
   const [showTabunganModal, setShowTabunganModal] = useState(false)
   const [showRencanaModal, setShowRencanaModal] = useState(false)
   const [showGajiModal, setShowGajiModal] = useState(false)
-  const [gajiForm, setGajiForm] = useState({ amount: '', note: '' })
+  const [gajiForm, setGajiForm] = useState({ amount: '', note: '', date: '' })
   const [gajiSaving, setGajiSaving] = useState(false)
   const [showMonthPicker, setShowMonthPicker] = useState(false)
   const [pickerYear, setPickerYear] = useState(() => Number(getCurrentMonth().split('-')[0]))
+  const [showPct, setShowPct] = useState(false)
 
   useEffect(() => {
     if (user.recording_start_month && month < user.recording_start_month) {
@@ -119,6 +120,7 @@ export default function Dashboard() {
     return () => setHeader(null)
   }, [month, showMonthPicker, pickerYear, user?.recording_start_month])
 
+  const navigate = useNavigate()
   const goToMonth = (m) => { setMonth(m); setSearchParams({ month: m }) }
 
   const fetchDashboard = async () => {
@@ -138,7 +140,17 @@ export default function Dashboard() {
 
       const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes, hutangRes, hutangTabunganRes] = await Promise.all([
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
-        supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+        Promise.all([
+          supabase.from('categories').select('*').eq('user_id', user.id).is('month', null),
+          supabase.from('categories').select('*').eq('user_id', user.id).eq('month', month),
+        ]).then(([g, m]) => {
+          const merged = [
+            ...(g.data || []).filter(c => isProtected(c)),
+            ...(m.data || []),
+          ].sort((a, b) => a.name.localeCompare(b.name))
+          const seen = new Set()
+          return { data: merged.filter(c => { if (seen.has(c.name)) return false; seen.add(c.name); return true }) }
+        }),
         supabase.from('savings').select('*').eq('user_id', user.id),
         supabase.from('savings_log').select('*').eq('user_id', user.id).eq('month', month),
         supabase.from('transactions').select('amount').eq('user_id', user.id).eq('date', today).eq('type', 'expense'),
@@ -146,48 +158,31 @@ export default function Dashboard() {
         allLogsQuery,
         supabase.from('plans').select('*').eq('user_id', user.id).eq('target_month', nmStr).eq('done', false).order('created_at', { ascending: true }),
         histQuery,
-        supabase.from('hutang').select('id, nama, amount, due_date, sumber, jenis, lunas').eq('user_id', user.id).eq('month', month).eq('lunas', false).order('due_date', { ascending: true, nullsFirst: false }),
-        supabase.from('hutang').select('id, nama, amount, jenis, lunas, created_at').eq('user_id', user.id).eq('month', month).eq('sumber', 'tabungan').order('created_at', { ascending: false }),
+        supabase.from('hutang').select('id, nama, amount, due_date, sumber, jenis, lunas').eq('user_id', user.id).lte('month', month).eq('lunas', false).order('due_date', { ascending: true, nullsFirst: false }),
+        supabase.from('hutang').select('id, nama, amount, jenis, lunas, created_at').eq('user_id', user.id).lte('month', month).eq('sumber', 'tabungan').order('created_at', { ascending: false }),
       ])
       const txs = txRes.data || []
       const catBudgetMap = {}
       ;(catBudgetsRes.data || []).forEach(cb => { catBudgetMap[cb.category_id] = Number(cb.budget_limit) })
 
-      let cats = (catRes.data || []).map(cat => ({
-        ...cat,
-        budget_limit: catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : (cat.budget_limit || 0),
-        budget_set: catBudgetMap[cat.id] !== undefined || (cat.budget_limit || 0) > 0,
-      }))
+      let cats = (catRes.data || []).map(cat => {
+        // Hanya pakai budget yang eksplisit di-set untuk bulan ini — tidak fallback ke categories.budget_limit
+        const budget_limit = catBudgetMap[cat.id] !== undefined ? catBudgetMap[cat.id] : 0
+        return { ...cat, budget_limit, budget_set: budget_limit > 0 }
+      })
 
-      // Kategori bulan ini saja
-      let currentMonthCats = cats.filter(c => c.month === month)
-      const gajiCat = currentMonthCats.find(c => c.name === 'Pemasukan Bulanan')
+      const gajiCat = cats.find(c => isMandatoryIncome(c))
       const gajiTxs = gajiCat ? txs.filter(t => t.type === 'income' && t.category_id === gajiCat.id) : []
       const salary = gajiTxs.reduce((s, t) => s + Number(t.amount), 0)
 
-      // Auto-set 15% untuk mandatory yang belum punya budget record — SEBELUM setData
-      if (salary > 0) {
-        const unset = currentMonthCats.filter(c => isMandatory(c) && catBudgetMap[c.id] === undefined)
-        if (unset.length > 0) {
-          const def = Math.round(salary * 0.15)
-          await Promise.all(unset.map(c =>
-            supabase.from('category_budgets').upsert(
-              { user_id: user.id, category_id: c.id, month, budget_limit: def },
-              { onConflict: 'category_id,month' }
-            )
-          ))
-          // Update in-memory agar display langsung benar tanpa re-fetch
-          unset.forEach(c => { catBudgetMap[c.id] = def })
-          cats = cats.map(c => unset.find(u => u.id === c.id)
-            ? { ...c, budget_limit: def, budget_set: true }
-            : c
-          )
-          currentMonthCats = cats.filter(c => c.month === month)
-        }
-      }
+      const currentMonthCats = cats
 
       const totalExpense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
       const totalIncome = txs.filter(t => t.type === 'income' && t.category_id !== gajiCat?.id).reduce((s, t) => s + Number(t.amount), 0)
+      const catIdSpendMap = {}
+      txs.filter(t => t.type === 'expense' && t.category_id).forEach(t => {
+        catIdSpendMap[t.category_id] = (catIdSpendMap[t.category_id] || 0) + Number(t.amount)
+      })
       const catSpendMap = {}
       txs.filter(t => t.type === 'expense' && t.categories).forEach(t => {
         const n = t.categories.name
@@ -195,7 +190,7 @@ export default function Dashboard() {
         catSpendMap[n].amount += Number(t.amount)
       })
       const catsWithStatus = currentMonthCats.map(cat => {
-        const spent = catSpendMap[cat.name]?.amount || 0
+        const spent = catIdSpendMap[cat.id] || 0
         const pct = cat.budget_limit > 0 ? (spent / cat.budget_limit) * 100 : null
         return { ...cat, spent, pct, overBudget: cat.budget_limit > 0 && spent > cat.budget_limit }
       }).sort((a, b) => {
@@ -257,17 +252,28 @@ export default function Dashboard() {
 
   const saveBudget = async () => {
     const amount = parseFloat(budgetEdit.nominal) || 0
-    const { error } = await supabase.from('category_budgets').upsert(
-      { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
-      { onConflict: 'category_id,month' }
-    )
-    if (error) { toast(error.message, 'error'); return }
+    const [r1, r2] = await Promise.all([
+      supabase.from('category_budgets').upsert(
+        { user_id: user.id, category_id: budgetEdit.id, month, budget_limit: amount },
+        { onConflict: 'category_id,month' }
+      ),
+      supabase.from('categories').update({ budget_limit: amount }).eq('id', budgetEdit.id),
+    ])
+    const err = r1.error || r2.error
+    if (err) { toast(err.message, 'error'); return }
     toast('Budget disimpan', 'success')
     setBudgetEdit(null)
     fetchDashboard()
   }
 
   const doDeleteCat = async () => {
+    const startDate = `${month}-01`
+    const endDate = getMonthEndDate(month)
+    const [r1, r2] = await Promise.all([
+      supabase.from('transactions').delete().eq('category_id', confirmDel.id).gte('date', startDate).lte('date', endDate),
+      supabase.from('category_budgets').delete().eq('category_id', confirmDel.id).eq('month', month),
+    ])
+    if (r1.error || r2.error) { toast((r1.error || r2.error).message, 'error'); return }
     const { error } = await supabase.from('categories').delete().eq('id', confirmDel.id)
     if (error) { toast(error.message, 'error'); return }
     toast('Kategori dihapus', 'success')
@@ -297,8 +303,6 @@ export default function Dashboard() {
     .filter(c => c.name === 'Tabungan Bulanan' && c.budget_limit > 0)
     .reduce((s, c) => s + Number(c.budget_limit), 0)
 
-  // cumulativeBalance sudah include semua transaksi + saldo_awal
-  // cumulativeMandatoryBudget = total mandatory budget dari recording_start s/d bulan ini
   const totalSaldo = data.cumulativeBalance - data.cumulativeMandatoryBudget
   // Sisa belanja bulan ini
   const freeBalance = data.salary - data.totalExpense - monthlyTabungan
@@ -339,7 +343,7 @@ export default function Dashboard() {
               </div>
               <div className="hero-right">
                 <div className="hero-chip hero-chip-btn" onClick={() => {
-                  setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '' })
+                  setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '', date: data.gajiTx?.date || `${month}-01` })
                   setShowGajiModal(true)
                 }}>
                   <span className="hero-chip-label">Pemasukan Bulanan</span>
@@ -370,18 +374,13 @@ export default function Dashboard() {
 
             {/* ── 3 section bawah ── */}
             <div className="hero-stats-row">
-              {(() => {
-                const nonMandatoryExp = data.totalExpense - mandatoryTransactionSpent
-                return (
-                  <div className="hero-stat">
-                    <span className="hero-stat-label">Total Pengeluaran</span>
-                    <span className="hero-stat-val" style={{ color: nonMandatoryExp > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                      {nonMandatoryExp > 0 ? `−${formatCurrency(nonMandatoryExp)}` : '—'}
-                    </span>
-                    <span className="hero-stat-sub">diluar wajib & tabungan</span>
-                  </div>
-                )
-              })()}
+              <div className="hero-stat">
+                <span className="hero-stat-label">Total Pengeluaran</span>
+                <span className="hero-stat-val" style={{ color: effectiveExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                  {effectiveExpense > 0 ? `−${formatCurrency(effectiveExpense - data.totalIncome)}` : '—'}
+                </span>
+                <span className="hero-stat-sub">dari gaji</span>
+              </div>
               <div className="hero-stat-divider" />
               {(() => {
                 const budget = user.budget_harian || 0
@@ -426,8 +425,8 @@ export default function Dashboard() {
       <div className="dash-two-col">
       {/* ── Budget Bulan Ini ─────────────────── */}
       {(() => {
-        const rutinCats = data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.is_monthly && c.budget_limit > 0)
-        const regularCats = data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && !c.is_monthly && c.budget_limit > 0)
+        const rutinCats = data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.is_monthly && (c.budget_limit > 0 || (c.spent || 0) > 0))
+        const regularCats = data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && !c.is_monthly && (c.budget_limit > 0 || (c.spent || 0) > 0))
         const hutangAktif = (data.hutangList || []).filter(h => h.jenis === 'hutang')
         const piutangAktif = (data.hutangList || []).filter(h => h.jenis === 'piutang')
         const isEmpty = !loading && rutinCats.length === 0 && regularCats.length === 0 && hutangAktif.length === 0 && piutangAktif.length === 0
@@ -446,6 +445,7 @@ export default function Dashboard() {
           const isNear = !isOver && rawPct >= 80 && rawPct < 100
           const barColor = isOver ? 'var(--danger)' : isFull ? 'var(--success)' : isNear ? 'var(--warning)' : cat.color || 'var(--accent)'
           const sisa = cat.budget_limit - (cat.spent || 0)
+          const salPct = data.salary > 0 && cat.budget_limit > 0 ? Math.round((cat.budget_limit / data.salary) * 100) : null
           return (
             <div className="brow">
               <div className="brow-left">
@@ -457,7 +457,6 @@ export default function Dashboard() {
                   {isOver && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 6px', marginLeft: 6 }}>Over</span>}
                   {isFull && <span className="badge badge-success" style={{ fontSize: '0.6rem', padding: '2px 6px', marginLeft: 6 }}>Penuh</span>}
                   {isNear && <span className="badge badge-warning" style={{ fontSize: '0.6rem', padding: '2px 6px', marginLeft: 6 }}>Hampir</span>}
-                  {cat.budget_limit === 0 && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 6 }}>belum diset</span>}
                 </div>
               </div>
               {cat.budget_limit > 0 ? (
@@ -467,14 +466,24 @@ export default function Dashboard() {
                       <div className="brow-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
                     </div>
                   </div>
-                  <div className="brow-right">
+                  <div
+                    className="brow-right"
+                    onClick={() => salPct && setShowPct(v => !v)}
+                    style={{ cursor: salPct ? 'pointer' : 'default' }}
+                  >
                     <span className="brow-spent tabular" style={{ color: isOver ? 'var(--danger)' : 'var(--text-primary)' }}>{formatCurrency(cat.spent || 0)}</span>
-                    <span className="brow-limit tabular" style={{ color: sisa < 0 ? 'var(--danger)' : sisa === 0 ? 'var(--text-muted)' : 'var(--success)' }}>
-                      {sisa < 0 ? `Over ${formatCurrency(Math.abs(sisa))}` : `Sisa ${formatCurrency(sisa)}`}
-                    </span>
+                    {showPct && salPct ? (
+                      <span className="brow-limit tabular" style={{ color: 'var(--accent)' }}>{salPct}% gaji</span>
+                    ) : (
+                      <span className="brow-limit tabular" style={{ color: sisa < 0 ? 'var(--danger)' : sisa === 0 ? 'var(--text-muted)' : 'var(--success)' }}>
+                        {sisa < 0 ? `Over ${formatCurrency(Math.abs(sisa))}` : `Sisa ${formatCurrency(sisa)}`}
+                      </span>
+                    )}
                   </div>
                   <span className="brow-pct" style={{ color: barColor }}>{rawPct.toFixed(0)}%</span>
                 </>
+              ) : cat.spent > 0 ? (
+                <span className="brow-spent tabular" style={{ color: 'var(--danger)', marginLeft: 'auto' }}>−{formatCurrency(cat.spent)}</span>
               ) : (
                 <div style={{ flex: 1 }} />
               )}
@@ -634,7 +643,7 @@ export default function Dashboard() {
           if (!amount) return
           setGajiSaving(true)
           try {
-            const txDate = `${month}-01`
+            const txDate = gajiForm.date || `${month}-01`
             if (data.gajiTx) {
               const { error } = await supabase.from('transactions').update({ amount, description: gajiForm.note, date: txDate }).eq('id', data.gajiTx.id)
               if (error) throw error
@@ -675,10 +684,22 @@ export default function Dashboard() {
               </div>
 
               <div className="form-group">
+                <label className="form-label">Tanggal Diterima</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  value={gajiForm.date}
+                  min={`${month}-01`}
+                  max={(() => { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).toISOString().split('T')[0] })()}
+                  onChange={e => setGajiForm(f => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+
+              <div className="form-group">
                 <label className="form-label">Catatan {!hasGaji && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span>}</label>
                 <textarea
                   className="form-input"
-                  rows={3}
+                  rows={2}
                   placeholder="Misal: gaji pokok + bonus, tunjangan, dll..."
                   value={gajiForm.note}
                   onChange={e => setGajiForm(f => ({ ...f, note: e.target.value }))}
@@ -843,7 +864,7 @@ export default function Dashboard() {
 
             <div className="wajib-rows">
               {data.categories.filter(c => isMandatory(c)).map(cat => {
-                const budget = cat.budget_set ? Number(cat.budget_limit) : (data.salary > 0 ? Math.round(data.salary * 0.15) : 0)
+                const budget = Number(cat.budget_limit || 0)
                 const salPct = data.salary > 0 && budget > 0 ? Math.round((budget / data.salary) * 100) : null
                 return (
                   <div key={cat.id} className="wajib-row">
@@ -1005,7 +1026,7 @@ export default function Dashboard() {
       {confirmDel && (
         <ConfirmModal
           title="Hapus Kategori"
-          message={`Hapus kategori "${confirmDel.name}"? Transaksi yang terhubung tidak akan ikut terhapus.`}
+          message={`Hapus kategori "${confirmDel.name}"? Semua transaksi kategori ini juga akan terhapus.`}
           confirmLabel="Hapus"
           onConfirm={doDeleteCat}
           onCancel={() => setConfirmDel(null)}

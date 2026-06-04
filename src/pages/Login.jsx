@@ -218,16 +218,23 @@ export default function Login() {
           -webkit-background-clip: text; background-clip: text;
           -webkit-text-fill-color: transparent;
         }
+        [data-theme="light"] .login-headline {
+          background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #4f46e5 100%);
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
         .login-sub-text {
           font-size: 0.95rem; line-height: 1.7;
           color: rgba(160, 160, 200, 0.60); max-width: 360px;
         }
+        [data-theme="light"] .login-sub-text { color: var(--text-secondary); }
 
         .login-features { list-style:none; display:flex; flex-direction:column; gap:12px; }
         .login-feature-item {
           display: flex; align-items: center; gap: 12px;
           color: rgba(160, 160, 200, 0.55); font-size: 0.85rem; font-weight: 500;
         }
+        [data-theme="light"] .login-feature-item { color: var(--text-secondary); }
         .login-feature-icon {
           width: 32px; height: 32px; border-radius: 8px;
           background: rgba(99,102,241,0.12);

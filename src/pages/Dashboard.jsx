@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [showMonthPicker, setShowMonthPicker] = useState(false)
   const [pickerYear, setPickerYear] = useState(() => Number(getCurrentMonth().split('-')[0]))
   const [showPct, setShowPct] = useState(false)
+  const [alertIdx, setAlertIdx] = useState(0)
 
   useEffect(() => {
     if (user.recording_start_month && month < user.recording_start_month) {
@@ -135,7 +136,7 @@ export default function Dashboard() {
       let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lt('date', startDate)
       if (recordStart) histQuery = histQuery.gte('date', `${recordStart}-01`)
 
-      let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id, month').eq('user_id', user.id).lte('month', month)
+      let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id, month, categories(is_mandatory, name)').eq('user_id', user.id).lte('month', month)
       if (recordStart) allLogsQuery = allLogsQuery.gte('month', recordStart)
 
       const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes, hutangRes, hutangTabunganRes] = await Promise.all([
@@ -207,10 +208,10 @@ export default function Dashboard() {
         savingsLogs: logsRes.data || [],
         todayExpense: (todayRes.data || []).reduce((s, t) => s + Number(t.amount), 0),
         tabunganPerMonth: (allLogsRes.data || [])
-          .filter(cb => { const c = cats.find(cat => cat.id === cb.category_id); return c && c.name === 'Tabungan Bulanan' })
+          .filter(cb => cb.categories?.name === 'Tabungan Bulanan' && Number(cb.budget_limit) > 0)
           .sort((a, b) => a.month.localeCompare(b.month)),
         totalTabungan: (allLogsRes.data || [])
-          .filter(cb => { const c = cats.find(cat => cat.id === cb.category_id); return c && c.name === 'Tabungan Bulanan' })
+          .filter(cb => cb.categories?.name === 'Tabungan Bulanan')
           .reduce((s, cb) => s + Number(cb.budget_limit), 0)
           + (user.tabungan_awal || 0)
           - (hutangTabunganRes.data || []).filter(h => !h.lunas).reduce((s, h) => s + Number(h.amount), 0),
@@ -224,7 +225,7 @@ export default function Dashboard() {
           + salary + totalIncome - totalExpense
           + (user.saldo_awal || 0),
         cumulativeMandatoryBudget: (allLogsRes.data || [])
-          .filter(cb => { const c = cats.find(cat => cat.id === cb.category_id); return c && isMandatory(c) })
+          .filter(cb => cb.categories?.is_mandatory === true)
           .reduce((s, cb) => s + Number(cb.budget_limit), 0),
       })
     } finally { setLoading(false) }
@@ -285,6 +286,12 @@ export default function Dashboard() {
   const isCurrentMonth = month === getCurrentMonth()
   const overBudgetCats = data.categories.filter(c => c.overBudget)
 
+  useEffect(() => {
+    if (overBudgetCats.length <= 1) { setAlertIdx(0); return }
+    const t = setInterval(() => setAlertIdx(i => (i + 1) % overBudgetCats.length), 2000)
+    return () => clearInterval(t)
+  }, [overBudgetCats.length])
+
   // Mandatory: hanya pakai budget yang sudah di-set secara eksplisit
   const mandatoryBudgetTotal = data.categories
     .filter(c => isMandatory(c))
@@ -316,14 +323,6 @@ export default function Dashboard() {
   return (
     <div className="animate-in">
 
-      {/* ── Overbudget alert ─────────────────── */}
-      {overBudgetCats.length > 0 && (
-        <div className="alert-banner">
-          <IconAlertTriangle size={15} />
-          <span><strong>Overbudget</strong> — {overBudgetCats.map(c => c.name).join(', ')}</span>
-        </div>
-      )}
-
       {/* ── Sections ─────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
@@ -333,6 +332,15 @@ export default function Dashboard() {
           <div className="skeleton" style={{ height: 88, borderRadius: 8 }} />
         ) : (
           <>
+            {overBudgetCats.length > 0 && (
+              <div key={alertIdx} className="hero-alert">
+                <IconAlertTriangle size={12} />
+                <span><strong>Overbudget</strong> — {overBudgetCats[alertIdx]?.name}</span>
+                {overBudgetCats.length > 1 && (
+                  <span className="hero-alert-counter">{alertIdx + 1}/{overBudgetCats.length}</span>
+                )}
+              </div>
+            )}
             <div className="hero-top">
               <div className="hero-left">
         <span className="hero-eyebrow">Total Saldo</span>
@@ -1096,12 +1104,32 @@ export default function Dashboard() {
           background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700;
         }
 
-        /* ── Alert ────────────────────────────── */
-        .alert-banner {
-          display: flex; align-items: center; gap: 9px;
-          background: var(--danger-dim); border: 1px solid rgba(248,113,113,0.3);
-          border-radius: var(--radius-sm); padding: 10px 14px;
-          font-size: 0.78rem; color: var(--danger); margin-bottom: 14px; font-weight: 500;
+        /* ── Hero Alert (inside hero-card) ──────── */
+        .hero-alert {
+          display: flex; align-items: center; gap: 7px;
+          background: rgba(248,113,113,0.10);
+          border: 1px solid rgba(248,113,113,0.25);
+          border-radius: var(--radius-sm);
+          padding: 7px 12px;
+          font-size: 0.73rem; color: var(--danger); font-weight: 500;
+          margin-bottom: 14px;
+          position: relative; z-index: 1;
+          animation: heroAlertIn 0.3s ease both;
+        }
+        [data-theme="light"] .hero-alert {
+          background: rgba(239,68,68,0.08);
+          border-color: rgba(239,68,68,0.22);
+        }
+        .hero-alert-counter {
+          margin-left: auto;
+          font-size: 0.62rem; font-weight: 700;
+          color: var(--danger); opacity: 0.6;
+          background: rgba(248,113,113,0.12);
+          padding: 1px 6px; border-radius: 99px;
+        }
+        @keyframes heroAlertIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
 
         /* ── Hero ─────────────────────────────── */
@@ -1116,9 +1144,9 @@ export default function Dashboard() {
           box-shadow: 0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
         }
         [data-theme="light"] .hero-card {
-          background: rgba(255,255,255,0.82);
-          border-color: rgba(99,102,241,0.18);
-          box-shadow: 0 8px 40px rgba(99,102,241,0.12);
+          background: rgba(255,255,255,0.94);
+          border-color: rgba(99,102,241,0.15);
+          box-shadow: 0 4px 24px rgba(99,102,241,0.08), 0 1px 4px rgba(0,0,0,0.06);
         }
         .hero-card::before {
           content: '';
@@ -1134,6 +1162,8 @@ export default function Dashboard() {
           background: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%);
           pointer-events: none;
         }
+        [data-theme="light"] .hero-card::before { opacity: 0.25; }
+        [data-theme="light"] .hero-card::after  { opacity: 0.15; }
         .hero-top {
           display: flex; justify-content: space-between;
           align-items: flex-start; margin-bottom: 16px;
@@ -1156,6 +1186,18 @@ export default function Dashboard() {
         }
         .hero-balance.neg {
           background: linear-gradient(135deg, #fca5a5 0%, #f87171 60%, #ef4444 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        [data-theme="light"] .hero-balance {
+          background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 45%, #4f46e5 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        [data-theme="light"] .hero-balance.neg {
+          background: linear-gradient(135deg, #7f1d1d 0%, #b91c1c 60%, #dc2626 100%);
           -webkit-background-clip: text;
           background-clip: text;
           -webkit-text-fill-color: transparent;

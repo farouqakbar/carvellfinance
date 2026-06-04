@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { LogoWordmark, LogoMark } from './Logo'
-import { IconGrid, IconBookmark, IconBarChart, IconMoon, IconSun } from './Icons'
+import { IconGrid, IconBookmark, IconBarChart, IconMoon, IconSun, IconLogOut } from './Icons'
 
 const navItems = [
   { to: '/dashboard', Icon: IconGrid, label: 'Dashboard' },
@@ -64,13 +64,18 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
 
         {/* Bottom */}
         <div className="sidebar-bottom">
-          <button className="user-chip" onClick={onProfileClick}>
-            <div className="user-avatar">{initial}</div>
-            <div className="user-detail">
-              <div className="user-name truncate">{name}</div>
-              <span className="user-sub">Profil &amp; Pengaturan</span>
-            </div>
-          </button>
+          <div className="user-chip">
+            <button className="user-chip-main" onClick={onProfileClick}>
+              <div className="user-avatar">{initial}</div>
+              <div className="user-detail">
+                <div className="user-name truncate">{name}</div>
+                <span className="user-sub">Profil &amp; Pengaturan</span>
+              </div>
+            </button>
+            <button className="user-chip-logout" onClick={handleSignOut} title="Keluar">
+              <IconLogOut size={14} />
+            </button>
+          </div>
 
           <div className="datetime-card">
             <span className="dt-date">{dateStr}</span>
@@ -185,14 +190,29 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
         .sidebar-bottom { display:flex; flex-direction:column; gap:8px; padding-top:14px; border-top:1px solid var(--border-glass); }
 
         .user-chip {
-          display:flex; align-items:center; gap:10px;
-          padding:10px; border-radius:10px;
+          display:flex; align-items:center;
+          border-radius:10px;
           background: rgba(99,102,241,0.06);
           border:1px solid rgba(99,102,241,0.12);
-          cursor:pointer; transition:all 0.18s;
-          text-align:left;
+          overflow: hidden;
         }
-        .user-chip:hover { background: var(--accent-dim); border-color: var(--accent); box-shadow: var(--glow-sm); }
+        .user-chip-main {
+          display:flex; align-items:center; gap:10px;
+          padding:10px; flex:1; min-width:0;
+          cursor:pointer; transition:background 0.18s;
+          text-align:left; background:transparent; border:none;
+          font-family:var(--font-sans); color:inherit;
+        }
+        .user-chip-main:hover { background: rgba(99,102,241,0.08); }
+        .user-chip-logout {
+          width:36px; height:100%; flex-shrink:0;
+          border:none; border-left:1px solid rgba(99,102,241,0.12);
+          background:transparent; color:var(--text-muted);
+          cursor:pointer; transition:all 0.18s;
+          display:flex; align-items:center; justify-content:center;
+          padding: 0;
+        }
+        .user-chip-logout:hover { background:rgba(248,113,113,0.08); color:var(--danger); border-left-color:rgba(248,113,113,0.2); }
         .user-avatar {
           width:32px; height:32px; border-radius:50%;
           background: linear-gradient(135deg,#6366f1,#8b5cf6);

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import CurrencyInput from './CurrencyInput'
 import { useToast } from './Toast'
@@ -20,9 +19,8 @@ function getPastMonthOptions() {
 const MONTH_OPTS = getPastMonthOptions()
 
 export default function ProfileModal({ onClose }) {
-  const { user, updateProfile, signOut } = useAuth()
+  const { user, updateProfile } = useAuth()
   const toast = useToast()
-  const navigate = useNavigate()
 
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [startMonth, setStartMonth] = useState(user?.recording_start_month || '')
@@ -48,11 +46,6 @@ export default function ProfileModal({ onClose }) {
     } finally {
       setSaving(false)
     }
-  }
-
-  const handleLogout = async () => {
-    await signOut()
-    navigate('/login')
   }
 
   return (
@@ -118,20 +111,11 @@ export default function ProfileModal({ onClose }) {
             <p className="pf-hint">Batas pengeluaran per hari — akan muncul indikator di dashboard</p>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ color: 'var(--danger)', fontSize: '0.78rem' }}
-              onClick={handleLogout}
-            >
-              Keluar
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
+            <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={saving}>Batal</button>
+            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+              {saving ? 'Menyimpan...' : 'Simpan'}
             </button>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={saving}>Batal</button>
-              <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-                {saving ? 'Menyimpan...' : 'Simpan'}
-              </button>
-            </div>
           </div>
         </div>
       </div>

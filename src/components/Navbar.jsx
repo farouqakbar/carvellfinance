@@ -156,27 +156,22 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
           text-decoration: none; color: var(--text-muted);
           font-size: 0.8125rem; font-weight: 600;
           transition: all 0.18s; position: relative;
-          letter-spacing: -0.01em;
+          letter-spacing: -0.01em; cursor: pointer;
+          border: 1px solid transparent;
         }
-        .nav-item:hover { color: var(--text-primary); background: rgba(99,102,241,0.06); }
+        .nav-item:hover { color: var(--text-primary); background: rgba(99,102,241,0.06); border-color: var(--border-glass); }
         .nav-item.active {
           color: #fff;
-          background: linear-gradient(135deg, rgba(99,102,241,0.28), rgba(139,92,246,0.18));
-          border: 1px solid rgba(139,92,246,0.25);
-          box-shadow: var(--glow-sm), inset 0 1px 0 rgba(255,255,255,0.06);
+          background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(139,92,246,0.14));
+          border: 1px solid rgba(139,92,246,0.2);
         }
         [data-theme="light"] .nav-item.active { color: var(--accent); background: var(--accent-dim); border-color: var(--accent); }
 
         .nav-icon-wrap { width:20px; height:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative; }
         .nav-icon-glow {
           position:absolute; inset:-4px;
-          background: radial-gradient(circle, rgba(139,92,246,0.4) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(139,92,246,0.2) 0%, transparent 70%);
           border-radius:50%; pointer-events:none;
-          animation: glow-pulse 2s ease-in-out infinite;
-        }
-        @keyframes glow-pulse {
-          0%,100% { opacity: 0.7; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.2); }
         }
         .nav-label { flex:1; }
         .nav-active-dot {
@@ -267,8 +262,13 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
           border-top:1px solid var(--border-glass);
         }
         .mtp-datetime { font-size:0.6rem; font-weight:600; color:var(--text-muted); font-variant-numeric:tabular-nums; text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .mtp-signout { background:none; border:none; color:var(--text-muted); font-size:0.6rem; font-family:var(--font-sans); font-weight:600; cursor:pointer; padding:0; flex-shrink:0; margin-left:8px; transition:color 0.15s; }
-        .mtp-signout:hover { color:var(--danger); }
+        .mtp-signout {
+          background:none; border:1px solid transparent; color:var(--text-muted); font-size:0.6rem;
+          font-family:var(--font-sans); font-weight:600; cursor:pointer;
+          padding:2px 6px; border-radius:4px;
+          flex-shrink:0; margin-left:8px; transition:all 0.15s;
+        }
+        .mtp-signout:hover { color:var(--danger); border-color:rgba(248,113,113,0.25); background:rgba(248,113,113,0.06); }
 
         /* ── Mobile bottom nav ─────────────────── */
         .mobile-nav {
@@ -290,18 +290,19 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
           display:flex; flex-direction:column; align-items:center; justify-content:center;
           gap:3px; padding:6px 4px;
           text-decoration:none; color:var(--text-muted);
-          transition:color 0.15s; border-radius:var(--radius-sm);
-          min-height:46px;
+          transition:color 0.15s, background 0.15s; border-radius:var(--radius-sm);
+          min-height:46px; cursor:pointer;
         }
+        .mobile-nav-item:hover { color:var(--text-secondary); }
         .mobile-nav-item.active { color:var(--accent); }
         .mobile-nav-item.active .mobile-nav-icon {
           background: var(--accent-dim);
           border-radius:8px;
-          box-shadow: var(--glow-sm);
+          box-shadow: 0 0 6px rgba(99,102,241,0.2);
         }
-        .mobile-nav-item:active { background:var(--bg-glass); }
+        .mobile-nav-item:active { background:var(--bg-glass); transform: scale(0.95); }
         .mobile-nav-icon { width:24px; height:24px; display:flex; align-items:center; justify-content:center; padding:2px; transition: all 0.15s; }
-        .mobile-nav-label { font-size:0.58rem; font-weight:700; letter-spacing:0.02em; }
+        .mobile-nav-label { font-size:0.6rem; font-weight:700; letter-spacing:0.02em; }
 
         @media (max-width: 768px) {
           .sidebar { display:none; }

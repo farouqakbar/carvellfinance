@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback } from 'react'
+import { IconCheck, IconX } from './Icons'
 
 const ToastContext = createContext(null)
 
@@ -19,7 +20,7 @@ export function ToastProvider({ children }) {
       <div className="toast-container">
         {toasts.map(t => (
           <div key={t.id} className={`toast toast-${t.type}`}>
-            <span>{t.type === 'success' ? '✓' : '✕'}</span>
+            {t.type === 'success' ? <IconCheck size={14} /> : <IconX size={14} />}
             {t.message}
           </div>
         ))}

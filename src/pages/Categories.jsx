@@ -559,15 +559,16 @@ export default function Categories() {
               <span className="cat-mandatory-badge">Wajib · langsung dipotong</span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => openBudgetEdit(cat)} style={{ fontSize: '0.72rem' }}>Ubah</button>
+          <div className="cat-card-actions">
+            <button className="btn btn-ghost btn-sm icon-btn" title="Ubah Budget" onClick={() => openBudgetEdit(cat)}><IconEdit size={13} /></button>
             {!isProtected(cat) && (
               <button
-                className="btn btn-ghost btn-sm"
-                style={{ fontSize: '0.72rem', color: 'var(--danger)' }}
+                className="btn btn-ghost btn-sm icon-btn"
+                style={{ color: 'var(--danger)' }}
+                title="Hapus"
                 onClick={() => setConfirmDel({ id: cat.id, name: cat.name })}
               >
-                Hapus
+                <IconTrash size={13} />
               </button>
             )}
           </div>
@@ -600,7 +601,7 @@ export default function Categories() {
             style={{ fontSize: '0.72rem', color: 'var(--accent)' }}
             onClick={() => { setPemasukanForm({ amount: gajiTx ? String(gajiTx.amount) : '', note: gajiTx?.description || '', date: gajiTx?.date || `${month}-01` }); setShowPemasukanModal(true) }}
           >
-            {salary > 0 ? '✎ Edit' : '+ Catat'}
+            {salary > 0 ? <><IconEdit size={12} /> Edit</> : <><IconPlus size={12} /> Catat</>}
           </button>
         </div>
         <div className="mand-budget-row">
@@ -726,11 +727,12 @@ export default function Categories() {
                       </div>
                     </div>
                     <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ color: 'var(--danger)', fontSize: '0.72rem' }}
+                      className="btn btn-ghost btn-sm icon-btn"
+                      style={{ color: 'var(--danger)' }}
+                      title="Hapus"
                       onClick={() => setConfirmDelHutang({ id: h.id, nama: h.nama })}
                     >
-                      Hapus
+                      <IconTrash size={13} />
                     </button>
                   </div>
 

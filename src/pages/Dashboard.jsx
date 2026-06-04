@@ -502,7 +502,7 @@ export default function Dashboard() {
               <div>
                 <h3 className="sect-title">Budget Bulan Ini</h3>
               </div>
-              <Link to={`/categories?month=${month}`} className="pill-link">⚙ Atur</Link>
+              <Link to={`/categories?month=${month}`} className="pill-link"><IconSettings size={11} /> Atur</Link>
             </div>
 
             <div className="card-scroll-body">
@@ -603,7 +603,7 @@ export default function Dashboard() {
           <h3 className="sect-title">Transaksi Terakhir</h3>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <Link to={`/transactions?month=${month}`} className="pill-link">Lihat semua</Link>
-            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem' }} onClick={() => setShowTxForm(true)}>+ Transaksi</button>
+            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem' }} onClick={() => setShowTxForm(true)}><IconPlus size={13} /> Transaksi</button>
           </div>
         </div>
         <div className="card-scroll-body">
@@ -920,7 +920,7 @@ export default function Dashboard() {
                 <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{getMonthLabel(month)}</p>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="btn btn-primary btn-sm" onClick={() => { setEditCatData({ is_mandatory: true }); setShowCatForm(true) }}>+ Kategori</button>
+                <button className="btn btn-primary btn-sm" onClick={() => { setEditCatData({ is_mandatory: true }); setShowCatForm(true) }}><IconPlus size={13} /> Kategori</button>
                 <button className="btn btn-ghost" onClick={() => setShowCatManager(false)}><IconX size={16} /></button>
               </div>
             </div>

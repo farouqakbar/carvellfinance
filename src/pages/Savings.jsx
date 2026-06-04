@@ -255,7 +255,7 @@ export default function Plans() {
               onClick={addPlan}
               disabled={!form.name.trim() || !form.amount || saving}
             >
-              {saving ? 'Menyimpan...' : '+ Simpan Rencana'}
+              {saving ? 'Menyimpan...' : <><IconPlus size={13} /> Simpan Rencana</>}
             </button>
           </div>
         </div>
@@ -280,7 +280,7 @@ export default function Plans() {
           style={{ flexShrink: 0, gap: 6 }}
           onClick={() => setShowForm(v => !v)}
         >
-          {showForm ? '✕ Tutup' : <><IconPlus size={13} /> Tambah Rencana</>}
+          {showForm ? <><IconX size={13} /> Tutup</> : <><IconPlus size={13} /> Tambah Rencana</>}
         </button>
       </div>
 
@@ -487,7 +487,7 @@ export default function Plans() {
                 onClick={confirmDone}
                 disabled={confirming || (doneSource === 'tabungan' && savings.length === 0)}
               >
-                {confirming ? 'Menyimpan...' : '✓ Tandai Selesai'}
+                {confirming ? 'Menyimpan...' : <><IconCheck size={13} /> Tandai Selesai</>}
               </button>
             </div>
           </div>

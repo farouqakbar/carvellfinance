@@ -71,7 +71,7 @@ export default function OnboardingModal({ onClose }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           <div className="ob-group">
-            <label className="ob-label">Mulai pencatatan dari bulan apa?</label>
+            <label className="ob-label">Mulai pencatatan dari bulan apa? <span className="ob-opt">(opsional)</span></label>
             <select
               className="form-input"
               value={startMonth}

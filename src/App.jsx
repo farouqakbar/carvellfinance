@@ -48,7 +48,7 @@ function AppRoutes() {
   }, [darkMode])
 
   useEffect(() => {
-    if (user && user.recording_start_month === null) {
+    if (user && user.isNewUser === true) {
       setShowOnboarding(true)
     }
   }, [user?.id])

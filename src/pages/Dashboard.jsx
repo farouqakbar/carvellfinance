@@ -113,9 +113,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        <div className="topbar-actions">
-          <button className="btn btn-primary btn-sm" style={{ fontSize: '0.78rem', height: 34 }} onClick={() => setShowTxForm(true)}>+ Transaksi</button>
-        </div>
       </>
     )
     return () => setHeader(null)
@@ -604,7 +601,10 @@ export default function Dashboard() {
       <div className="card">
         <div className="sect-head">
           <h3 className="sect-title">Transaksi Terakhir</h3>
-          <Link to={`/transactions?month=${month}`} className="pill-link">Lihat semua</Link>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to={`/transactions?month=${month}`} className="pill-link">Lihat semua</Link>
+            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem' }} onClick={() => setShowTxForm(true)}>+ Transaksi</button>
+          </div>
         </div>
         <div className="card-scroll-body">
         {loading ? (

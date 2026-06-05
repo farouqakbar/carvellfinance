@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../services/supabaseClient'
 import CurrencyInput from './CurrencyInput'
 import { useToast } from './Toast'
-import { IconX } from './Icons'
+import { IconX, IconAlertTriangle } from './Icons'
 
 function getPastMonthOptions() {
   const opts = []
@@ -28,6 +29,34 @@ export default function ProfileModal({ onClose }) {
   const [tabunganAwal, setTabunganAwal] = useState(String(user?.tabungan_awal || ''))
   const [budgetHarian, setBudgetHarian] = useState(String(user?.budget_harian || ''))
   const [saving, setSaving] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  const handleReset = async () => {
+    setResetting(true)
+    try {
+      const uid = user.id
+      await Promise.all([
+        supabase.from('transactions').delete().eq('user_id', uid),
+        supabase.from('category_budgets').delete().eq('user_id', uid),
+        supabase.from('savings_log').delete().eq('user_id', uid),
+        supabase.from('hutang').delete().eq('user_id', uid),
+      ])
+      await supabase.from('categories').delete().eq('user_id', uid)
+      await supabase.from('savings').delete().eq('user_id', uid)
+      await supabase.from('user_profiles').update({
+        recording_start_month: null,
+        saldo_awal: 0,
+        tabungan_awal: 0,
+        budget_harian: 0,
+      }).eq('id', uid)
+      toast('Semua data berhasil dihapus', 'success')
+      setTimeout(() => window.location.reload(), 800)
+    } catch {
+      toast('Gagal menghapus data', 'error')
+      setResetting(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -117,6 +146,49 @@ export default function ProfileModal({ onClose }) {
               {saving ? 'Menyimpan...' : 'Simpan'}
             </button>
           </div>
+
+          {/* ── Danger zone ── */}
+          <div className="pf-danger-zone">
+            <div className="pf-danger-label">ZONA BERBAHAYA</div>
+
+            {!showResetConfirm ? (
+              <button
+                className="pf-reset-btn"
+                onClick={() => setShowResetConfirm(true)}
+                disabled={saving}
+              >
+                Reset semua data
+              </button>
+            ) : (
+              <div className="pf-reset-confirm">
+                <div className="pf-reset-warn">
+                  <IconAlertTriangle size={14} />
+                  <span>
+                    <strong>Tidak bisa dibatalkan.</strong> Semua transaksi, kategori, budget,
+                    tabungan, dan hutang akan dihapus permanen. Akun kamu tetap ada.
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setShowResetConfirm(false)}
+                    disabled={resetting}
+                    style={{ flex: 1 }}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    className="pf-reset-confirm-btn"
+                    onClick={handleReset}
+                    disabled={resetting}
+                    style={{ flex: 1 }}
+                  >
+                    {resetting ? 'Menghapus...' : 'Ya, Hapus Semua'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -134,6 +206,51 @@ export default function ProfileModal({ onClose }) {
         .pf-group { display: flex; flex-direction: column; gap: 6px; }
         .pf-label { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); }
         .pf-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+
+        .pf-danger-zone {
+          border-top: 1px solid rgba(248,113,113,0.15);
+          padding-top: 16px;
+          display: flex; flex-direction: column; gap: 10px;
+        }
+        .pf-danger-label {
+          font-size: 0.55rem; font-weight: 700; letter-spacing: 0.12em;
+          color: rgba(248,113,113,0.5); text-transform: uppercase;
+        }
+        .pf-reset-btn {
+          display: inline-flex; align-items: center;
+          padding: 7px 14px; border-radius: 7px;
+          font-size: 0.78rem; font-weight: 600;
+          color: #f87171;
+          background: rgba(248,113,113,0.06);
+          border: 1px solid rgba(248,113,113,0.2);
+          cursor: pointer; transition: all 0.15s;
+          font-family: var(--font-sans);
+          align-self: flex-start;
+        }
+        .pf-reset-btn:hover {
+          background: rgba(248,113,113,0.1);
+          border-color: rgba(248,113,113,0.35);
+        }
+        .pf-reset-confirm {
+          display: flex; flex-direction: column; gap: 12px;
+          background: rgba(248,113,113,0.06);
+          border: 1px solid rgba(248,113,113,0.2);
+          border-radius: 9px; padding: 12px;
+        }
+        .pf-reset-warn {
+          display: flex; align-items: flex-start; gap: 8px;
+          font-size: 0.75rem; color: #f87171; line-height: 1.5;
+        }
+        .pf-reset-warn svg { flex-shrink: 0; margin-top: 2px; }
+        .pf-reset-confirm-btn {
+          padding: 8px 14px; border-radius: 7px;
+          font-size: 0.78rem; font-weight: 700;
+          color: #fff; background: #ef4444;
+          border: none; cursor: pointer; transition: all 0.15s;
+          font-family: var(--font-sans);
+        }
+        .pf-reset-confirm-btn:hover { background: #dc2626; }
+        .pf-reset-confirm-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>
     </div>
   )

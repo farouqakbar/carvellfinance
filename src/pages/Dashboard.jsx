@@ -54,6 +54,7 @@ export default function Dashboard() {
   const [showMonthPicker, setShowMonthPicker] = useState(false)
   const [pickerYear, setPickerYear] = useState(() => Number(getCurrentMonth().split('-')[0]))
   const [showPct, setShowPct] = useState(false)
+  const [dashTab, setDashTab] = useState('transaction')
   const [alertIdx, setAlertIdx] = useState(0)
 
   useEffect(() => {
@@ -319,128 +320,87 @@ export default function Dashboard() {
 
   return (
     <div className="animate-in">
+    <div className="db-page">
 
-      {/* ── Sections ─────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-      {/* ── Hero Saldo ───────────────────────── */}
-      <div className="hero-card">
+      {/* ── Saldo Hero ── */}
+      <div className="db-hero">
+        <span className="db-eyebrow">TOTAL SALDO</span>
         {loading ? (
-          <div className="skeleton" style={{ height: 88, borderRadius: 8 }} />
+          <div className="skeleton" style={{ height: 56, width: 220, borderRadius: 8, marginTop: 6 }} />
         ) : (
-          <>
-            {overBudgetCats.length > 0 && (
-              <div key={alertIdx} className="hero-alert">
-                <IconAlertTriangle size={12} />
-                <span><strong>Overbudget</strong> — {overBudgetCats[alertIdx]?.name}</span>
-                {overBudgetCats.length > 1 && (
-                  <span className="hero-alert-counter">{alertIdx + 1}/{overBudgetCats.length}</span>
-                )}
-              </div>
-            )}
-            <div className="hero-top">
-              <div className="hero-left">
-        <span className="hero-eyebrow">Total Saldo</span>
-                <div className={`hero-balance ${totalSaldo < 0 ? 'neg' : ''}`}>
-                  {totalSaldo < 0 && <span className="hero-neg-sign">-</span>}
-                  {formatCurrency(Math.abs(totalSaldo))}
-                </div>
-              </div>
-              <div className="hero-right">
-                <div className="hero-chip hero-chip-btn" onClick={() => {
-                  setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '', date: data.gajiTx?.date || `${month}-01` })
-                  setShowGajiModal(true)
-                }}>
-                  <span className="hero-chip-label">Pemasukan Bulanan</span>
-                  <span className="hero-chip-val tabular" style={{ color: data.salary > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {formatCurrency(data.salary)}
-                  </span>
-                  <span className="hero-chip-cta">
-                    {data.salary > 0 ? 'Lihat detail →' : '+ Catat sekarang'}
-                  </span>
-                </div>
-                <div className="hero-chip hero-chip-btn" onClick={() => setShowWajibModal(true)}>
-                  <span className="hero-chip-label">Pengeluaran Wajib</span>
-                  <span className="hero-chip-val tabular" style={{ color: mandatoryBudgetTotal > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                    {mandatoryBudgetTotal > 0 ? `−${formatCurrency(mandatoryBudgetTotal)}` : '—'}
-                  </span>
-                  <span className="hero-chip-cta">Lihat detail →</span>
-                </div>
-                <div className="hero-chip hero-chip-btn" onClick={() => setShowTabunganModal(true)}>
-                  <span className="hero-chip-label">Total Tabungan</span>
-                  <span className="hero-chip-val tabular" style={{ color: data.totalTabungan > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-                    {formatCurrency(data.totalTabungan)}
-                  </span>
-                  <span className="hero-chip-cta">Lihat detail →</span>
-                </div>
-              </div>
-            </div>
-
-
-            {/* ── 3 section bawah ── */}
-            <div className="hero-stats-row">
-              <div className="hero-stat">
-                <span className="hero-stat-label">Total Pengeluaran</span>
-                <span className="hero-stat-val" style={{ color: effectiveExpense > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                  {effectiveExpense > 0 ? `−${formatCurrency(effectiveExpense - data.totalIncome)}` : '—'}
-                </span>
-                <span className="hero-stat-sub">dari gaji</span>
-              </div>
-              <div className="hero-stat-divider" />
-              {(() => {
-                const budget = user.budget_harian || 0
-                const spent = data.todayExpense
-                const pct = budget > 0 ? spent / budget : 0
-                const over = budget > 0 && spent >= budget
-                const near = budget > 0 && pct >= 0.8 && !over
-                const ok = budget > 0 && spent > 0 && pct < 0.8
-                const dayColor = over ? 'var(--danger)' : near ? 'var(--warning)' : spent > 0 ? 'var(--danger)' : 'var(--text-muted)'
-                return (
-                  <div className="hero-stat">
-                    <span className="hero-stat-label">Hari Ini</span>
-                    <span className="hero-stat-val" style={{ color: dayColor }}>
-                      {spent > 0 ? `−${formatCurrency(spent)}` : '—'}
-                    </span>
-                    {over
-                      ? <span className="hero-stat-sub" style={{ color: 'var(--danger)', fontWeight: 600 }}>melebihi budget harian</span>
-                      : near
-                        ? <span className="hero-stat-sub" style={{ color: 'var(--warning)', fontWeight: 600 }}>mendekati budget harian</span>
-                        : ok
-                          ? <span className="hero-stat-sub" style={{ color: 'var(--success)', fontWeight: 600 }}>dalam budget harian</span>
-                          : <span className="hero-stat-sub">pengeluaran</span>
-                    }
-                  </div>
-                )
-              })()}
-              <div className="hero-stat-divider" />
-              <div className="hero-stat hero-stat-btn" onClick={() => setShowRencanaModal(true)}>
-                <span className="hero-stat-label">Rencana Bulan Depan</span>
-                <span className="hero-stat-val" style={{ color: data.nextMonthPlans.length > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                  {data.nextMonthPlans.length > 0 ? formatCurrency(data.nextMonthPlans.reduce((s, p) => s + Number(p.amount), 0)) : '—'}
-                </span>
-                <span className="hero-stat-sub" style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                  {data.nextMonthPlans.length > 0 ? `${data.nextMonthPlans.length} item · Lihat detail` : 'Belum ada'}
-                </span>
-              </div>
-            </div>
-          </>
+          <div className={`db-balance${totalSaldo < 0 ? ' neg' : ''}`}>
+            {totalSaldo < 0 && <span className="db-neg-sign">−</span>}
+            {formatCurrency(Math.abs(totalSaldo))}
+          </div>
+        )}
+        {!loading && data.todayExpense > 0 && (
+          <div className="db-daily">
+            {(() => {
+              const budget = user.budget_harian || 0
+              const spent = data.todayExpense
+              const over = budget > 0 && spent >= budget
+              const near = budget > 0 && spent / budget >= 0.8 && !over
+              const color = over ? '#f87171' : near ? '#fbbf24' : 'var(--text-muted)'
+              return (
+                <>
+                  <span style={{ color }}>Hari ini −{formatCurrency(spent)}</span>
+                  {over && <span className="db-daily-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>melebihi limit</span>}
+                  {near && <span className="db-daily-badge" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>hampir limit</span>}
+                </>
+              )
+            })()}
+          </div>
         )}
       </div>
 
-      <div className="dash-two-col">
-      {/* ── Budget Bulan Ini ─────────────────── */}
+      {/* ── Stats 2×2 ── */}
+      {!loading && (
+        <div className="db-stats-grid">
+          <button className="db-stat db-stat-btn" onClick={() => {
+            setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '', date: data.gajiTx?.date || `${month}-01` })
+            setShowGajiModal(true)
+          }}>
+            <span className="db-stat-label">PEMASUKAN</span>
+            <span className="db-stat-val tabular" style={{ color: data.salary > 0 ? '#34d399' : 'var(--text-muted)' }}>
+              {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
+            </span>
+            <span className="db-stat-sub">{data.salary > 0 ? 'bulan ini' : 'belum dicatat'}</span>
+          </button>
+
+          <button className="db-stat db-stat-btn" onClick={() => setShowWajibModal(true)}>
+            <span className="db-stat-label">WAJIB</span>
+            <span className="db-stat-val tabular" style={{ color: mandatoryBudgetTotal > 0 ? '#f87171' : 'var(--text-muted)' }}>
+              {mandatoryBudgetTotal > 0 ? `−${formatCurrency(mandatoryBudgetTotal)}` : '—'}
+            </span>
+            <span className="db-stat-sub">{mandatoryBudgetTotal > 0 ? 'auto-deduct' : 'belum diatur'}</span>
+          </button>
+
+          <div className="db-stat">
+            <span className="db-stat-label">PENGELUARAN</span>
+            <span className="db-stat-val tabular" style={{ color: effectiveExpense > data.totalIncome ? '#f87171' : effectiveExpense > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              {effectiveExpense > 0 ? `−${formatCurrency(effectiveExpense - data.totalIncome)}` : '—'}
+            </span>
+            <span className="db-stat-sub">{data.salary > 0 && effectiveExpense > 0 ? `${Math.round((effectiveExpense / data.salary) * 100)}% gaji` : 'bulan ini'}</span>
+          </div>
+
+          <button className="db-stat db-stat-btn" onClick={() => setShowTabunganModal(true)}>
+            <span className="db-stat-label">TABUNGAN</span>
+            <span className="db-stat-val tabular" style={{ color: data.totalTabungan > 0 ? '#34d399' : 'var(--text-muted)' }}>
+              {formatCurrency(data.totalTabungan)}
+            </span>
+            <span className="db-stat-sub">{data.savings?.length > 0 ? `${data.savings.length} kantong` : 'semua kantong'}</span>
+          </button>
+        </div>
+      )}
+      {loading && <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius-lg)' }} />}
+
+      {/* ── My Transaction / My Budget tab ──── */}
       {(() => {
         const rutinCats = data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && c.is_monthly && (c.budget_limit > 0 || (c.spent || 0) > 0))
         const regularCats = data.categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && !c.is_monthly && (c.budget_limit > 0 || (c.spent || 0) > 0))
         const hutangAktif = (data.hutangList || []).filter(h => h.jenis === 'hutang')
         const piutangAktif = (data.hutangList || []).filter(h => h.jenis === 'piutang')
         const isEmpty = !loading && rutinCats.length === 0 && regularCats.length === 0 && hutangAktif.length === 0 && piutangAktif.length === 0
-        const allCats = [...rutinCats, ...regularCats]
-        const totalBudget = allCats.reduce((s, c) => s + Number(c.budget_limit), 0)
-        const totalSpent = allCats.reduce((s, c) => s + Number(c.spent || 0), 0)
-        const totalSisa = totalBudget - totalSpent
-        const totalPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0
-        const totalColor = totalPct >= 100 ? 'var(--danger)' : totalPct >= 80 ? 'var(--warning)' : 'var(--accent)'
 
         const BudgetRow = ({ cat }) => {
           const rawPct = cat.budget_limit > 0 ? (cat.spent / cat.budget_limit) * 100 : 0
@@ -451,8 +411,9 @@ export default function Dashboard() {
           const barColor = isOver ? 'var(--danger)' : isFull ? 'var(--success)' : isNear ? 'var(--warning)' : cat.color || 'var(--accent)'
           const sisa = cat.budget_limit - (cat.spent || 0)
           const salPct = data.salary > 0 && cat.budget_limit > 0 ? Math.round((cat.budget_limit / data.salary) * 100) : null
+          const hasBar = cat.budget_limit > 0
           return (
-            <div className="brow">
+            <div className={`brow${!hasBar && cat.spent > 0 ? ' brow-no-budget' : ''}`}>
               <div className="brow-left">
                 <span className="brow-icon" style={{ background: `${cat.color || '#6366f1'}18` }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: cat.color || 'var(--accent)', display: 'inline-block', flexShrink: 0 }} />
@@ -471,11 +432,7 @@ export default function Dashboard() {
                       <div className="brow-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
                     </div>
                   </div>
-                  <div
-                    className="brow-right"
-                    onClick={() => salPct && setShowPct(v => !v)}
-                    style={{ cursor: salPct ? 'pointer' : 'default' }}
-                  >
+                  <div className="brow-right" onClick={() => salPct && setShowPct(v => !v)} style={{ cursor: salPct ? 'pointer' : 'default' }}>
                     <span className="brow-spent tabular" style={{ color: isOver ? 'var(--danger)' : 'var(--text-primary)' }}>{formatCurrency(cat.spent || 0)}</span>
                     {showPct && salPct ? (
                       <span className="brow-limit tabular" style={{ color: 'var(--accent)' }}>{salPct}% gaji</span>
@@ -488,158 +445,173 @@ export default function Dashboard() {
                   <span className="brow-pct" style={{ color: barColor }}>{rawPct.toFixed(0)}%</span>
                 </>
               ) : cat.spent > 0 ? (
-                <span className="brow-spent tabular" style={{ color: 'var(--danger)', marginLeft: 'auto' }}>−{formatCurrency(cat.spent)}</span>
-              ) : (
-                <div style={{ flex: 1 }} />
-              )}
+                <span className="brow-only-spent tabular" style={{ color: 'var(--danger)' }}>−{formatCurrency(cat.spent)}</span>
+              ) : null}
             </div>
           )
         }
 
         return (
-          <div className="card">
-            <div className="sect-head" style={{ marginBottom: 14 }}>
-              <div>
-                <h3 className="sect-title">Budget Bulan Ini</h3>
+          <>
+          {!loading && overBudgetCats.length > 0 && (
+            <div key={alertIdx} className="db-alert">
+              <IconAlertTriangle size={11} />
+              <span>Overbudget — <strong>{overBudgetCats[alertIdx]?.name}</strong></span>
+              {overBudgetCats.length > 1 && (
+                <span className="db-alert-count">{alertIdx + 1}/{overBudgetCats.length}</span>
+              )}
+            </div>
+          )}
+          <div className="card dash-tab-card">
+            {/* ── Tab header ── */}
+            <div className="sect-head" style={{ marginBottom: 16 }}>
+              <div className="dash-tab-toggle">
+                <button
+                  className={`dash-tab-btn${dashTab === 'transaction' ? ' active' : ''}`}
+                  onClick={() => setDashTab('transaction')}
+                >
+                  My Transaction
+                </button>
+                <button
+                  className={`dash-tab-btn${dashTab === 'budget' ? ' active' : ''}`}
+                  onClick={() => setDashTab('budget')}
+                >
+                  My Budget
+                </button>
               </div>
-              <Link to={`/categories?month=${month}`} className="pill-link"><IconSettings size={11} /> Atur</Link>
+
+              <div className="tab-actions">
+                <Link to={`/transactions?month=${month}`} className="tab-act">
+                  <IconArrowUpRight size={13} />
+                  <span className="tab-act-label">Lihat semua</span>
+                </Link>
+                <Link to={`/categories?month=${month}`} className="tab-act">
+                  <IconSettings size={13} />
+                  <span className="tab-act-label">Atur</span>
+                </Link>
+                <button className="tab-act tab-act-accent" onClick={() => setShowTxForm(true)}>
+                  <IconPlus size={13} />
+                  <span className="tab-act-label">Transaksi</span>
+                </button>
+              </div>
             </div>
 
+            {/* ── Tab content ── */}
             <div className="card-scroll-body">
-            {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 44 }} />)}
-              </div>
-            ) : isEmpty ? (
-              <div className="empty-hint">
-                <span className="empty-hint-icon"><IconSettings size={14} /></span>
-                <span>Tambahkan kategori dan budget</span>
-                <Link to={`/categories?month=${month}`} className="empty-hint-link" style={{ color: 'var(--accent)' }}>Atur →</Link>
-              </div>
-            ) : (
-              <>
-                {/* Hutang & Piutang */}
-                {(hutangAktif.length > 0 || piutangAktif.length > 0) && (
-                  <>
-                    <div className="budget-section-label">Hutang & Piutang</div>
-                    <div className="budget-rows">
-                      {[...hutangAktif, ...piutangAktif].map(h => {
-                        const isPiutang = h.jenis === 'piutang'
-                        const color = isPiutang ? '#f59e0b' : '#f87171'
-                        const today2 = new Date(); today2.setHours(0,0,0,0)
-                        const due = h.due_date ? new Date(h.due_date) : null
-                        const diff = due ? Math.round((due - today2) / 86400000) : null
-                        const overdue = diff !== null && diff < 0
-                        return (
-                          <div key={h.id} className="brow">
-                            <div className="brow-left">
-                              <span className="brow-icon" style={{ background: `${color}18`, color }}>
-                                {isPiutang ? <IconArrowDownLeft size={13} /> : <IconArrowUpRight size={13} />}
-                              </span>
-                              <div style={{ minWidth: 0 }}>
-                                <span className="brow-name">{h.nama}</span>
-                                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginLeft: 6 }}>
-                                  {isPiutang ? 'piutang' : 'hutang'}
-                                </span>
-                                {overdue && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 6px', marginLeft: 6 }}>Terlambat</span>}
-                              </div>
-                            </div>
-                            <div style={{ flex: 1 }} />
-                            <div className="brow-right">
-                              <span className="brow-spent tabular" style={{ color }}>{formatCurrency(h.amount)}</span>
-                              {h.due_date && (
-                                <span className="brow-limit tabular" style={{ color: overdue ? 'var(--danger)' : diff <= 7 ? 'var(--warning)' : 'var(--text-muted)' }}>
-                                  {diff === 0 ? 'Hari ini' : diff > 0 ? `${diff}h lagi` : `${Math.abs(diff)}h lalu`}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
 
-                {/* Pengeluaran Rutin */}
-                {(hutangAktif.length > 0 || piutangAktif.length > 0) && rutinCats.length > 0 && (
-                  <div style={{ height: 1, background: 'var(--border)', margin: '12px 0' }} />
-                )}
-                {rutinCats.length > 0 && (
-                  <>
-                    <div className="budget-section-label">Pengeluaran Rutin</div>
-                    <div className="budget-rows">
-                      {rutinCats.map(cat => <BudgetRow key={cat.id} cat={cat} />)}
-                    </div>
-                  </>
-                )}
-
-                {/* Kategori Lainnya */}
-                {(rutinCats.length > 0 || hutangAktif.length > 0 || piutangAktif.length > 0) && regularCats.length > 0 && (
-                  <div style={{ height: 1, background: 'var(--border)', margin: '12px 0' }} />
-                )}
-                {regularCats.length > 0 ? (
-                  <>
-                    <div className="budget-section-label">Kategori Lainnya</div>
-                    <div className="budget-rows">
-                      {regularCats.map(cat => <BudgetRow key={cat.id} cat={cat} />)}
-                    </div>
-                  </>
-                ) : (hutangAktif.length === 0 && piutangAktif.length === 0 && rutinCats.length === 0) && (
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    Belum ada kategori dengan budget. <Link to={`/categories?month=${month}`} style={{ color: 'var(--accent)' }}>Atur →</Link>
+              {/* MY TRANSACTION */}
+              {dashTab === 'transaction' && (
+                loading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 42 }} />)}
                   </div>
-                )}
-              </>
-            )}
-            </div>{/* end card-scroll-body budget */}
+                ) : data.transactions.length === 0 ? (
+                  <div className="empty-hint">
+                    <span className="empty-hint-icon"><IconArrowUp size={13} /></span>
+                    <span>Belum ada transaksi bulan ini.</span>
+                    <button className="empty-hint-link" onClick={() => setShowTxForm(true)}>Tambah sekarang →</button>
+                  </div>
+                ) : (
+                  <div className="tx-list">
+                    {data.transactions.map(tx => (
+                      <div key={tx.id} className="tx-row">
+                        <div className="tx-icon" style={{ background: tx.type === 'income' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)', color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                          {tx.type === 'income' ? <IconArrowUp size={14} /> : <IconArrowDown size={14} />}
+                        </div>
+                        <div className="tx-meta">
+                          <span className="tx-desc">{tx.description || tx.categories?.name || 'Transaksi'}</span>
+                          <span className="tx-date">{new Date(tx.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                        </div>
+                        <span className={`tx-amount tabular ${tx.type === 'income' ? 'inc' : 'exp'}`}>
+                          {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {/* MY BUDGET */}
+              {dashTab === 'budget' && (
+                loading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 44 }} />)}
+                  </div>
+                ) : isEmpty ? (
+                  <div className="empty-hint">
+                    <span className="empty-hint-icon"><IconSettings size={14} /></span>
+                    <span>Tambahkan kategori dan budget</span>
+                    <Link to={`/categories?month=${month}`} className="empty-hint-link" style={{ color: 'var(--accent)' }}>Atur →</Link>
+                  </div>
+                ) : (
+                  <>
+                    {(hutangAktif.length > 0 || piutangAktif.length > 0) && (
+                      <>
+                        <div className="budget-section-label">Hutang &amp; Piutang</div>
+                        <div className="budget-rows">
+                          {[...hutangAktif, ...piutangAktif].map(h => {
+                            const isPiutang = h.jenis === 'piutang'
+                            const color = isPiutang ? '#f59e0b' : '#f87171'
+                            const today2 = new Date(); today2.setHours(0,0,0,0)
+                            const due = h.due_date ? new Date(h.due_date) : null
+                            const diff = due ? Math.round((due - today2) / 86400000) : null
+                            const overdue = diff !== null && diff < 0
+                            return (
+                              <div key={h.id} className="brow">
+                                <div className="brow-left">
+                                  <span className="brow-icon" style={{ background: `${color}18`, color }}>
+                                    {isPiutang ? <IconArrowDownLeft size={13} /> : <IconArrowUpRight size={13} />}
+                                  </span>
+                                  <div style={{ minWidth: 0 }}>
+                                    <span className="brow-name">{h.nama}</span>
+                                    <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginLeft: 6 }}>{isPiutang ? 'piutang' : 'hutang'}</span>
+                                    {overdue && <span className="badge badge-danger" style={{ fontSize: '0.6rem', padding: '2px 6px', marginLeft: 6 }}>Terlambat</span>}
+                                  </div>
+                                </div>
+                                <div style={{ flex: 1 }} />
+                                <div className="brow-right">
+                                  <span className="brow-spent tabular" style={{ color }}>{formatCurrency(h.amount)}</span>
+                                  {h.due_date && (
+                                    <span className="brow-limit tabular" style={{ color: overdue ? 'var(--danger)' : diff <= 7 ? 'var(--warning)' : 'var(--text-muted)' }}>
+                                      {diff === 0 ? 'Hari ini' : diff > 0 ? `${diff}h lagi` : `${Math.abs(diff)}h lalu`}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+                    {(hutangAktif.length > 0 || piutangAktif.length > 0) && rutinCats.length > 0 && <div style={{ height: 1, background: 'var(--border)', margin: '12px 0' }} />}
+                    {rutinCats.length > 0 && (
+                      <>
+                        <div className="budget-section-label">Pengeluaran Rutin</div>
+                        <div className="budget-rows">{rutinCats.map(cat => <BudgetRow key={cat.id} cat={cat} />)}</div>
+                      </>
+                    )}
+                    {(rutinCats.length > 0 || hutangAktif.length > 0 || piutangAktif.length > 0) && regularCats.length > 0 && <div style={{ height: 1, background: 'var(--border)', margin: '12px 0' }} />}
+                    {regularCats.length > 0 ? (
+                      <>
+                        <div className="budget-section-label">Kategori Lainnya</div>
+                        <div className="budget-rows">{regularCats.map(cat => <BudgetRow key={cat.id} cat={cat} />)}</div>
+                      </>
+                    ) : (hutangAktif.length === 0 && piutangAktif.length === 0 && rutinCats.length === 0) && (
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Belum ada kategori dengan budget. <Link to={`/categories?month=${month}`} style={{ color: 'var(--accent)' }}>Atur →</Link>
+                      </div>
+                    )}
+                  </>
+                )
+              )}
+
+            </div>
           </div>
+          </>
         )
       })()}
 
-
-      {/* ── Transaksi terakhir ───────────────── */}
-      <div className="card">
-        <div className="sect-head">
-          <h3 className="sect-title">Transaksi Terakhir</h3>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to={`/transactions?month=${month}`} className="pill-link">Lihat semua</Link>
-            <button className="btn btn-primary btn-sm" style={{ fontSize: '0.75rem' }} onClick={() => setShowTxForm(true)}><IconPlus size={13} /> Transaksi</button>
-          </div>
-        </div>
-        <div className="card-scroll-body">
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-            {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 42 }} />)}
-          </div>
-        ) : data.transactions.length === 0 ? (
-          <div className="empty-hint">
-            <span className="empty-hint-icon"><IconArrowUp size={13} /></span>
-            <span>Belum ada transaksi bulan ini. </span>
-            <button className="empty-hint-link" onClick={() => setShowTxForm(true)}>Tambah sekarang →</button>
-          </div>
-        ) : (
-          <div className="tx-list">
-            {data.transactions.map(tx => (
-              <div key={tx.id} className="tx-row">
-                <div className="tx-icon" style={{ background: tx.type === 'income' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)', color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
-                  {tx.type === 'income' ? <IconArrowUp size={14} /> : <IconArrowDown size={14} />}
-                </div>
-                <div className="tx-meta">
-                  <span className="tx-desc">{tx.description || tx.categories?.name || 'Transaksi'}</span>
-                  <span className="tx-date">{new Date(tx.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
-                </div>
-                <span className={`tx-amount tabular ${tx.type === 'income' ? 'inc' : 'exp'}`}>
-                  {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-        </div>{/* end card-scroll-body tx */}
-      </div>
-      </div>{/* end dash-two-col */}
-
-      </div>{/* end sections gap wrapper */}
+    </div>{/* end db-page */}
 
       {/* ── Modals ───────────────────────────── */}
       {/* ── Gaji Modal ──────────────────────── */}
@@ -1104,200 +1076,105 @@ export default function Dashboard() {
           background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700;
         }
 
-        /* ── Hero Alert (inside hero-card) ──────── */
-        .hero-alert {
+        /* ── Alert ────────────────────────────── */
+        .db-alert {
           display: flex; align-items: center; gap: 7px;
-          background: rgba(248,113,113,0.10);
-          border: 1px solid rgba(248,113,113,0.25);
-          border-radius: var(--radius-sm);
-          padding: 7px 12px;
-          font-size: 0.73rem; color: var(--danger); font-weight: 500;
-          margin-bottom: 14px;
-          position: relative; z-index: 1;
+          background: rgba(248,113,113,0.08);
+          border: 1px solid rgba(248,113,113,0.2);
+          border-radius: 8px;
+          padding: 8px 12px;
+          font-size: 0.72rem; color: #f87171; font-weight: 600;
           animation: heroAlertIn 0.3s ease both;
         }
-        [data-theme="light"] .hero-alert {
-          background: rgba(239,68,68,0.08);
-          border-color: rgba(239,68,68,0.22);
-        }
-        .hero-alert-counter {
-          margin-left: auto;
-          font-size: 0.62rem; font-weight: 700;
-          color: var(--danger); opacity: 0.6;
-          background: rgba(248,113,113,0.12);
-          padding: 1px 6px; border-radius: 99px;
+        [data-theme="light"] .db-alert { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.2); }
+        .db-alert-count {
+          margin-left: auto; font-size: 0.6rem; font-weight: 700;
+          background: rgba(248,113,113,0.12); padding: 1px 6px; border-radius: 99px;
         }
         @keyframes heroAlertIn {
           from { opacity: 0; transform: translateY(-4px); }
           to   { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Hero ─────────────────────────────── */
-        .hero-card {
-          background: rgba(8, 8, 22, 0.80);
-          backdrop-filter: blur(24px) saturate(160%);
-          -webkit-backdrop-filter: blur(24px) saturate(160%);
-          border: 1px solid rgba(99,102,241,0.20);
-          border-radius: 20px;
-          padding: 24px 26px;
-          position: relative; overflow: hidden;
-          box-shadow: 0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+        /* ── Dashboard page ───────────────────── */
+        .db-page { display: flex; flex-direction: column; gap: 16px; padding-bottom: 48px; }
+
+        /* ── Saldo hero ───────────────────────── */
+        .db-hero { padding: 8px 0 4px; }
+
+        .db-eyebrow {
+          font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em;
+          color: var(--text-muted); text-transform: uppercase;
+          display: block; margin-bottom: 8px;
         }
-        [data-theme="light"] .hero-card {
-          background: rgba(255,255,255,0.94);
-          border-color: rgba(99,102,241,0.15);
-          box-shadow: 0 4px 24px rgba(99,102,241,0.08), 0 1px 4px rgba(0,0,0,0.06);
-        }
-        .hero-card::before {
-          content: '';
-          position: absolute; top: -60px; right: -60px;
-          width: 260px; height: 260px;
-          background: radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%);
-          pointer-events: none;
-        }
-        .hero-card::after {
-          content: '';
-          position: absolute; bottom: -40px; left: -40px;
-          width: 200px; height: 200px;
-          background: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%);
-          pointer-events: none;
-        }
-        [data-theme="light"] .hero-card::before { opacity: 0.25; }
-        [data-theme="light"] .hero-card::after  { opacity: 0.15; }
-        .hero-top {
-          display: flex; justify-content: space-between;
-          align-items: flex-start; margin-bottom: 16px;
-        }
-        .hero-left { position: relative; z-index: 1; }
-        .hero-eyebrow {
-          font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em;
-          color: var(--hero-muted); font-weight: 700; display: block; margin-bottom: 8px;
-        }
-        .hero-balance {
-          font-size: clamp(1.9rem, 5vw, 2.8rem);
+        .db-balance {
+          font-size: clamp(2.2rem, 8vw, 3.4rem);
           font-weight: 800; letter-spacing: -0.045em;
           font-variant-numeric: tabular-nums; line-height: 1;
-          /* Gradient text */
           background: linear-gradient(135deg, #fff 20%, rgba(167,139,250,0.9) 65%, rgba(99,102,241,0.85) 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
+          -webkit-background-clip: text; background-clip: text;
           -webkit-text-fill-color: transparent;
           display: inline-block;
         }
-        .hero-balance.neg {
+        .db-balance.neg {
           background: linear-gradient(135deg, #fca5a5 0%, #f87171 60%, #ef4444 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
+          -webkit-background-clip: text; background-clip: text;
           -webkit-text-fill-color: transparent;
         }
-        [data-theme="light"] .hero-balance {
+        [data-theme="light"] .db-balance {
           background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 45%, #4f46e5 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
+          -webkit-background-clip: text; background-clip: text;
           -webkit-text-fill-color: transparent;
         }
-        [data-theme="light"] .hero-balance.neg {
+        [data-theme="light"] .db-balance.neg {
           background: linear-gradient(135deg, #7f1d1d 0%, #b91c1c 60%, #dc2626 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
+          -webkit-background-clip: text; background-clip: text;
           -webkit-text-fill-color: transparent;
         }
-        .hero-neg-sign { font-size: 0.7em; vertical-align: 0.05em; margin-right: 1px; }
+        .db-neg-sign { font-size: 0.7em; vertical-align: 0.05em; margin-right: 1px; }
 
-        .hero-right {
+        .db-daily {
+          display: flex; align-items: center; gap: 8px;
+          margin-top: 8px;
+          font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
+        }
+        .db-daily-badge {
+          font-size: 0.6rem; font-weight: 700; padding: 2px 7px; border-radius: 99px;
+        }
+
+        /* ── Stats 2×2 ────────────────────────── */
+        .db-stats-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          grid-auto-rows: auto;
-          grid-auto-flow: column;
-          gap: 8px;
-          align-items: start;
-          position: relative; z-index: 1;
+          gap: 1px;
+          background: var(--border);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          overflow: hidden;
         }
-        .hero-chip {
-          display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
-          background: rgba(99,102,241,0.06);
-          border: 1px solid rgba(139,92,246,0.15);
-          border-radius: 10px; padding: 9px 13px; min-width: 130px;
-          transition: all 0.2s;
+        .db-stat {
+          display: flex; flex-direction: column; gap: 4px;
+          padding: 14px 16px;
+          background: var(--bg-card);
+          text-align: left; border: none;
+          font-family: var(--font-sans); cursor: default;
+          transition: background 0.12s;
         }
-        [data-theme="light"] .hero-chip { background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.15); }
-        .hero-chip-btn {
-          cursor: pointer;
+        .db-stat-btn { cursor: pointer; }
+        .db-stat-btn:hover { background: rgba(255,255,255,0.025); }
+        [data-theme="light"] .db-stat-btn:hover { background: rgba(0,0,0,0.02); }
+        .db-stat-label {
+          font-size: 0.55rem; font-weight: 700; letter-spacing: 0.1em;
+          text-transform: uppercase; color: var(--text-muted);
         }
-        .hero-chip-btn:hover {
-          border-color: rgba(139,92,246,0.4);
-          background: rgba(99,102,241,0.12);
-          box-shadow: 0 0 16px rgba(99,102,241,0.15);
-          transform: translateY(-1px);
-        }
-        .hero-chip-label {
-          font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em;
-          color: var(--hero-muted); font-weight: 700;
-        }
-        .hero-chip-val {
-          font-size: 0.875rem; font-weight: 700;
-          color: var(--hero-chip-val); letter-spacing: -0.02em;
-        }
-        .hero-chip-cta {
-          font-size: 0.58rem; color: var(--accent); font-weight: 700; margin-top: 1px;
-          opacity: 0.85;
-        }
-        .hero-chip-btn:hover .hero-chip-cta { opacity: 1; }
-
-        .hero-stats-row {
-          display: flex; align-items: stretch; gap: 0;
-          margin-top: 14px; padding-top: 14px;
-          border-top: 1px solid rgba(99,102,241,0.12);
-          position: relative; z-index: 1;
-        }
-        .hero-stat {
-          flex: 1; display: flex; flex-direction: column; gap: 3px;
-          padding: 0 12px;
-        }
-        .hero-stat:first-child { padding-left: 0; }
-        .hero-stat:last-child { padding-right: 0; }
-        .hero-stat-btn { cursor: pointer; border-radius: 8px; transition: all 0.15s; }
-        .hero-stat-btn:hover { background: rgba(99,102,241,0.06); }
-        .hero-stat-btn:hover .hero-stat-label { color: var(--accent); }
-        .hero-stat-label {
-          font-size: 0.58rem; font-weight: 700;
-          letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
-        }
-        .hero-stat-val {
-          font-size: 0.85rem; font-weight: 700;
-          letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+        .db-stat-val {
+          font-size: 0.9rem; font-weight: 800;
+          letter-spacing: -0.025em; font-variant-numeric: tabular-nums;
           color: var(--text-primary);
         }
-        .hero-stat-sub { font-size: 0.58rem; color: var(--text-muted); font-weight: 500; }
-        .hero-stat-divider {
-          width: 1px; background: rgba(99,102,241,0.12);
-          flex-shrink: 0; align-self: stretch;
-        }
-        .hero-bar-track {
-          height: 5px; background: var(--hero-track); border-radius: 99px; overflow: hidden; margin-bottom: 7px;
-        }
-        .hero-bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
-        .hero-bar-labels {
-          display: flex; justify-content: space-between;
-          font-size: 0.68rem; color: var(--hero-bar-label); font-weight: 500;
-        }
-
-        .hero-no-salary {
-          display: flex; align-items: center; gap: 10px; margin-top: 10px;
-        }
-        .salary-cta {
-          display: inline-flex; align-items: center; gap: 5px;
-          background: var(--accent-dim);
-          border: 1px solid rgba(99,102,241,0.35);
-          border-radius: var(--radius-sm);
-          padding: 7px 13px;
-          color: var(--accent); font-size: 0.78rem; font-weight: 700;
-          cursor: pointer; font-family: var(--font-sans);
-          transition: all 0.15s; letter-spacing: -0.01em; white-space: nowrap;
-        }
-        .salary-cta:hover { background: rgba(99,102,241,0.2); transform: translateY(-1px); }
-        .salary-cta-hint {
-          font-size: 0.72rem; color: var(--hero-muted); font-weight: 500;
+        .db-stat-sub {
+          font-size: 0.58rem; font-weight: 500;
+          color: var(--text-muted); opacity: 0.8;
         }
 
         /* ── Stats strip ──────────────────────── */
@@ -1393,6 +1270,85 @@ export default function Dashboard() {
         }
         .wajib-amount { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; }
 
+        /* ── Tab toggle ──────────────────────── */
+        .dash-tab-card { display: flex; flex-direction: column; }
+        .dash-tab-card .sect-head { flex-wrap: wrap; gap: 8px; }
+        .dash-tab-toggle {
+          display: flex;
+          gap: 2px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 8px;
+          padding: 3px;
+        }
+        [data-theme="light"] .dash-tab-toggle {
+          background: rgba(0,0,0,0.04);
+          border-color: rgba(0,0,0,0.08);
+        }
+        .dash-tab-btn {
+          padding: 5px 12px;
+          border-radius: 5px;
+          border: none;
+          background: transparent;
+          color: var(--text-muted);
+          font-size: 0.75rem;
+          font-weight: 700;
+          font-family: var(--font-sans);
+          letter-spacing: -0.01em;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+        .dash-tab-btn:hover { color: var(--text-secondary); }
+        .dash-tab-btn.active {
+          background: rgba(255,255,255,0.09);
+          color: var(--text-primary);
+        }
+        [data-theme="light"] .dash-tab-btn.active {
+          background: #fff;
+          color: var(--accent);
+          box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        /* ── Tab actions ──────────────────────── */
+        .tab-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+        .tab-act {
+          display: flex; align-items: center; gap: 5px;
+          padding: 6px 10px; border-radius: 7px;
+          font-size: 0.72rem; font-weight: 600; letter-spacing: -0.01em;
+          color: var(--text-muted);
+          border: 1px solid rgba(255,255,255,0.07);
+          background: transparent; text-decoration: none;
+          transition: all 0.12s; cursor: pointer;
+          font-family: var(--font-sans); white-space: nowrap;
+        }
+        .tab-act:hover {
+          color: var(--text-primary);
+          background: rgba(255,255,255,0.05);
+          border-color: rgba(255,255,255,0.12);
+        }
+        .tab-act-accent {
+          color: var(--accent);
+          border-color: rgba(99,102,241,0.2);
+          background: rgba(99,102,241,0.06);
+        }
+        .tab-act-accent:hover {
+          background: rgba(99,102,241,0.12);
+          border-color: rgba(99,102,241,0.35);
+          color: var(--accent);
+        }
+        [data-theme="light"] .tab-act { border-color: rgba(0,0,0,0.09); }
+        [data-theme="light"] .tab-act:hover { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.14); }
+        [data-theme="light"] .tab-act-accent { background: var(--accent-dim); border-color: rgba(99,102,241,0.25); }
+
+        @media (max-width: 600px) {
+          .dash-tab-card .sect-head { flex-wrap: wrap; gap: 8px; align-items: center; }
+          .dash-tab-toggle { flex: 1; }
+          .dash-tab-toggle .dash-tab-btn { flex: 1; text-align: center; }
+          .tab-act-label { display: none; }
+          .tab-act { padding: 7px 9px; border-radius: 8px; }
+        }
+
         /* ── Two-col layout ──────────────────── */
         .dash-two-col {
           display: grid;
@@ -1433,12 +1389,17 @@ export default function Dashboard() {
         }
         .brow {
           display: grid;
-          grid-template-columns: minmax(140px, 1.6fr) 1fr 110px 36px;
+          grid-template-columns: minmax(140px, 1.6fr) 1fr 36px 110px;
+          grid-template-areas: "left bar pct right";
           align-items: center; gap: 14px; padding: 12px 0;
           border-bottom: 1px solid var(--border);
         }
+        .brow-left { grid-area: left; }
+        .brow-bar-wrap { grid-area: bar; }
+        .brow-pct { grid-area: pct; }
+        .brow-right { grid-area: right; }
         .brow:last-child { border-bottom: none; }
-        .brow.no-limit { grid-template-columns: 1fr auto; }
+        .brow.no-limit { grid-template-columns: 1fr auto; grid-template-areas: none; }
         .brow-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
         .brow-icon {
           width: 28px; height: 28px; border-radius: 7px;
@@ -1462,6 +1423,12 @@ export default function Dashboard() {
         .brow-spent { font-size: 0.8rem; font-weight: 700; letter-spacing: -0.01em; }
         .brow-limit { font-size: 0.65rem; color: var(--text-muted); font-weight: 500; }
         .brow-pct { font-size: 0.72rem; font-weight: 700; text-align: right; min-width: 30px; }
+        .brow-no-budget {
+          grid-template-columns: 1fr auto;
+          grid-template-areas: none;
+        }
+        .brow-no-budget .brow-left { grid-column: 1; grid-area: unset; }
+        .brow-only-spent { grid-column: 2; align-self: center; text-align: right; }
 
         /* ── Savings grid ─────────────────────── */
         .savings-grid {
@@ -1589,14 +1556,18 @@ export default function Dashboard() {
           .stat-col-val { font-size: 0.875rem; }
           .brow {
             grid-template-columns: 1fr auto;
-            grid-template-rows: auto auto auto;
-            grid-template-areas: "left right" "bar bar" "meta meta";
+            grid-template-rows: auto auto;
+            grid-template-areas: none;
+            gap: 0 8px;
           }
-          .brow-left { grid-area: left; }
-          .brow-bar-wrap { grid-area: bar; margin-top: 5px; }
-          .brow-right { grid-area: right; align-self: start; }
-          .brow-pct { display: block; font-size: 0.68rem; grid-area: meta; }
-          .brow-limit { display: block; font-size: 0.65rem; }
+          .brow-left   { grid-column: 1; grid-row: 1; padding-bottom: 5px; }
+          .brow-right  { grid-column: 2; grid-row: 1; align-self: start; flex-direction: column; align-items: flex-end; gap: 1px; }
+          .brow-bar-wrap { grid-column: 1; grid-row: 2; align-self: center; }
+          .brow-pct    { grid-column: 2; grid-row: 2; align-self: center; padding-left: 6px; font-size: 0.65rem; }
+          .brow-no-budget { grid-template-rows: auto; }
+          .brow-no-budget .brow-left { grid-row: 1; padding-bottom: 0; }
+          .brow-only-spent { grid-column: 2; grid-row: 1; align-self: center; }
+          .brow-limit  { font-size: 0.62rem; }
           .savings-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 400px) {

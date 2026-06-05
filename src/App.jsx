@@ -13,7 +13,7 @@ import './index.css'
 const Login = lazy(() => import('./pages/Login'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Transactions = lazy(() => import('./pages/Transactions'))
-const Categories = lazy(() => import('./pages/Categories'))
+const Categories = lazy(() => import('./pages/CategoriesV2'))
 const Savings = lazy(() => import('./pages/Savings'))
 const Report = lazy(() => import('./pages/Report'))
 

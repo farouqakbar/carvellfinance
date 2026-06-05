@@ -780,15 +780,15 @@ a:focus-visible {
 @media (max-width: 768px) {
   .main-wrapper { margin-left: 0; }
   .page-topbar-slot {
-    position: fixed; top: 78px; left: 0; right: 0;
+    position: fixed; top: 52px; left: 0; right: 0;
     padding: 0 14px; height: 50px;
   }
   .main-content {
     padding: 16px 14px;
-    padding-top: 94px; padding-bottom: 88px;
+    padding-top: 68px; padding-bottom: 80px;
     max-width: 100vw; overflow-x: hidden;
   }
-  .main-wrapper.has-page-topbar .main-content { padding-top: 144px; }
+  .main-wrapper.has-page-topbar .main-content { padding-top: 118px; }
   .page-title { font-size: 1.2rem; }
   .page-subtitle { font-size: 0.78rem; margin-bottom: 14px; }
   .flex-between { flex-wrap: wrap; gap: 8px; }
@@ -802,8 +802,8 @@ a:focus-visible {
     max-width: 100% !important;
     border-radius: 20px 20px 0 0;
     padding: 0 18px;
-    padding-bottom: max(40px, env(safe-area-inset-bottom, 0px));
-    max-height: 82dvh;
+    padding-bottom: max(100px, calc(68px + env(safe-area-inset-bottom, 0px)));
+    max-height: 88dvh;
     overflow-y: auto;
     overscroll-behavior: contain;
     border-top: 1px solid rgba(139,92,246,0.25);
@@ -815,6 +815,9 @@ a:focus-visible {
     /* Overlay tap-zone di atas sheet tidak terlalu tinggi */
   }
   .modal-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
     position: sticky; top: 0;
     background: rgba(12, 12, 28, 0.97);
     backdrop-filter: var(--glass-blur);
@@ -829,12 +832,14 @@ a:focus-visible {
   [data-theme="light"] .modal-header { background: rgba(255,255,255,0.97); }
   .modal-header::before {
     content: '';
-    display: block;
+    grid-column: 1 / -1;
     width: 36px; height: 4px;
-    background: var(--border-light);
+    background: rgba(255,255,255,0.15);
     border-radius: 99px;
-    margin: 14px auto 16px;
+    margin: 12px auto 14px;
+    justify-self: center;
   }
+  [data-theme="light"] .modal-header::before { background: rgba(0,0,0,0.12); }
   .modal-title { font-size: 1rem; }
   /* Override animasi jadi slide-from-bottom */
   .modal { animation: mobileSheetUp 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -862,8 +867,8 @@ a:focus-visible {
 }
 
 @media (max-width: 480px) {
-  .main-content { padding: 12px; padding-top: 94px; padding-bottom: 88px; }
-  .main-wrapper.has-page-topbar .main-content { padding-top: 144px; }
+  .main-content { padding: 12px; padding-top: 68px; padding-bottom: 80px; }
+  .main-wrapper.has-page-topbar .main-content { padding-top: 118px; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; gap: 8px; }
   .card { padding: 12px; }
   .back-label { display: none; }

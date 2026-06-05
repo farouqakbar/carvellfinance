@@ -88,9 +88,18 @@ export default function DevOverlay() {
   const [enabled, setEnabled] = useState(false)
   const [selections, setSelections] = useState([])
   const [instruction, setInstruction] = useState('')
-  const [flash, setFlash] = useState(false) // auto-copy flash indicator
+  const [flash, setFlash] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [mobilePreview, setMobilePreview] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [previewKey, setPreviewKey] = useState(0)
   const textareaRef = useRef(null)
+
+  const openMobilePreview = () => {
+    setPreviewUrl(window.location.href)
+    setPreviewKey(k => k + 1)
+    setMobilePreview(true)
+  }
 
   const [btnPos, onBtnDrag] = useDrag({ x: window.innerWidth - 90, y: window.innerHeight - 100 })
   const btnDragged = useRef(false)
@@ -167,6 +176,7 @@ export default function DevOverlay() {
   if (!import.meta.env.DEV) return null
 
   const panelOpen = enabled && selections.length > 0
+  const frameScale = Math.min(1, (window.innerHeight - 120) / 920)
 
   return (
     <div data-dev-overlay="true">
@@ -219,6 +229,124 @@ export default function DevOverlay() {
       >
         {flash ? '✓ Copied!' : enabled ? (selections.length > 0 ? `◈ ${selections.length} sel` : '◈ ON') : '◈ DEV'}
       </button>
+
+      {/* Mobile preview button */}
+      <button
+        data-dev-overlay="true"
+        onClick={openMobilePreview}
+        title="Mobile preview"
+        style={{
+          position: 'fixed',
+          right: 16, bottom: 56,
+          zIndex: 99998,
+          width: 36, height: 36,
+          borderRadius: 8,
+          border: mobilePreview ? '1.5px solid #34d399' : '1.5px solid #333',
+          background: mobilePreview ? 'rgba(52,211,153,0.15)' : 'rgba(15,15,28,0.92)',
+          color: mobilePreview ? '#34d399' : '#555',
+          fontSize: 16, cursor: 'pointer',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 2px 8px #0004',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 0.2s',
+        }}
+      >
+        📱
+      </button>
+
+      {/* iPhone frame overlay */}
+      {mobilePreview && (
+        <div
+          data-dev-overlay="true"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 99999,
+            background: 'rgba(0,0,0,0.88)',
+            backdropFilter: 'blur(16px)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'flex-start',
+            padding: '16px 0 24px',
+            overflow: 'auto',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setMobilePreview(false) }}
+        >
+          {/* Toolbar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexShrink: 0 }}>
+            <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#555', letterSpacing: '0.08em' }}>
+              MOBILE PREVIEW · 390 × 844
+            </span>
+            <button
+              onClick={openMobilePreview}
+              title="Refresh ke halaman aktif"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid #333', borderRadius: 5, color: '#888', fontSize: 10, padding: '3px 9px', cursor: 'pointer', fontFamily: 'monospace' }}
+            >
+              ↺ sync
+            </button>
+            <button
+              onClick={() => setMobilePreview(false)}
+              style={{ background: 'transparent', border: '1px solid #333', borderRadius: 5, color: '#555', fontSize: 11, padding: '3px 9px', cursor: 'pointer', fontFamily: 'monospace' }}
+            >
+              ✕ tutup
+            </button>
+          </div>
+
+          {/* iPhone 14 Pro frame */}
+          <div style={{
+            transformOrigin: 'top center',
+            transform: `scale(${frameScale})`,
+            flexShrink: 0,
+            marginBottom: frameScale < 1 ? `${(920 * (frameScale - 1))}px` : 0,
+          }}>
+            <div style={{
+              width: 422,
+              background: 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
+              borderRadius: 52,
+              padding: '18px 15px 26px',
+              boxShadow: '0 0 0 1px #3a3a3a, inset 0 0 0 1px #111, 0 40px 100px rgba(0,0,0,0.9), 0 0 0 2px #0a0a0a',
+              position: 'relative',
+            }}>
+              {/* Volume buttons — left */}
+              <div style={{ position: 'absolute', left: -3, top: 116, width: 3, height: 30, background: '#2a2a2a', borderRadius: '3px 0 0 3px', boxShadow: 'inset 1px 0 2px rgba(0,0,0,0.5)' }} />
+              <div style={{ position: 'absolute', left: -3, top: 158, width: 3, height: 60, background: '#2a2a2a', borderRadius: '3px 0 0 3px', boxShadow: 'inset 1px 0 2px rgba(0,0,0,0.5)' }} />
+              <div style={{ position: 'absolute', left: -3, top: 228, width: 3, height: 60, background: '#2a2a2a', borderRadius: '3px 0 0 3px', boxShadow: 'inset 1px 0 2px rgba(0,0,0,0.5)' }} />
+              {/* Power button — right */}
+              <div style={{ position: 'absolute', right: -3, top: 158, width: 3, height: 90, background: '#2a2a2a', borderRadius: '0 3px 3px 0', boxShadow: 'inset -1px 0 2px rgba(0,0,0,0.5)' }} />
+
+              {/* Screen container */}
+              <div style={{
+                width: 390, height: 844,
+                background: '#000',
+                borderRadius: 42,
+                overflow: 'hidden',
+                position: 'relative',
+                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05)',
+              }}>
+                {/* Dynamic Island */}
+                <div style={{
+                  position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+                  width: 120, height: 34,
+                  background: '#000',
+                  borderRadius: 20,
+                  zIndex: 10,
+                  boxShadow: '0 0 0 1px rgba(255,255,255,0.08)',
+                }} />
+
+                {/* Iframe */}
+                <iframe
+                  key={previewKey}
+                  src={previewUrl}
+                  style={{ width: 390, height: 844, border: 'none', display: 'block' }}
+                  title="Mobile Preview"
+                />
+              </div>
+
+              {/* Home indicator */}
+              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10 }}>
+                <div style={{ width: 130, height: 5, background: '#333', borderRadius: 3 }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating panel — freely draggable */}
       {panelOpen && (

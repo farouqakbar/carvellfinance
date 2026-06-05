@@ -1,0 +1,32 @@
+{
+  "name": "Cashvell",
+  "short_name": "Cashvell",
+  "description": "Aplikasi keuangan pribadi — tracking pemasukan, pengeluaran, dan budget",
+  "start_url": "/carvellfinance/",
+  "scope": "/carvellfinance/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07070f",
+  "theme_color": "#07070f",
+  "lang": "id",
+  "icons": [
+    {
+      "src": "/carvellfinance/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/carvellfinance/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/carvellfinance/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

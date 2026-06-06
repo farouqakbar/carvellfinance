@@ -147,7 +147,7 @@ export default function Dashboard() {
       const nmStr = nextMonth(month)
       const recordStart = user.recording_start_month
       // Transaksi dari recording_start_month s/d sebelum bulan ini — lt(startDate) hindari invalid endDate
-      let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lt('date', startDate)
+      let histQuery = supabase.from('transactions').select('amount, type, date').eq('user_id', user.id).lt('date', startDate)
       if (recordStart) histQuery = histQuery.gte('date', `${recordStart}-01`)
 
       let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id, month, categories(is_mandatory, name, category_type)').eq('user_id', user.id).lte('month', month)
@@ -245,6 +245,8 @@ export default function Dashboard() {
           .reduce((s, cb) => s + Number(cb.budget_limit), 0),
         planEvents: planEventsRes.data || [],
         allWishlist: allWishlistRes.data || [],
+        allCurrentMonthTx: txs,
+        histTransactions: histRes.data || [],
       })
     } finally { setLoading(false) }
   }
@@ -420,6 +422,14 @@ export default function Dashboard() {
 
   const projectedSaldo = useMemo(() => {
     if (!simMode || !simDate) return null
+    if (simDate < todayStr) {
+      // Historical: undo net flow of real transactions after simDate up to today
+      const allTxs = [...(data.allCurrentMonthTx || []), ...(data.histTransactions || [])]
+      const netFlowAfter = allTxs
+        .filter(t => t.date > simDate && t.date <= todayStr)
+        .reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0)
+      return totalSaldo - netFlowAfter
+    }
     const simMonth = simDate.slice(0, 7)
     const planIncome = (data.planEvents || [])
       .filter(e => e.type === 'income' && e.date >= todayStr && e.date <= simDate)
@@ -431,7 +441,7 @@ export default function Dashboard() {
       .filter(p => p.target_month >= currentMonthStr && p.target_month <= simMonth)
       .reduce((s, p) => s + Number(p.amount), 0)
     return totalSaldo + planIncome - planExpense - wishlistCost
-  }, [simMode, simDate, data.planEvents, data.allWishlist, totalSaldo])
+  }, [simMode, simDate, data.planEvents, data.allWishlist, data.allCurrentMonthTx, data.histTransactions, totalSaldo])
 
   const toggleSimMode = () => {
     if (simScrollTimerRef.current) clearTimeout(simScrollTimerRef.current)
@@ -469,17 +479,20 @@ export default function Dashboard() {
     }
   }, [simMode, simDates.length])
 
-  // Wheel → horizontal scroll (desktop) — only when cursor is over the strip
+  // Wheel → horizontal scroll (desktop) — 1 item per tick, only when cursor is over the strip
   useEffect(() => {
     const container = simCalScrollRef.current
     if (!container) return
     let inside = false
-    const onEnter = () => { inside = true }
+    let targetIdx = 0
+    const onEnter = () => { inside = true; targetIdx = Math.round(container.scrollLeft / ITEM_W) }
     const onLeave = () => { inside = false }
     const handler = (e) => {
       if (!inside) return
       e.preventDefault()
-      container.scrollLeft += e.deltaY + e.deltaX
+      const dir = (e.deltaY + e.deltaX) > 0 ? 1 : -1
+      targetIdx = Math.max(0, Math.min(targetIdx + dir, simDates.length - 1))
+      container.scrollTo({ left: targetIdx * ITEM_W, behavior: 'instant' })
     }
     container.addEventListener('mouseenter', onEnter)
     container.addEventListener('mouseleave', onLeave)
@@ -707,67 +720,88 @@ export default function Dashboard() {
             })}
           </div>
 
-          {simDate ? (
-            <div className="sim-cal-arrow">
-              {(() => {
-                const sel = simDates.find(d => d.key === simDate)
-                return (
-                  <>
-                    {sel?.planCount > 0 && <span className="sim-dot plan">▲</span>}
-                    {sel?.wishlistCount > 0 && <span className="sim-dot wish">▲</span>}
-                  </>
-                )
-              })()}
-            </div>
-          ) : (
-            <div className="sim-hint">Scroll ke tanggal untuk lihat proyeksi</div>
-          )}
+          {(() => {
+            if (!simDate) return <div className="sim-hint">Scroll ke tanggal untuk lihat proyeksi</div>
+            const sel = simDates.find(d => d.key === simDate)
+            const hasPlan = (sel?.planCount ?? 0) > 0
+            const hasWish = (sel?.wishlistCount ?? 0) > 0
+            if (!hasPlan && !hasWish) return null
+            return (
+              <div className="sim-cal-arrow">
+                {hasPlan && <span className="sim-dot plan">▲</span>}
+                {hasWish && <span className="sim-dot wish">▲</span>}
+              </div>
+            )
+          })()}
 
-          {/* Breakdown panel when date is selected */}
-          {simDate && (
-            <div className="sim-breakdown">
-              {(() => {
-                const simMonth = simDate.slice(0, 7)
-                const planEventsUpTo = (data.planEvents || []).filter(e => e.date >= todayStr && e.date <= simDate)
-                const wishlistUpTo = (data.allWishlist || []).filter(p => p.target_month >= currentMonthStr && p.target_month <= simMonth)
-                const hasAnything = planEventsUpTo.length > 0 || wishlistUpTo.length > 0
-                return hasAnything ? (
-                  <>
-                    {planEventsUpTo.length > 0 && (
-                      <div className="sim-bk-group">
-                        <span className="sim-bk-label">Plan events s/d {new Date(simDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
-                        {planEventsUpTo.map(e => (
-                          <div key={e.id} className="sim-bk-row">
-                            <span className="sim-bk-date">{new Date(e.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
-                            <span className="sim-bk-name">{e.title}</span>
-                            <span className="sim-bk-amt" style={{ color: e.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
-                              {e.type === 'income' ? '+' : '−'}{formatCurrency(e.amount)}
-                            </span>
-                          </div>
-                        ))}
+          {/* Breakdown panel */}
+          {simDate && (() => {
+            const dateLabel = new Date(simDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+            if (simDate < todayStr) {
+              // Past: actual transactions on this date
+              const txsOnDate = [
+                ...(data.allCurrentMonthTx || []).filter(t => t.date === simDate),
+                ...(data.histTransactions || []).filter(t => t.date === simDate),
+              ]
+              if (txsOnDate.length === 0) return null
+              return (
+                <div className="sim-breakdown">
+                  <div className="sim-bk-group">
+                    <span className="sim-bk-label">Transaksi {dateLabel}</span>
+                    {txsOnDate.map((t, i) => (
+                      <div key={t.id || i} className="sim-bk-row">
+                        <span className="sim-bk-name">{t.categories?.name || (t.type === 'income' ? 'Pemasukan' : 'Pengeluaran')}</span>
+                        <span className="sim-bk-amt" style={{ color: t.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                          {t.type === 'income' ? '+' : '−'}{formatCurrency(t.amount)}
+                        </span>
                       </div>
-                    )}
-                    {wishlistUpTo.length > 0 && (
-                      <div className="sim-bk-group">
-                        <span className="sim-bk-label">Wishlist s/d {simMonth}</span>
-                        {wishlistUpTo.map(p => (
-                          <div key={p.id} className="sim-bk-row">
-                            <span className="sim-bk-date">{p.target_month}</span>
-                            <span className="sim-bk-name">{p.name}</span>
-                            <span className="sim-bk-amt" style={{ color: 'var(--danger)' }}>−{formatCurrency(p.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '6px 0' }}>
-                    Tidak ada event dari hari ini s/d tanggal ini.
+                    ))}
                   </div>
-                )
-              })()}
-            </div>
-          )}
+                </div>
+              )
+            }
+            // Future: plan events + wishlist
+            const sel = simDates.find(d => d.key === simDate)
+            const hasPlan = (sel?.planCount ?? 0) > 0
+            const hasWish = (sel?.wishlistCount ?? 0) > 0
+            if (!hasPlan && !hasWish) return null
+            const simMonth = simDate.slice(0, 7)
+            const planEventsOnDate = (data.planEvents || []).filter(e => e.date === simDate)
+            const simDateObj = new Date(simDate + 'T00:00:00')
+            const lastDayOfMonth = new Date(simDateObj.getFullYear(), simDateObj.getMonth() + 1, 0).getDate()
+            const isLastDay = simDateObj.getDate() === lastDayOfMonth
+            const wishlistOnDate = isLastDay
+              ? (data.allWishlist || []).filter(p => p.target_month === simMonth)
+              : []
+            return (
+              <div className="sim-breakdown">
+                {planEventsOnDate.length > 0 && (
+                  <div className="sim-bk-group">
+                    <span className="sim-bk-label">Plan events {dateLabel}</span>
+                    {planEventsOnDate.map(e => (
+                      <div key={e.id} className="sim-bk-row">
+                        <span className="sim-bk-name">{e.title}</span>
+                        <span className="sim-bk-amt" style={{ color: e.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                          {e.type === 'income' ? '+' : '−'}{formatCurrency(e.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {wishlistOnDate.length > 0 && (
+                  <div className="sim-bk-group">
+                    <span className="sim-bk-label">Wishlist {simMonth}</span>
+                    {wishlistOnDate.map(p => (
+                      <div key={p.id} className="sim-bk-row">
+                        <span className="sim-bk-name">{p.name}</span>
+                        <span className="sim-bk-amt" style={{ color: 'var(--danger)' }}>−{formatCurrency(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
 

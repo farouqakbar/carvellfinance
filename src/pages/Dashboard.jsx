@@ -1745,8 +1745,6 @@ export default function Dashboard() {
 
       <style>{`
         /* ── Month Picker Popup ───────────────── */
-
-        /* ── Month Picker Popup ───────────────── */
         .month-picker-popup {
           position: absolute; top: calc(100% + 8px); left: 0;
           z-index: 300; width: 224px;
@@ -2439,7 +2437,7 @@ export default function Dashboard() {
           letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 4px;
         }
         .sim-bk-row {
-          display: grid; grid-template-columns: 50px 1fr auto;
+          display: grid; grid-template-columns: 1fr auto;
           align-items: center; gap: 8px;
           padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
         }

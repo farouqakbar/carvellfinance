@@ -186,15 +186,13 @@ export default function Transactions() {
 
       {/* Stats strip */}
       {transactions.length > 0 && (() => {
-        const mandatory = categories.filter(c => c.is_mandatory).reduce((s, c) => s + Number(c.budget_limit || 0), 0)
-        const net = allTotals.income - allTotals.expense - mandatory
-        const totalPengeluaran = salary - net
+        const totalPengeluaran = salary - totalSaldo
         return (
           <div className="tx-stats">
             <div className="tx-stat">
               <span className="tx-stat-label">TOTAL SALDO</span>
-              <span className="tx-stat-val tabular" style={{ color: net >= 0 ? '#34d399' : '#f87171' }}>
-                {net >= 0 ? '+' : '−'}{formatCurrency(Math.abs(net))}
+              <span className="tx-stat-val tabular" style={{ color: totalSaldo >= 0 ? '#34d399' : '#f87171' }}>
+                {totalSaldo >= 0 ? '+' : '−'}{formatCurrency(Math.abs(totalSaldo))}
               </span>
             </div>
             <div className="tx-stat-sep" />

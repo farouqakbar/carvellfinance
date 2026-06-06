@@ -281,7 +281,7 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
         /* ── Mobile Topbar ──────────────────────────────────── */
         .mobile-topbar {
           display: none; position: fixed; top: 0; left: 0; right: 0;
-          height: 52px;
+          height: calc(52px + env(safe-area-inset-top, 0px));
           background: rgba(6,6,16,0.92);
           backdrop-filter: blur(20px) saturate(140%);
           -webkit-backdrop-filter: blur(20px) saturate(140%);
@@ -294,7 +294,7 @@ export default function Navbar({ darkMode, setDarkMode, onProfileClick }) {
         }
         .mtp-inner {
           display: flex; align-items: center;
-          padding: 0 14px; height: 100%; gap: 10px;
+          padding: env(safe-area-inset-top, 0px) 14px 0; height: 100%; gap: 10px;
         }
         .mtp-logo { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
         .mtp-logo-text {

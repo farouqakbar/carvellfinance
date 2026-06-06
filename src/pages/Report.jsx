@@ -68,7 +68,7 @@ export default function Report() {
       if (!monthCatMap[m]) monthCatMap[m] = {}
 
       if (tx.type === 'income') {
-        if (tx.categories?.name === 'Pemasukan Bulanan') {
+        if (tx.categories?.name === 'Gaji' || tx.categories?.name === 'Pemasukan Bulanan') {
           salaryMap[m] = (salaryMap[m] || 0) + Number(tx.amount)
         } else {
           monthMap[m].income += Number(tx.amount)

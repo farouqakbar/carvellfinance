@@ -133,7 +133,7 @@ export default function CategoriesV2() {
       let catId = gajiCatId
       if (!catId) {
         const { data: newCat, error: catErr } = await supabase.from('categories')
-          .insert({ user_id: user.id, name: 'Pemasukan Bulanan', color: '#22c55e', icon: '', is_mandatory: false, budget_limit: 0 })
+          .insert({ user_id: user.id, name: 'Pemasukan Bulanan', color: '#22c55e', icon: '', is_mandatory: false, budget_limit: 0, category_type: 'income' })
           .select().single()
         if (catErr) throw catErr
         catId = newCat.id
@@ -1189,6 +1189,9 @@ export default function CategoriesV2() {
           background: rgba(255,255,255,0.07);
           border-radius: 2px;
           overflow: hidden;
+        }
+        [data-theme="light"] .cv2-bar-track {
+          background: rgba(0,0,0,0.09);
         }
         .cv2-bar-fill {
           height: 100%;

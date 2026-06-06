@@ -8,6 +8,7 @@ import TransactionForm from '../components/TransactionForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import { IconList, IconArrowUp, IconArrowDown, IconEdit, IconTrash, IconDownload, IconPlus, IconX } from '../components/Icons'
+import { isMandatoryIncome } from '../constants/mandatoryCategories'
 
 function prevMonth(m) {
   const [y, mo] = m.split('-').map(Number)
@@ -159,7 +160,7 @@ export default function Transactions() {
   }, [transactions])
 
   const salary = useMemo(() => {
-    const gajiCat = categories.find(c => c.name === 'Pemasukan Bulanan')
+    const gajiCat = categories.find(c => isMandatoryIncome(c))
     return transactions.filter(tx => tx.type === 'income' && tx.category_id === gajiCat?.id)
       .reduce((s, tx) => s + Number(tx.amount), 0)
   }, [transactions, categories])

@@ -8,7 +8,7 @@ import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import CurrencyInput from '../components/CurrencyInput'
 import { useToast } from '../components/Toast'
-import { isMandatory, isMandatoryIncome, isProtected } from '../constants/mandatoryCategories'
+import { isMandatory, isMandatoryIncome, isSavings, isWajib, isRutin, isTambahan, isProtected } from '../constants/mandatoryCategories'
 import { IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconEdit, IconTrash, IconPlus, IconCheck, IconX } from '../components/Icons'
 
 const DEFAULT_PCT = 15
@@ -86,7 +86,7 @@ export default function CategoriesV2() {
       supabase.from('categories').select('*').eq('user_id', user.id).eq('month', month),
     ])
     const merged = [
-      ...(globalRes.data || []).filter(c => isProtected(c)),
+      ...(globalRes.data || []),
       ...(monthRes.data || []),
     ].sort((a, b) => a.name.localeCompare(b.name))
     const seen = new Set()
@@ -333,15 +333,13 @@ export default function CategoriesV2() {
 
   // ─── DERIVED ────────────────────────────────────────────────────────────────
   const incomeCategories = categories.filter(c => isMandatoryIncome(c))
-  const mandatory = categories.filter(c => isMandatory(c)).sort((a, b) => {
-    if (isProtected(a) && !isProtected(b)) return -1
-    if (!isProtected(a) && isProtected(b)) return 1
-    return a.name.localeCompare(b.name)
-  })
-  const monthly = categories.filter(c => c.is_monthly && !isMandatory(c) && !isMandatoryIncome(c))
-  const regular = categories.filter(c => !isMandatory(c) && !isMandatoryIncome(c) && !c.is_monthly)
-  const mandatoryTotal = mandatory.reduce((s, c) => s + Number(c.budget_limit || 0), 0)
-  const sisaGaji = salary - mandatoryTotal
+  const savingsCategories = categories.filter(c => isSavings(c))
+  const wajibCategories = categories.filter(c => isWajib(c))
+  const rutinCategories = categories.filter(c => isRutin(c))
+  const tambahanCategories = categories.filter(c => isTambahan(c))
+  const savingsTotal = savingsCategories.reduce((s, c) => s + Number(c.budget_limit || 0), 0)
+  const wajibTotal = wajibCategories.reduce((s, c) => s + Number(c.budget_limit || 0), 0)
+  const sisaGaji = salary - savingsTotal - wajibTotal
 
   // ─── ROW RENDERS ────────────────────────────────────────────────────────────
 
@@ -449,24 +447,29 @@ export default function CategoriesV2() {
     )
   }
 
-  const renderMandatoryRow = (cat) => {
+  const renderMandatoryRow = (cat, type = 'wajib') => {
     const budget = Number(cat.budget_limit || 0)
     const salaryPct = salary > 0 && budget > 0 ? Math.round((budget / salary) * 100) : null
     const isPlanned = !!cat.is_planned
+    const isSav = type === 'savings'
+    const accentColor = isSav ? (cat.color || '#6366f1') : (cat.color || '#f87171')
+    const tagBg = isSav ? 'rgba(99,102,241,0.1)' : 'rgba(248,113,113,0.1)'
+    const tagColor = isSav ? '#818cf8' : '#f87171'
+    const tagLabel = isSav ? 'tabungan' : 'wajib'
 
     return (
-      <div key={cat.id} className={`cv2-row${isPlanned ? ' cv2-row-dim' : ''}`} style={{ '--rc': cat.color || '#f87171' }}>
+      <div key={cat.id} className={`cv2-row${isPlanned ? ' cv2-row-dim' : ''}`} style={{ '--rc': accentColor }}>
         <div className="cv2-cell-name">
-          <span className="cv2-dot" style={{ background: cat.color || '#f87171' }} />
+          <span className="cv2-dot" style={{ background: accentColor }} />
           <span className="cv2-name">{cat.name}</span>
-          <span className="cv2-tag" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>wajib</span>
+          <span className="cv2-tag" style={{ background: tagBg, color: tagColor }}>{tagLabel}</span>
         </div>
 
         <div className="cv2-cell-bar">
           {salaryPct ? (
             <>
               <div className="cv2-bar-track">
-                <div className="cv2-bar-fill" style={{ width: `${Math.min(salaryPct, 100)}%`, background: cat.color || '#f87171' }} />
+                <div className="cv2-bar-fill" style={{ width: `${Math.min(salaryPct, 100)}%`, background: accentColor }} />
               </div>
               <span className="cv2-bar-pct" style={{ color: 'var(--text-muted)' }}>{salaryPct}%</span>
             </>
@@ -490,7 +493,7 @@ export default function CategoriesV2() {
         {salaryPct && (
           <div className="cv2-mobile-prog">
             <div className="cv2-bar-track">
-              <div className="cv2-bar-fill" style={{ width: `${Math.min(salaryPct, 100)}%`, background: cat.color || '#f87171' }} />
+              <div className="cv2-bar-fill" style={{ width: `${Math.min(salaryPct, 100)}%`, background: accentColor }} />
             </div>
           </div>
         )}
@@ -605,8 +608,17 @@ export default function CategoriesV2() {
             </div>
             <div className="cv2-stat-divider" />
             <div className="cv2-stat">
+              <span className="cv2-stat-label">Tabungan</span>
+              <span className="cv2-stat-val" style={{ color: savingsTotal > 0 ? '#6366f1' : 'var(--text-muted)' }}>
+                {savingsTotal > 0 ? `−${formatCurrency(savingsTotal)}` : '—'}
+              </span>
+            </div>
+            <div className="cv2-stat-divider" />
+            <div className="cv2-stat">
               <span className="cv2-stat-label">Wajib</span>
-              <span className="cv2-stat-val" style={{ color: '#f87171' }}>−{formatCurrency(mandatoryTotal)}</span>
+              <span className="cv2-stat-val" style={{ color: wajibTotal > 0 ? '#f87171' : 'var(--text-muted)' }}>
+                {wajibTotal > 0 ? `−${formatCurrency(wajibTotal)}` : '—'}
+              </span>
             </div>
             <div className="cv2-stat-divider" />
             <div className="cv2-stat">
@@ -630,17 +642,17 @@ export default function CategoriesV2() {
           )}
         </Section>
 
-        {/* Wajib */}
+        {/* Tabungan */}
         <Section
-          label="PENGELUARAN WAJIB"
-          sub={salary > 0
-            ? `${formatCurrency(mandatoryTotal)} · ${Math.round((mandatoryTotal / salary) * 100)}% gaji · langsung dipotong`
-            : 'Langsung dipotong dari gaji'}
-          onAdd={() => { setEditData({ is_mandatory: true, color: getSuggestedColor() }); setShowForm(true) }}
+          label="TABUNGAN"
+          sub={savingsTotal > 0
+            ? `${formatCurrency(savingsTotal)} · ${salary > 0 ? `${Math.round((savingsTotal / salary) * 100)}% gaji · ` : ''}auto-deduct`
+            : 'Alokasi tabungan bulanan'}
+          onAdd={() => { setEditData({ is_mandatory: true, category_type: 'savings', color: getSuggestedColor() }); setShowForm(true) }}
         >
           {loading
-            ? [...Array(3)].map((_, i) => <div key={i} className="skeleton" style={{ height: 50, marginBottom: 1 }} />)
-            : mandatory.map(renderMandatoryRow)
+            ? [...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 50, marginBottom: 1 }} />)
+            : savingsCategories.map(cat => renderMandatoryRow(cat, 'savings'))
           }
         </Section>
 
@@ -659,30 +671,44 @@ export default function CategoriesV2() {
           }
         </Section>
 
-        {/* Rutin */}
+        {/* Pengeluaran Wajib */}
         <Section
-          label="PENGELUARAN RUTIN"
-          sub="Tagihan & langganan bulanan"
-          onAdd={() => { setEditData({ is_monthly: true, color: getSuggestedColor() }); setShowForm(true) }}
+          label="PENGELUARAN WAJIB"
+          sub={salary > 0 && wajibTotal > 0
+            ? `${formatCurrency(wajibTotal)} · ${Math.round((wajibTotal / salary) * 100)}% gaji · langsung dipotong`
+            : 'Langsung dipotong dari gaji'}
+          onAdd={() => { setEditData({ is_mandatory: true, category_type: 'wajib', color: getSuggestedColor() }); setShowForm(true) }}
         >
           {loading
             ? [...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 50, marginBottom: 1 }} />)
-            : monthly.length === 0
-              ? <div className="cv2-empty">Belum ada pengeluaran rutin</div>
-              : monthly.map(renderCatRow)
+            : wajibCategories.map(cat => renderMandatoryRow(cat, 'wajib'))
           }
         </Section>
 
-        {/* Lainnya */}
+        {/* Pengeluaran Rutin */}
         <Section
-          label="KATEGORI LAINNYA"
-          onAdd={() => { setEditData({ color: getSuggestedColor() }); setShowForm(true) }}
+          label="PENGELUARAN RUTIN"
+          sub="Tagihan & langganan bulanan"
+          onAdd={() => { setEditData({ is_monthly: true, category_type: 'rutin', color: getSuggestedColor() }); setShowForm(true) }}
         >
           {loading
             ? [...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 50, marginBottom: 1 }} />)
-            : regular.length === 0
-              ? <div className="cv2-empty">Belum ada kategori lain</div>
-              : regular.map(renderCatRow)
+            : rutinCategories.length === 0
+              ? <div className="cv2-empty">Belum ada pengeluaran rutin</div>
+              : rutinCategories.map(renderCatRow)
+          }
+        </Section>
+
+        {/* Pengeluaran Tambahan */}
+        <Section
+          label="PENGELUARAN TAMBAHAN"
+          onAdd={() => { setEditData({ category_type: 'tambahan', color: getSuggestedColor() }); setShowForm(true) }}
+        >
+          {loading
+            ? [...Array(2)].map((_, i) => <div key={i} className="skeleton" style={{ height: 50, marginBottom: 1 }} />)
+            : tambahanCategories.length === 0
+              ? <div className="cv2-empty">Belum ada pengeluaran tambahan</div>
+              : tambahanCategories.map(renderCatRow)
           }
         </Section>
 

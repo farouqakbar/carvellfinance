@@ -22,6 +22,7 @@ export default function CategoryForm({ onSuccess, onClose, editData, salary = 0,
     is_mandatory: false,
     is_monthly: false,
     is_planned: false,
+    category_type: null,
     ...editData,
   })
 
@@ -46,6 +47,7 @@ export default function CategoryForm({ onSuccess, onClose, editData, salary = 0,
         is_mandatory: form.is_mandatory || false,
         is_monthly: form.is_monthly || false,
         is_planned: form.is_planned || false,
+        category_type: form.category_type || null,
       }
       let catId = editData?.id
       if (catId) {

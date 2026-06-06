@@ -6,11 +6,15 @@ const AuthContext = createContext({});
 const STORAGE_KEY = "cashvell_user";
 
 const DEFAULT_CATEGORIES = [
-  { name: "Pemasukan Bulanan", icon: "", color: "#22c55e", budget_limit: 0, is_mandatory: false },
-  { name: "Tabungan Bulanan",  icon: "", color: "#6366f1", budget_limit: 0, is_mandatory: true  },
+  { name: "Gaji",             icon: "", color: "#22c55e", budget_limit: 0, is_mandatory: false, is_monthly: false, category_type: "income"   },
+  { name: "Tabungan Bulanan", icon: "", color: "#6366f1", budget_limit: 0, is_mandatory: true,  is_monthly: false, category_type: "savings"  },
+  { name: "Dana Darurat",     icon: "", color: "#06b6d4", budget_limit: 0, is_mandatory: true,  is_monthly: false, category_type: "savings"  },
+  { name: "Investasi",        icon: "", color: "#a855f7", budget_limit: 0, is_mandatory: true,  is_monthly: false, category_type: "wajib"    },
+  { name: "Belanja Bulanan",  icon: "", color: "#f59e0b", budget_limit: 0, is_mandatory: false, is_monthly: true,  category_type: "rutin"    },
+  { name: "Jajan",            icon: "", color: "#f97316", budget_limit: 0, is_mandatory: false, is_monthly: false, category_type: "tambahan" },
 ];
 
-const DEPRECATED_CATEGORY_NAMES = ["Keluarga", "Investasi"];
+const DEPRECATED_CATEGORY_NAMES = ["Keluarga"];
 
 async function hashPassword(password) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
@@ -18,6 +22,14 @@ async function hashPassword(password) {
 }
 
 async function seedDefaultCategories(userId) {
+  // Rename "Pemasukan Bulanan" → "Gaji" in-place (preserves category_id, transactions stay linked)
+  await supabase.from("categories")
+    .update({ name: "Gaji", category_type: "income" })
+    .eq("user_id", userId)
+    .eq("name", "Pemasukan Bulanan")
+    .is("month", null);
+
+  // Delete deprecated categories (only if budget not configured by user)
   await supabase.from("categories")
     .delete()
     .eq("user_id", userId)

@@ -9,7 +9,7 @@ import CategoryForm from '../components/CategoryForm'
 import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
-import { isMandatory, isMandatoryIncome, isProtected } from '../constants/mandatoryCategories'
+import { isMandatory, isMandatoryIncome, isProtected, isSavings, isWajib, isRutin, isTambahan } from '../constants/mandatoryCategories'
 import { IconAlertTriangle, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconSettings, IconPlus, IconX, IconBookmark } from '../components/Icons'
 import SpotlightCard from '../components/ui/SpotlightCard'
 
@@ -56,6 +56,10 @@ export default function Dashboard() {
   const [showPct, setShowPct] = useState(false)
   const [dashTab, setDashTab] = useState('transaction')
   const [alertIdx, setAlertIdx] = useState(0)
+  const [statsIdx, setStatsIdx] = useState(0)
+  const [statsCarouselTouchX, setStatsCarouselTouchX] = useState(null)
+  const [tabunganSubIdx, setTabunganSubIdx] = useState(0)
+  const [pengeluaranSubIdx, setPengeluaranSubIdx] = useState(0)
 
   useEffect(() => {
     if (user.recording_start_month && month < user.recording_start_month) {
@@ -134,7 +138,7 @@ export default function Dashboard() {
       let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lt('date', startDate)
       if (recordStart) histQuery = histQuery.gte('date', `${recordStart}-01`)
 
-      let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id, month, categories(is_mandatory, name)').eq('user_id', user.id).lte('month', month)
+      let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id, month, categories(is_mandatory, name, category_type)').eq('user_id', user.id).lte('month', month)
       if (recordStart) allLogsQuery = allLogsQuery.gte('month', recordStart)
 
       const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes, hutangRes, hutangTabunganRes] = await Promise.all([
@@ -144,7 +148,7 @@ export default function Dashboard() {
           supabase.from('categories').select('*').eq('user_id', user.id).eq('month', month),
         ]).then(([g, m]) => {
           const merged = [
-            ...(g.data || []).filter(c => isProtected(c)),
+            ...(g.data || []),
             ...(m.data || []),
           ].sort((a, b) => a.name.localeCompare(b.name))
           const seen = new Set()
@@ -206,10 +210,10 @@ export default function Dashboard() {
         savingsLogs: logsRes.data || [],
         todayExpense: (todayRes.data || []).reduce((s, t) => s + Number(t.amount), 0),
         tabunganPerMonth: (allLogsRes.data || [])
-          .filter(cb => cb.categories?.name === 'Tabungan Bulanan' && Number(cb.budget_limit) > 0)
+          .filter(cb => (cb.categories?.category_type === 'savings' || cb.categories?.name === 'Tabungan Bulanan') && Number(cb.budget_limit) > 0)
           .sort((a, b) => a.month.localeCompare(b.month)),
         totalTabungan: (allLogsRes.data || [])
-          .filter(cb => cb.categories?.name === 'Tabungan Bulanan')
+          .filter(cb => cb.categories?.category_type === 'savings' || cb.categories?.name === 'Tabungan Bulanan')
           .reduce((s, cb) => s + Number(cb.budget_limit), 0)
           + (user.tabungan_awal || 0)
           - (hutangTabunganRes.data || []).filter(h => !h.lunas).reduce((s, h) => s + Number(h.amount), 0),
@@ -290,6 +294,13 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [overBudgetCats.length])
 
+  // Auto-scroll stats carousel — reset timer setiap kali statsIdx berubah (manual atau auto)
+  useEffect(() => {
+    if (loading) return
+    const t = setInterval(() => setStatsIdx(i => (i + 1) % 4), 3500)
+    return () => clearInterval(t)
+  }, [loading, statsIdx])
+
   // Mandatory: hanya pakai budget yang sudah di-set secara eksplisit
   const mandatoryBudgetTotal = data.categories
     .filter(c => isMandatory(c))
@@ -303,10 +314,22 @@ export default function Dashboard() {
   const balance = data.salary + data.totalIncome - effectiveExpense
   const budgetUsed = data.salary > 0 ? (effectiveExpense / data.salary) * 100 : 0
 
-  // Alokasi tabungan dari kategori mandatory "Tabungan Bulanan"
+  // Alokasi tabungan dari semua kategori savings bulan ini
   const monthlyTabungan = data.categories
-    .filter(c => c.name === 'Tabungan Bulanan' && c.budget_limit > 0)
+    .filter(c => isSavings(c) && c.budget_limit > 0)
     .reduce((s, c) => s + Number(c.budget_limit), 0)
+
+  // Data untuk stats carousel
+  const statsIncomeCats = data.categories.filter(c => isMandatoryIncome(c))
+  const statsSavingsCats = data.categories.filter(c => isSavings(c))
+  const statsWajibCats = data.categories.filter(c => isWajib(c))
+  const statsRutinCats = data.categories.filter(c => isRutin(c))
+  const statsTambahanCats = data.categories.filter(c => isTambahan(c))
+  const pengeluaranSubSlides = [
+    { label: 'Wajib',    spent: statsWajibCats.reduce((s, c) => s + (c.spent || 0), 0),    budget: statsWajibCats.reduce((s, c) => s + Number(c.budget_limit || 0), 0),    color: '#f87171', action: () => setShowWajibModal(true) },
+    { label: 'Rutin',    spent: statsRutinCats.reduce((s, c) => s + (c.spent || 0), 0),    budget: statsRutinCats.reduce((s, c) => s + Number(c.budget_limit || 0), 0),    color: '#fbbf24' },
+    { label: 'Tambahan', spent: statsTambahanCats.reduce((s, c) => s + (c.spent || 0), 0), budget: statsTambahanCats.reduce((s, c) => s + Number(c.budget_limit || 0), 0), color: '#f97316' },
+  ]
 
   const totalSaldo = data.cumulativeBalance - data.cumulativeMandatoryBudget
   // Sisa belanja bulan ini
@@ -361,46 +384,112 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Stats 2×2 ── */}
+      {/* ── Stats Carousel (4 cards, auto-scroll) ── */}
       {!loading && (
-        <div className="db-stats-grid">
-          <button className="db-stat db-stat-btn" onClick={() => {
-            setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '', date: data.gajiTx?.date || `${month}-01` })
-            setShowGajiModal(true)
-          }}>
-            <span className="db-stat-label">PEMASUKAN</span>
-            <span className="db-stat-val tabular" style={{ color: data.salary > 0 ? '#34d399' : 'var(--text-muted)' }}>
-              {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
-            </span>
-            <span className="db-stat-sub">{data.salary > 0 ? 'bulan ini' : 'belum dicatat'}</span>
-          </button>
+        <div
+          className="db-stats-carousel"
+          onTouchStart={e => setStatsCarouselTouchX(e.touches[0].clientX)}
+          onTouchEnd={e => {
+            if (statsCarouselTouchX === null) return
+            const dx = e.changedTouches[0].clientX - statsCarouselTouchX
+            setStatsCarouselTouchX(null)
+            if (dx < -40) setStatsIdx(i => Math.min(i + 1, 3))
+            else if (dx > 40) setStatsIdx(i => Math.max(i - 1, 0))
+          }}
+        >
+          <div className="db-stats-track" style={{ transform: `translateX(-${statsIdx * 100}%)` }}>
 
-          <button className="db-stat db-stat-btn" onClick={() => setShowWajibModal(true)}>
-            <span className="db-stat-label">WAJIB</span>
-            <span className="db-stat-val tabular" style={{ color: mandatoryBudgetTotal > 0 ? '#f87171' : 'var(--text-muted)' }}>
-              {mandatoryBudgetTotal > 0 ? `−${formatCurrency(mandatoryBudgetTotal)}` : '—'}
-            </span>
-            <span className="db-stat-sub">{mandatoryBudgetTotal > 0 ? 'auto-deduct' : 'belum diatur'}</span>
-          </button>
+            {/* Slide 0: Pemasukan */}
+            <div className="db-stats-slide">
+              <button className="db-stat db-stat-btn" onClick={() => {
+                setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '', date: data.gajiTx?.date || `${month}-01` })
+                setShowGajiModal(true)
+              }}>
+                <span className="db-stat-label">PEMASUKAN</span>
+                <span className="db-stat-val tabular" style={{ color: data.salary > 0 ? '#34d399' : 'var(--text-muted)' }}>
+                  {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
+                </span>
+                <span className="db-stat-sub">{data.salary > 0 ? 'bulan ini' : 'belum dicatat'}</span>
+              </button>
+            </div>
 
-          <div className="db-stat">
-            <span className="db-stat-label">PENGELUARAN</span>
-            <span className="db-stat-val tabular" style={{ color: effectiveExpense > data.totalIncome ? '#f87171' : effectiveExpense > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-              {effectiveExpense > 0 ? `−${formatCurrency(effectiveExpense - data.totalIncome)}` : '—'}
-            </span>
-            <span className="db-stat-sub">{data.salary > 0 && effectiveExpense > 0 ? `${Math.round((effectiveExpense / data.salary) * 100)}% gaji` : 'bulan ini'}</span>
+            {/* Slide 1: Tabungan */}
+            <div className="db-stats-slide">
+              <button className="db-stat db-stat-btn" onClick={() => setShowTabunganModal(true)}>
+                <span className="db-stat-label">TABUNGAN</span>
+                {statsSavingsCats.length > 0 ? (
+                  <>
+                    <span className="db-stat-val tabular" style={{ color: (statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0 ? '#818cf8' : 'var(--text-muted)' }}>
+                      {(statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0
+                        ? formatCurrency(statsSavingsCats[tabunganSubIdx].budget_limit)
+                        : '—'}
+                    </span>
+                    <span className="db-stat-sub" style={{ color: statsSavingsCats[tabunganSubIdx]?.color }}>
+                      {statsSavingsCats[tabunganSubIdx]?.name || '—'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="db-stat-val tabular" style={{ color: 'var(--text-muted)' }}>—</span>
+                    <span className="db-stat-sub">belum diatur</span>
+                  </>
+                )}
+                {statsSavingsCats.length > 1 && (
+                  <div className="db-sub-dots">
+                    {statsSavingsCats.map((_, i) => (
+                      <span key={i} className={`db-sub-dot${tabunganSubIdx === i ? ' active' : ''}`}
+                        onClick={e => { e.stopPropagation(); setTabunganSubIdx(i) }} />
+                    ))}
+                  </div>
+                )}
+              </button>
+            </div>
+
+            {/* Slide 2: Pengeluaran */}
+            <div className="db-stats-slide">
+              <button className="db-stat db-stat-btn" onClick={() => pengeluaranSubSlides[pengeluaranSubIdx]?.action?.()}>
+                <span className="db-stat-label">PENGELUARAN</span>
+                <span className="db-stat-val tabular" style={{ color: (pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0 ? '#f87171' : 'var(--text-muted)' }}>
+                  {(pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0
+                    ? `−${formatCurrency(pengeluaranSubSlides[pengeluaranSubIdx].spent)}`
+                    : '—'}
+                </span>
+                <span className="db-stat-sub" style={{ color: pengeluaranSubSlides[pengeluaranSubIdx]?.color }}>
+                  {pengeluaranSubSlides[pengeluaranSubIdx]?.label}
+                </span>
+                <div className="db-sub-dots">
+                  {pengeluaranSubSlides.map((_, i) => (
+                    <span key={i} className={`db-sub-dot${pengeluaranSubIdx === i ? ' active' : ''}`}
+                      onClick={e => { e.stopPropagation(); setPengeluaranSubIdx(i) }} />
+                  ))}
+                </div>
+              </button>
+            </div>
+
+            {/* Slide 3: Rencana */}
+            <div className="db-stats-slide">
+              <button className="db-stat db-stat-btn" onClick={() => setShowRencanaModal(true)}>
+                <span className="db-stat-label">RENCANA</span>
+                <span className="db-stat-val tabular" style={{ color: data.nextMonthPlans.length > 0 ? '#fbbf24' : 'var(--text-muted)' }}>
+                  {data.nextMonthPlans.length > 0 ? data.nextMonthPlans.length : '—'}
+                </span>
+                <span className="db-stat-sub">
+                  {data.nextMonthPlans.length > 0 ? 'rencana bulan depan' : 'belum ada rencana'}
+                </span>
+              </button>
+            </div>
+
           </div>
 
-          <button className="db-stat db-stat-btn" onClick={() => setShowTabunganModal(true)}>
-            <span className="db-stat-label">TABUNGAN</span>
-            <span className="db-stat-val tabular" style={{ color: data.totalTabungan > 0 ? '#34d399' : 'var(--text-muted)' }}>
-              {formatCurrency(data.totalTabungan)}
-            </span>
-            <span className="db-stat-sub">{data.savings?.length > 0 ? `${data.savings.length} kantong` : 'semua kantong'}</span>
-          </button>
+          {/* Outer navigation dots */}
+          <div className="db-outer-dots">
+            {[0, 1, 2, 3].map(i => (
+              <span key={i} className={`db-outer-dot${statsIdx === i ? ' active' : ''}`} onClick={() => setStatsIdx(i)} />
+            ))}
+          </div>
         </div>
       )}
-      {loading && <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius-lg)' }} />}
+      {loading && <div className="skeleton" style={{ height: 108, borderRadius: 'var(--radius-lg)' }} />}
 
       {/* ── My Transaction / My Budget tab ──── */}
       {(() => {
@@ -1167,21 +1256,27 @@ export default function Dashboard() {
         }
         .db-rencana-chip:hover { background: rgba(251,191,36,0.13); border-color: rgba(251,191,36,0.35); }
 
-        /* ── Stats 2×2 ────────────────────────── */
-        .db-stats-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 1px;
-          background: var(--border);
+        /* ── Stats Carousel ──────────────────────── */
+        .db-stats-carousel {
           border: 1px solid var(--border);
           border-radius: var(--radius-lg);
           overflow: hidden;
+          background: var(--bg-card);
+          touch-action: pan-y;
+        }
+        .db-stats-track {
+          display: flex;
+          transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+          will-change: transform;
+        }
+        .db-stats-slide {
+          flex: 0 0 100%; width: 100%;
         }
         .db-stat {
-          display: flex; flex-direction: column; gap: 4px;
-          padding: 14px 16px;
+          display: flex; flex-direction: column; align-items: center; gap: 4px;
+          padding: 16px 20px;
           background: var(--bg-card);
-          text-align: left; border: none;
+          text-align: center; border: none; width: 100%;
           font-family: var(--font-sans); cursor: default;
           transition: background 0.12s;
         }
@@ -1193,14 +1288,36 @@ export default function Dashboard() {
           text-transform: uppercase; color: var(--text-muted);
         }
         .db-stat-val {
-          font-size: 0.9rem; font-weight: 800;
+          font-size: 1.05rem; font-weight: 800;
           letter-spacing: -0.025em; font-variant-numeric: tabular-nums;
           color: var(--text-primary);
         }
         .db-stat-sub {
-          font-size: 0.58rem; font-weight: 500;
-          color: var(--text-muted); opacity: 0.8;
+          font-size: 0.6rem; font-weight: 500; color: var(--text-muted);
         }
+        .db-sub-dots {
+          display: flex; gap: 5px; margin-top: 4px; justify-content: center;
+        }
+        .db-sub-dot {
+          width: 4px; height: 4px; border-radius: 50%;
+          background: var(--text-muted); opacity: 0.25; flex-shrink: 0;
+          transition: opacity 0.15s; cursor: pointer;
+          padding: 3px; box-sizing: content-box;
+        }
+        .db-sub-dot.active { opacity: 0.9; background: var(--text-primary); }
+        .db-sub-dot:hover { opacity: 0.6; }
+        .db-outer-dots {
+          display: flex; justify-content: center; align-items: center; gap: 6px;
+          padding: 6px 0 8px;
+          border-top: 1px solid var(--border);
+        }
+        .db-outer-dot {
+          height: 5px; width: 5px; border-radius: 99px;
+          background: var(--text-muted); opacity: 0.3;
+          cursor: pointer; transition: all 0.25s ease; flex-shrink: 0;
+        }
+        .db-outer-dot.active { opacity: 1; background: var(--accent); width: 16px; }
+        .db-outer-dot:hover:not(.active) { opacity: 0.55; }
 
         /* ── Stats strip ──────────────────────── */
         .stats-strip {

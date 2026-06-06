@@ -434,6 +434,7 @@ export default function Dashboard() {
   }, [simMode, simDate, data.planEvents, data.allWishlist, totalSaldo])
 
   const toggleSimMode = () => {
+    if (simScrollTimerRef.current) clearTimeout(simScrollTimerRef.current)
     setSimMode(v => !v)
     setSimDate(null)
   }
@@ -454,7 +455,7 @@ export default function Dashboard() {
     }
   }
 
-  // Scroll to today on sim activate + auto-select
+  // Scroll to today on sim activate (no auto-select — user scrolls to choose)
   useEffect(() => {
     if (!simMode || !simCalScrollRef.current || simDates.length === 0) return
     const todayIndex = simDates.findIndex(d => d.key === todayStr)
@@ -464,7 +465,6 @@ export default function Dashboard() {
     if (d) {
       const dateObj = new Date(d.key + 'T00:00:00')
       setSimVisibleMonth(dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
-      setSimDate(d.key)
     }
   }, [simMode, simDates.length])
 
@@ -710,15 +710,17 @@ export default function Dashboard() {
             })}
           </div>
 
-          {simDate && projectedSaldo !== null && (
+          {simDate && projectedSaldo !== null ? (
             <div className="sim-cal-arrow">
               {(() => {
-                const delta = (projectedSaldo - hutangAktifTotal) - (totalSaldo - hutangAktifTotal)
+                const delta = projectedSaldo - totalSaldo
                 return delta >= 0
                   ? <span style={{ color: 'var(--success)' }}>▲</span>
                   : <span style={{ color: 'var(--danger)' }}>▼</span>
               })()}
             </div>
+          ) : (
+            <div className="sim-hint">Scroll ke tanggal untuk lihat proyeksi</div>
           )}
 
           {/* Breakdown panel when date is selected */}

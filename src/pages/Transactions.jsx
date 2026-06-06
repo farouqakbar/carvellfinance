@@ -181,61 +181,54 @@ export default function Transactions() {
 
   return (
     <>
-      <div className="animate-in">
-      <div className="page-header-banner">
-        <div className="page-header-icon"><IconList size={18} /></div>
-        <div>
-          <h1 className="page-header-title">Transaksi</h1>
-          <p className="page-header-sub">Riwayat pemasukan &amp; pengeluaran</p>
-        </div>
-      </div>
+      <div className="animate-in tx-page">
 
-      {/* Summary strip */}
+      {/* Stats strip */}
       {transactions.length > 0 && (() => {
         const mandatory = categories.filter(c => c.is_mandatory).reduce((s, c) => s + Number(c.budget_limit || 0), 0)
         const net = allTotals.income - allTotals.expense - mandatory
         const totalPengeluaran = salary - net
         return (
-          <div className="tx-summary-strip mb-16">
-            <div className="tss-item">
-              <span className="tss-label">Total Saldo</span>
-              <span className={`tss-val tabular ${net >= 0 ? 'text-success' : 'text-danger'}`}>
-                {net >= 0 ? '+' : '-'}{formatCurrency(Math.abs(net))}
+          <div className="tx-stats">
+            <div className="tx-stat">
+              <span className="tx-stat-label">TOTAL SALDO</span>
+              <span className="tx-stat-val tabular" style={{ color: net >= 0 ? '#34d399' : '#f87171' }}>
+                {net >= 0 ? '+' : '−'}{formatCurrency(Math.abs(net))}
               </span>
             </div>
-            <div className="tss-divider" />
-            <div className="tss-item">
-              <span className="tss-label">Total Pengeluaran</span>
-              <span className="tss-val text-danger tabular">-{formatCurrency(Math.max(0, totalPengeluaran))}</span>
+            <div className="tx-stat-sep" />
+            <div className="tx-stat">
+              <span className="tx-stat-label">PENGELUARAN</span>
+              <span className="tx-stat-val tabular" style={{ color: '#f87171' }}>
+                −{formatCurrency(Math.max(0, totalPengeluaran))}
+              </span>
             </div>
           </div>
         )
       })()}
 
       {/* Filter bar */}
-      <div className="tx-filter-bar mb-16">
+      <div className="tx-filter">
         <input
-          className="form-input"
+          className="form-input tx-search"
           type="text"
           placeholder="Cari transaksi..."
           value={filter.search}
           onChange={e => setFilter(f => ({ ...f, search: e.target.value }))}
-          style={{ flex: 2 }}
         />
         <select
-          className="form-select"
+          className="form-select tx-cat-select"
           value={filter.category}
           onChange={e => setFilter(f => ({ ...f, category: e.target.value }))}
-          style={{ flex: 1 }}
         >
           <option value="">Semua Kategori</option>
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <div className="type-filter-btns">
-          {[['', 'Semua'], ['expense', '↓ Keluar'], ['income', '↑ Masuk']].map(([val, label]) => (
+        <div className="tx-type-toggle">
+          {[['', 'Semua'], ['expense', 'Keluar'], ['income', 'Masuk']].map(([val, label]) => (
             <button
               key={val}
-              className={`type-filter-btn ${filter.type === val ? 'active' : ''}`}
+              className={`tx-type-btn${filter.type === val ? ' active' : ''}`}
               onClick={() => setFilter(f => ({ ...f, type: val }))}
             >
               {label}
@@ -244,58 +237,52 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* Transaction list */}
+      {/* List */}
       {loading ? (
-        <div className="card">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52 }} />)}
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {[...Array(6)].map((_, i) => <div key={i} className="skeleton" style={{ height: 52 }} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon"><IconList size={22} /></div>
-            <strong>{hasFilter ? 'Tidak ada yang cocok' : 'Belum ada transaksi'}</strong>
-            <p>{hasFilter ? 'Coba ubah atau reset filter' : 'Tap "+ Transaksi" untuk mulai mencatat'}</p>
-          </div>
+        <div className="tx-empty">
+          <IconList size={20} />
+          <span>{hasFilter ? 'Tidak ada yang cocok' : 'Belum ada transaksi'}</span>
+          <p>{hasFilter ? 'Coba ubah atau reset filter' : 'Tambah transaksi pertamamu'}</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="tx-list">
           {grouped.map(([date, txs]) => {
             const dayTotal = getDayTotal(txs)
             return (
               <div key={date} className="tx-group">
-                <div className="tx-group-header">
+                <div className="tx-group-head">
                   <span className="tx-group-date">{formatDateGroup(date)}</span>
-                  <span className={`tx-group-total tabular ${dayTotal >= 0 ? 'text-success' : 'text-danger'}`}>
+                  <span className={`tx-group-total tabular${dayTotal >= 0 ? '' : ' neg'}`}>
                     {dayTotal >= 0 ? '+' : ''}{formatCurrency(dayTotal)}
                   </span>
                 </div>
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {txs.map((tx, i) => (
-                    <div key={tx.id} className={`tx-row-item ${i < txs.length - 1 ? 'bordered' : ''}`}>
-                      <div className="tri-icon" style={{
-                        background: tx.type === 'income' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
-                        color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)',
+                <div className="tx-group-rows">
+                  {txs.map(tx => (
+                    <div key={tx.id} className="tx-row" style={{ '--tc': tx.type === 'income' ? '#34d399' : '#f87171' }}>
+                      <div className="tx-icon" style={{
+                        background: tx.type === 'income' ? 'rgba(52,211,153,0.1)' : 'rgba(248,113,113,0.1)',
+                        color: tx.type === 'income' ? '#34d399' : '#f87171',
                       }}>
-                        {tx.type === 'income' ? <IconArrowUp size={14} /> : <IconArrowDown size={14} />}
+                        {tx.type === 'income' ? <IconArrowUp size={13} /> : <IconArrowDown size={13} />}
                       </div>
-                      <div className="tri-info">
-                        <span className="tri-desc">{tx.description || tx.categories?.name || 'Transaksi'}</span>
+                      <div className="tx-info">
+                        <span className="tx-desc">{tx.description || tx.categories?.name || 'Transaksi'}</span>
                         {tx.categories && (
-                          <span className="tri-cat" style={{ color: tx.categories.color }}>
+                          <span className="tx-cat" style={{ color: tx.categories.color || 'var(--text-muted)' }}>
                             {tx.categories.name}
                           </span>
                         )}
                       </div>
-                      <div className="tri-right">
-                        <span className={`tri-amount tabular ${tx.type === 'income' ? 'text-success' : 'text-danger'}`}>
-                          {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
-                        </span>
-                        <div className="tri-actions">
-                          <button className="btn btn-ghost btn-sm icon-btn" onClick={() => { setEditData(tx); setShowForm(true) }} title="Edit"><IconEdit size={13} /></button>
-                          <button className="btn btn-ghost btn-sm icon-btn" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDel(tx.id)} title="Hapus"><IconTrash size={13} /></button>
-                        </div>
+                      <span className={`tx-amount tabular${tx.type === 'income' ? ' inc' : ' exp'}`}>
+                        {tx.type === 'income' ? '+' : '−'}{formatCurrency(tx.amount)}
+                      </span>
+                      <div className="tx-actions">
+                        <button className="tx-act-btn" onClick={() => { setEditData(tx); setShowForm(true) }} title="Edit"><IconEdit size={11} /></button>
+                        <button className="tx-act-btn danger" onClick={() => setConfirmDel(tx.id)} title="Hapus"><IconTrash size={11} /></button>
                       </div>
                     </div>
                   ))}
@@ -303,30 +290,30 @@ export default function Transactions() {
               </div>
             )
           })}
+
+          {/* Pengeluaran wajib */}
           {(!filter.type || filter.type === 'expense') && (() => {
             const mandCats = categories.filter(c => c.is_mandatory && Number(c.budget_limit) > 0)
             if (!mandCats.length) return null
             return (
               <div className="tx-group">
-                <div className="tx-group-header">
+                <div className="tx-group-head">
                   <span className="tx-group-date">Pengeluaran Wajib</span>
-                  <span className="tx-group-total tabular text-danger">
+                  <span className="tx-group-total tabular neg">
                     −{formatCurrency(mandCats.reduce((s, c) => s + Number(c.budget_limit), 0))}
                   </span>
                 </div>
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {mandCats.map((cat, i) => (
-                    <div key={cat.id} className={`tx-row-item ${i < mandCats.length - 1 ? 'bordered' : ''}`}>
-                      <div className="tri-icon" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--danger)' }}>
-                        <IconArrowDown size={14} />
+                <div className="tx-group-rows">
+                  {mandCats.map(cat => (
+                    <div key={cat.id} className="tx-row" style={{ '--tc': '#f87171' }}>
+                      <div className="tx-icon" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
+                        <IconArrowDown size={13} />
                       </div>
-                      <div className="tri-info">
-                        <span className="tri-desc">{cat.name}</span>
-                        <span className="tri-cat" style={{ color: 'var(--danger)' }}>Wajib · langsung dipotong</span>
+                      <div className="tx-info">
+                        <span className="tx-desc">{cat.name}</span>
+                        <span className="tx-cat" style={{ color: '#f87171' }}>Wajib · langsung dipotong</span>
                       </div>
-                      <div className="tri-right">
-                        <span className="tri-amount tabular text-danger">−{formatCurrency(cat.budget_limit)}</span>
-                      </div>
+                      <span className="tx-amount tabular exp">−{formatCurrency(cat.budget_limit)}</span>
                     </div>
                   ))}
                 </div>
@@ -337,174 +324,139 @@ export default function Transactions() {
       )}
 
       <style>{`
-        .icon-btn { padding: 5px 6px !important; }
+        .tx-page { display: flex; flex-direction: column; gap: 16px; padding-bottom: 48px; }
 
-        .tx-filter-bar {
+        /* Stats */
+        .tx-stats {
           display: flex;
-          gap: 8px;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-        .type-filter-btns {
-          display: flex; gap: 3px;
-          background: var(--bg-glass);
-          backdrop-filter: var(--glass-blur);
+          background: var(--bg-card);
           border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 3px; flex-shrink: 0;
+          border-radius: var(--radius-lg);
+          overflow: hidden;
         }
-        .type-filter-btn {
-          padding: 5px 12px; border: none; border-radius: 5px;
+        .tx-stat {
+          flex: 1; padding: 12px 18px;
+          display: flex; flex-direction: column; gap: 3px;
+        }
+        .tx-stat-sep { width: 1px; background: var(--border); flex-shrink: 0; margin: 8px 0; }
+        .tx-stat-label {
+          font-size: 0.55rem; font-weight: 700; letter-spacing: 0.1em;
+          text-transform: uppercase; color: var(--text-muted);
+        }
+        .tx-stat-val {
+          font-size: 0.95rem; font-weight: 800; letter-spacing: -0.03em;
+        }
+
+        /* Filter — satu baris di desktop, 2 baris di mobile */
+        .tx-filter {
+          display: flex; gap: 8px; align-items: center; flex-wrap: nowrap;
+        }
+        .tx-search { flex: 2; min-width: 0; }
+        .tx-cat-select { flex: 1; min-width: 0; }
+
+        .tx-type-toggle {
+          display: flex; gap: 2px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 8px; padding: 3px; flex-shrink: 0;
+        }
+        [data-theme="light"] .tx-type-toggle { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); }
+        .tx-type-btn {
+          padding: 5px 12px; border-radius: 5px; border: none;
           background: transparent; color: var(--text-muted);
-          font-family: var(--font-sans); font-size: 0.76rem; font-weight: 600;
+          font-family: var(--font-sans); font-size: 0.72rem; font-weight: 700;
           cursor: pointer; transition: all 0.15s; white-space: nowrap;
         }
-        .type-filter-btn.active {
-          background: var(--gradient-accent); color: #fff;
-          box-shadow: var(--glow-sm);
-        }
+        .tx-type-btn:hover { color: var(--text-secondary); }
+        .tx-type-btn.active { background: rgba(255,255,255,0.09); color: var(--text-primary); }
+        [data-theme="light"] .tx-type-btn.active { background: #fff; color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 
-        .tx-summary-strip {
-          display: flex; align-items: center;
-          background: var(--bg-card);
-          backdrop-filter: var(--glass-blur);
-          border: 1px solid var(--border-glass);
-          border-radius: var(--radius-lg);
-          padding: 14px 22px; gap: 0;
-          box-shadow: var(--shadow);
-        }
-        .tss-item {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 2px;
-        }
-        .tss-label {
-          font-size: 0.68rem;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-          color: var(--text-muted);
-          font-weight: 600;
-        }
-        .tss-val {
-          font-size: 0.9rem;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-        }
-        .tss-divider {
-          width: 1px;
-          height: 28px;
-          background: var(--border);
-          flex-shrink: 0;
-        }
+        /* Groups */
+        .tx-list { display: flex; flex-direction: column; gap: 24px; }
+        .tx-group { display: flex; flex-direction: column; }
 
-        .tx-group-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 4px;
-          margin-bottom: 6px;
+        .tx-group-head {
+          display: flex; justify-content: space-between; align-items: center;
+          padding-bottom: 8px;
+          border-bottom: 1px solid var(--border);
         }
         .tx-group-date {
-          font-size: 0.75rem;
-          font-weight: 700;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
+          font-size: 0.6rem; font-weight: 800; letter-spacing: 0.1em;
+          text-transform: uppercase; color: var(--text-muted);
         }
-        .tx-group-total {
-          font-size: 0.78rem;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-        }
+        .tx-group-total { font-size: 0.78rem; font-weight: 700; letter-spacing: -0.01em; color: #34d399; }
+        .tx-group-total.neg { color: #f87171; }
 
-        .tx-row-item {
+        /* Rows */
+        .tx-group-rows { }
+        .tx-row {
           display: flex; align-items: center; gap: 12px;
-          padding: 12px 16px; transition: background 0.15s;
-          border-radius: 10px; margin: 1px 2px;
+          padding: 11px 4px;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+          position: relative; transition: background 0.12s;
         }
-        .tx-row-item:hover { background: rgba(99,102,241,0.05); }
-        .tx-row-item.bordered { border-bottom: 1px solid rgba(99,102,241,0.06); border-radius: 0; margin: 0; }
-        .tx-row-item.bordered:last-child { border-bottom: none; }
+        .tx-row:last-child { border-bottom: none; }
+        .tx-row::before {
+          content: ''; position: absolute;
+          left: 0; top: 8px; bottom: 8px; width: 2px;
+          background: var(--tc); border-radius: 2px;
+          opacity: 0; transition: opacity 0.15s;
+        }
+        .tx-row:hover { background: rgba(255,255,255,0.02); }
+        .tx-row:hover::before { opacity: 0.8; }
 
-        .tri-icon {
-          width: 38px; height: 38px;
-          border-radius: 10px;
+        .tx-icon {
+          width: 32px; height: 32px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .tx-info { flex: 1; min-width: 0; }
+        .tx-desc {
+          display: block; font-size: 0.8125rem; font-weight: 600;
+          color: var(--text-primary); letter-spacing: -0.01em;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .tx-cat { font-size: 0.6rem; font-weight: 600; display: block; margin-top: 1px; opacity: 0.85; }
+        .tx-amount { font-size: 0.875rem; font-weight: 700; letter-spacing: -0.02em; flex-shrink: 0; }
+        .tx-amount.inc { color: #34d399; }
+        .tx-amount.exp { color: #f87171; }
+
+        .tx-actions { display: flex; gap: 1px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
+        .tx-row:hover .tx-actions { opacity: 1; }
+        .tx-act-btn {
+          width: 26px; height: 26px; border-radius: 5px;
+          background: transparent; border: none; color: var(--text-muted);
           display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0;
+          cursor: pointer; transition: all 0.12s;
         }
-        .tri-info { flex: 1; min-width: 0; }
-        .tri-desc {
-          display: block;
-          font-size: 0.8125rem;
-          font-weight: 600;
-          color: var(--text-primary);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          letter-spacing: -0.01em;
-        }
-        .tri-cat {
-          font-size: 0.68rem;
-          font-weight: 600;
-          opacity: 0.8;
-        }
-        .tri-right {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          flex-shrink: 0;
-        }
-        .tri-amount {
-          font-size: 0.875rem;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-        }
-        .tri-actions {
-          display: flex;
-          gap: 0;
-          opacity: 0;
-          transition: opacity 0.15s;
-        }
-        .tx-row-item:hover .tri-actions { opacity: 1; }
+        .tx-act-btn:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
+        .tx-act-btn.danger:hover { background: rgba(248,113,113,0.1); color: #f87171; }
 
-        @media (max-width: 768px) {
-          .tx-filter-bar { flex-direction: column; align-items: stretch; }
-          .tx-filter-bar .form-input,
-          .tx-filter-bar .form-select { width: 100%; flex: none; }
-          .type-filter-btns { width: 100%; justify-content: stretch; }
-          .type-filter-btn { flex: 1; }
-          .tri-actions { opacity: 1; }
-          .tx-summary-strip { padding: 10px 14px; }
-          .tss-val { font-size: 0.8rem; }
-          .tx-row-item { padding: 12px 14px; }
-          .tx-group-date { font-size: 0.68rem; }
-          /* Filter bar lebih compact — search + select sejajar, type filter di bawah */
-          .tx-filter-bar {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-          }
-          .tx-filter-bar .form-input { grid-column: span 2; }
-          .tx-filter-bar .form-select { grid-column: span 1; }
-          .type-filter-btns { grid-column: span 1; width: 100%; }
-          .tx-filter-bar .btn-ghost { grid-column: span 2; }
+        /* Empty */
+        .tx-empty {
+          display: flex; flex-direction: column; align-items: center; gap: 8px;
+          padding: 48px 0; color: var(--text-muted);
+          font-size: 0.82rem; font-weight: 600;
         }
+        .tx-empty p { font-size: 0.72rem; font-weight: 400; margin: 0; }
 
-        @media (max-width: 400px) {
-          .tx-filter-bar { grid-template-columns: 1fr; }
-          .tx-filter-bar .form-input,
-          .tx-filter-bar .form-select,
-          .type-filter-btns,
-          .tx-filter-bar .btn-ghost { grid-column: span 1; }
-          .type-filter-btns { width: 100%; }
-          .tx-summary-strip { padding: 8px 10px; }
-          .tss-val { font-size: 0.75rem; }
-          .tss-label { font-size: 0.6rem; }
-          .tri-amount { font-size: 0.8rem; }
-          .tri-icon { width: 32px; height: 32px; }
-          .tx-row-item { padding: 10px 12px; gap: 10px; }
+        /* Mobile */
+        @media (max-width: 640px) {
+          .tx-stat { padding: 10px 14px; }
+          .tx-stat-val { font-size: 0.88rem; }
+          .tx-actions { opacity: 1; }
+          .tx-row { padding: 11px 2px; gap: 10px; }
+          .tx-amount { font-size: 0.82rem; }
+          .tx-type-btn { padding: 5px 8px; font-size: 0.68rem; }
+          /* Mobile: filter jadi 2 baris */
+          .tx-filter { flex-wrap: wrap; }
+          .tx-search { flex: 1 1 100%; }
+          .tx-cat-select { flex: 1; }
+          .tx-type-toggle { flex-shrink: 0; }
+        }
+        @media (max-width: 380px) {
+          .tx-stat-val { font-size: 0.82rem; }
+          .tx-stat-label { font-size: 0.52rem; }
+          .tx-icon { width: 28px; height: 28px; }
         }
       `}</style>
       </div>

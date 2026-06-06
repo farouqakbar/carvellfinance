@@ -41,6 +41,7 @@ export default function Dashboard() {
   })
   const [simMode, setSimMode] = useState(false)
   const [simDate, setSimDate] = useState(null)
+  const [simVisibleMonth, setSimVisibleMonth] = useState('')
   const [loading, setLoading] = useState(true)
   const [showTxForm, setShowTxForm] = useState(false)
   const [showCatManager, setShowCatManager] = useState(false)
@@ -386,22 +387,36 @@ export default function Dashboard() {
   const currentMonthStr = getCurrentMonth()
 
   const simDates = useMemo(() => {
-    const map = new Map()
+    const planMap = new Map()
+    const wishMap = new Map()
     ;(data.planEvents || []).forEach(e => {
-      const entry = map.get(e.date) || { key: e.date, planCount: 0, wishlistCount: 0 }
-      entry.planCount++
-      map.set(e.date, entry)
+      planMap.set(e.date, (planMap.get(e.date) || 0) + 1)
     })
     ;(data.allWishlist || []).forEach(p => {
       const [y, m] = p.target_month.split('-').map(Number)
-      const lastDayNum = new Date(y, m, 0).getDate()
-      const key = `${y}-${String(m).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`
-      const entry = map.get(key) || { key, planCount: 0, wishlistCount: 0 }
-      entry.wishlistCount++
-      map.set(key, entry)
+      const lastDay = new Date(y, m, 0).getDate()
+      const key = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+      wishMap.set(key, (wishMap.get(key) || 0) + 1)
     })
-    return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key))
-  }, [data.planEvents, data.allWishlist])
+    // Range: 1 month back → max(1 month ahead, furthest event date)
+    const [ty, tm] = todayStr.split('-').map(Number)
+    const startObj = new Date(ty, tm - 2, 1)
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const startStr = fmt(startObj)
+    const minEndObj = new Date(ty, tm + 1, 0)
+    const minEndStr = fmt(minEndObj)
+    const allKeys = [...planMap.keys(), ...wishMap.keys()]
+    const maxEventStr = allKeys.length > 0 ? allKeys.reduce((a, b) => a > b ? a : b) : null
+    const endStr = maxEventStr && maxEventStr > minEndStr ? maxEventStr : minEndStr
+    const result = []
+    const cur = new Date(startStr + 'T00:00:00')
+    const end = new Date(endStr + 'T00:00:00')
+    while (cur <= end) {
+      result.push({ key: fmt(cur), planCount: planMap.get(fmt(cur)) || 0, wishlistCount: wishMap.get(fmt(cur)) || 0 })
+      cur.setDate(cur.getDate() + 1)
+    }
+    return result
+  }, [data.planEvents, data.allWishlist, todayStr])
 
   const projectedSaldo = useMemo(() => {
     if (!simMode || !simDate) return null
@@ -424,13 +439,66 @@ export default function Dashboard() {
   }
 
   const simCalScrollRef = useRef(null)
+  const simScrollTimerRef = useRef(null)
+  const ITEM_W = 44
+
+  const handleSimScroll = (e) => {
+    const container = e.currentTarget
+    const idx = Math.round(container.scrollLeft / ITEM_W)
+    const d = simDates[Math.max(0, Math.min(idx, simDates.length - 1))]
+    if (d) {
+      const dateObj = new Date(d.key + 'T00:00:00')
+      setSimVisibleMonth(dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
+      if (simScrollTimerRef.current) clearTimeout(simScrollTimerRef.current)
+      simScrollTimerRef.current = setTimeout(() => setSimDate(d.key), 120)
+    }
+  }
+
+  // Scroll to today on sim activate + auto-select
+  useEffect(() => {
+    if (!simMode || !simCalScrollRef.current || simDates.length === 0) return
+    const todayIndex = simDates.findIndex(d => d.key === todayStr)
+    const idx = todayIndex >= 0 ? todayIndex : 0
+    simCalScrollRef.current.scrollTo({ left: idx * ITEM_W, behavior: 'instant' })
+    const d = simDates[idx]
+    if (d) {
+      const dateObj = new Date(d.key + 'T00:00:00')
+      setSimVisibleMonth(dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
+      setSimDate(d.key)
+    }
+  }, [simMode, simDates.length])
+
+  // Wheel → horizontal scroll (desktop) — only when cursor is over the strip
+  useEffect(() => {
+    const container = simCalScrollRef.current
+    if (!container) return
+    let inside = false
+    const onEnter = () => { inside = true }
+    const onLeave = () => { inside = false }
+    const handler = (e) => {
+      if (!inside) return
+      e.preventDefault()
+      container.scrollLeft += e.deltaY + e.deltaX
+    }
+    container.addEventListener('mouseenter', onEnter)
+    container.addEventListener('mouseleave', onLeave)
+    window.addEventListener('wheel', handler, { passive: false })
+    return () => {
+      container.removeEventListener('mouseenter', onEnter)
+      container.removeEventListener('mouseleave', onLeave)
+      window.removeEventListener('wheel', handler)
+    }
+  }, [simMode, simDates.length])
+
+  // Scroll selected date to center (for tap/click, not auto-scroll)
   useEffect(() => {
     if (!simDate || !simCalScrollRef.current) return
     const container = simCalScrollRef.current
     const selected = container.querySelector('[data-selected="true"]')
     if (!selected) return
-    const left = selected.offsetLeft - container.offsetWidth / 2 + selected.offsetWidth / 2
-    container.scrollTo({ left, behavior: 'smooth' })
+    const targetLeft = selected.offsetLeft - container.offsetWidth / 2 + selected.offsetWidth / 2
+    if (Math.abs(container.scrollLeft - targetLeft) < ITEM_W) return
+    container.scrollTo({ left: targetLeft, behavior: 'smooth' })
   }, [simDate])
 
   return (
@@ -605,48 +673,53 @@ export default function Dashboard() {
       {/* ── Simulation Date Strip ─────────────── */}
       {!loading && isCurrentMonth && simMode && (
         <div className="sim-wrap">
-          {simDates.length === 0 ? (
-            <div className="sim-empty">
-              Belum ada plan event atau wishlist — tambahkan di halaman <a href="/carvellfinance/savings" style={{ color: 'var(--accent)' }}>Plan &amp; Wishlist</a>
-            </div>
-          ) : (
-            <div className="sim-cal-scroll" ref={simCalScrollRef}>
-              {simDates.map((d, i) => {
-                const thisMonth = d.key.slice(0, 7)
-                const prevMonth = i > 0 ? simDates[i - 1].key.slice(0, 7) : null
-                const showMonthLabel = thisMonth !== prevMonth
-                const isWishlistOnly = d.planCount === 0 && d.wishlistCount > 0
-                const dateObj = new Date(d.key + 'T00:00:00')
-                const day = dateObj.getDate()
-                const monLong = dateObj.toLocaleDateString('id-ID', { month: 'long' })
-                const monShort = dateObj.toLocaleDateString('id-ID', { month: 'short' })
-                const yr = dateObj.getFullYear()
-                const isThisYear = yr === new Date().getFullYear()
-                const isSelected = simDate === d.key
-                const isInSelectedMonth = simDate && simDate.slice(0, 7) === thisMonth
-                return (
-                  <div key={d.key} className="sim-cal-item" data-selected={isSelected ? 'true' : undefined}>
-                    <span className={`sim-cal-month${isInSelectedMonth ? ' active' : ''}`}>
-                      {showMonthLabel ? (isThisYear ? monLong : `${monShort} '${String(yr).slice(2)}`) : ''}
-                    </span>
-                    <button
-                      className={`sim-cal-day${isSelected ? ' active' : ''}`}
-                      onClick={() => setSimDate(isSelected ? null : d.key)}
-                    >
-                      {isWishlistOnly ? monShort : day}
-                    </button>
-                    <div className="sim-cal-dots">
-                      {d.planCount > 0 && <span className="sim-dot plan" />}
-                      {d.wishlistCount > 0 && <span className="sim-dot wish" />}
-                    </div>
+          {/* Sticky header: month label + nav arrows */}
+          <div className="sim-cal-header">
+            <button className="sim-nav-btn" onClick={() => simCalScrollRef.current?.scrollBy({ left: -ITEM_W * 7, behavior: 'smooth' })}>‹</button>
+            <span className="sim-cal-header-label">{simVisibleMonth}</span>
+            <button className="sim-nav-btn" onClick={() => simCalScrollRef.current?.scrollBy({ left: ITEM_W * 7, behavior: 'smooth' })}>›</button>
+          </div>
+
+          {/* Date strip */}
+          <div className="sim-cal-scroll" ref={simCalScrollRef} onScroll={handleSimScroll}>
+            {simDates.map((d) => {
+              const isSelected = simDate === d.key
+              const dateObj = new Date(d.key + 'T00:00:00')
+              const day = dateObj.getDate()
+              const hasPlan = d.planCount > 0
+              const hasWishlist = d.wishlistCount > 0
+              const dayStyle = isSelected ? undefined
+                : hasPlan ? { color: '#a78bfa', fontWeight: 800, boxShadow: '0 0 0 1.5px rgba(167,139,250,0.35)' }
+                : hasWishlist ? { color: '#fbbf24', fontWeight: 700 }
+                : undefined
+              return (
+                <div key={d.key} className="sim-cal-item" data-selected={isSelected ? 'true' : undefined}>
+                  <button
+                    className={`sim-cal-day${isSelected ? ' active' : ''}`}
+                    style={dayStyle}
+                    onClick={() => setSimDate(isSelected ? null : d.key)}
+                  >
+                    {day}
+                  </button>
+                  <div className="sim-cal-dots">
+                    {hasPlan && <span className="sim-dot plan">›</span>}
+                    {hasWishlist && <span className="sim-dot wish">›</span>}
                   </div>
-                )
-              })}
+                </div>
+              )
+            })}
+          </div>
+
+          {simDate && projectedSaldo !== null && (
+            <div className="sim-cal-arrow">
+              {(() => {
+                const delta = (projectedSaldo - hutangAktifTotal) - (totalSaldo - hutangAktifTotal)
+                return delta >= 0
+                  ? <span style={{ color: 'var(--success)' }}>▲</span>
+                  : <span style={{ color: 'var(--danger)' }}>▼</span>
+              })()}
             </div>
           )}
-
-          {simDate && <div className="sim-cal-arrow">&#8963;</div>}
-          {!simDate && <div className="sim-hint">Pilih tanggal untuk lihat proyeksi saldo</div>}
 
           {/* Breakdown panel when date is selected */}
           {simDate && (
@@ -2252,29 +2325,41 @@ export default function Dashboard() {
           overflow: hidden;
         }
 
+        .sim-cal-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 10px 12px 6px;
+        }
+        .sim-cal-header-label {
+          font-size: 0.8rem; font-weight: 700; color: var(--text-primary);
+          letter-spacing: -0.01em; text-transform: capitalize;
+        }
+        .sim-nav-btn {
+          background: none; border: none; cursor: pointer;
+          color: var(--text-muted); font-size: 1.1rem; padding: 2px 10px;
+          border-radius: 6px; transition: all 0.15s; font-family: var(--font-sans);
+          line-height: 1;
+        }
+        .sim-nav-btn:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
+        [data-theme="light"] .sim-nav-btn:hover { background: rgba(0,0,0,0.06); }
+
         .sim-cal-scroll {
-          display: flex; overflow-x: auto; scrollbar-width: none;
-          padding: 14px 16px 6px; gap: 0;
+          display: flex; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+          padding: 4px calc(50% - 22px) 2px; gap: 0;
+          scroll-snap-type: x mandatory;
         }
         .sim-cal-scroll::-webkit-scrollbar { display: none; }
 
         .sim-cal-item {
           display: flex; flex-direction: column; align-items: center;
-          flex-shrink: 0; min-width: 52px; gap: 2px;
+          flex-shrink: 0; min-width: 44px; gap: 1px;
+          scroll-snap-align: center;
         }
-
-        .sim-cal-month {
-          font-size: 0.62rem; font-weight: 600; color: var(--text-muted);
-          height: 18px; display: flex; align-items: center;
-          white-space: nowrap; transition: color 0.15s;
-        }
-        .sim-cal-month.active { color: var(--text-primary); font-weight: 700; }
 
         .sim-cal-day {
-          width: 38px; height: 38px; border-radius: 50%;
+          width: 32px; height: 32px; border-radius: 50%;
           border: none; background: transparent;
           color: var(--text-secondary);
-          font-size: 0.9375rem; font-weight: 600;
+          font-size: 0.875rem; font-weight: 600;
           cursor: pointer; display: flex; align-items: center; justify-content: center;
           transition: all 0.15s; font-family: var(--font-sans);
         }
@@ -2285,24 +2370,26 @@ export default function Dashboard() {
         }
         [data-theme="light"] .sim-cal-day.active { background: #1a1a1a; color: #fff; }
 
-        .sim-cal-dots { display: flex; gap: 3px; height: 8px; align-items: center; }
-        .sim-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-        .sim-dot.plan { background: var(--accent); }
-        .sim-dot.wish { background: var(--warning); }
-        .sim-cal-day.active + .sim-cal-dots .sim-dot { background: var(--text-muted); }
+        .sim-cal-dots { display: flex; gap: 2px; height: 10px; align-items: center; }
+        .sim-dot {
+          font-size: 0.6rem; font-weight: 700; line-height: 1; flex-shrink: 0;
+          display: inline-block;
+        }
+        .sim-dot.plan { color: var(--accent); transform: rotate(-90deg); }
+        .sim-dot.wish { color: var(--warning); transform: rotate(90deg); }
 
         .sim-cal-arrow {
           display: flex; justify-content: center; align-items: center;
-          padding: 2px 0 8px; color: var(--text-muted); font-size: 0.9rem;
+          padding: 0 0 4px; color: var(--text-muted); font-size: 0.75rem;
         }
 
         .sim-hint {
-          font-size: 0.65rem; color: var(--text-muted); text-align: center;
-          padding: 6px 14px 12px; font-weight: 500;
+          font-size: 0.62rem; color: var(--text-muted); text-align: center;
+          padding: 4px 14px 8px; font-weight: 500;
         }
         .sim-empty {
           font-size: 0.72rem; color: var(--text-muted);
-          padding: 14px 16px; text-align: center;
+          padding: 10px 16px; text-align: center;
         }
 
         /* Breakdown panel */

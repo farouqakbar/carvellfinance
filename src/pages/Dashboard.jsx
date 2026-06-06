@@ -455,7 +455,7 @@ export default function Dashboard() {
     }
   }
 
-  // Scroll to today on sim activate (no auto-select — user scrolls to choose)
+  // Scroll to today on sim activate + auto-select today
   useEffect(() => {
     if (!simMode || !simCalScrollRef.current || simDates.length === 0) return
     const todayIndex = simDates.findIndex(d => d.key === todayStr)
@@ -465,6 +465,7 @@ export default function Dashboard() {
     if (d) {
       const dateObj = new Date(d.key + 'T00:00:00')
       setSimVisibleMonth(dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }))
+      setSimDate(d.key)
     }
   }, [simMode, simDates.length])
 
@@ -713,9 +714,11 @@ export default function Dashboard() {
             <div className="sim-cal-arrow">
               {(() => {
                 const delta = projectedSaldo - totalSaldo
-                return delta >= 0
+                return delta > 0
                   ? <span style={{ color: 'var(--success)' }}>▲</span>
-                  : <span style={{ color: 'var(--danger)' }}>▼</span>
+                  : delta < 0
+                  ? <span style={{ color: 'var(--danger)' }}>▼</span>
+                  : <span style={{ color: 'var(--text-muted)' }}>—</span>
               })()}
             </div>
           ) : (

@@ -713,8 +713,8 @@ export default function Dashboard() {
                 const sel = simDates.find(d => d.key === simDate)
                 return (
                   <>
-                    {sel?.planCount > 0 && <span className="sim-dot plan">›</span>}
-                    {sel?.wishlistCount > 0 && <span className="sim-dot wish">›</span>}
+                    {sel?.planCount > 0 && <span className="sim-dot plan">▲</span>}
+                    {sel?.wishlistCount > 0 && <span className="sim-dot wish">▲</span>}
                   </>
                 )
               })()}
@@ -2377,8 +2377,8 @@ export default function Dashboard() {
           font-size: 0.6rem; font-weight: 700; line-height: 1; flex-shrink: 0;
           display: inline-block;
         }
-        .sim-dot.plan { color: var(--accent); transform: rotate(-90deg); }
-        .sim-dot.wish { color: var(--warning); transform: rotate(90deg); }
+        .sim-dot.plan { color: var(--accent); }
+        .sim-dot.wish { color: var(--warning); }
 
         .sim-cal-arrow {
           display: flex; justify-content: center; align-items: center; gap: 4px;

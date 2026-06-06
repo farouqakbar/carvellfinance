@@ -8,7 +8,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { IconBarChart, IconArrowUp, IconArrowDown, IconActivity } from '../components/Icons'
+import { IconBarChart } from '../components/Icons'
 
 const fmt = v =>
   v >= 1e9 ? `${(v / 1e9).toFixed(1)}M` :
@@ -30,19 +30,36 @@ export default function Report() {
   const [categories, setCategories] = useState([])
   const [trendData, setTrendData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedMonthIdx, setSelectedMonthIdx] = useState(0)
 
   useEffect(() => { fetchReport() }, [])
 
   const fetchReport = async () => {
     setLoading(true)
-    const txRes = await supabase.from('transactions')
-      .select('amount, type, date, category_id, categories(name, color, icon)')
-      .eq('user_id', user.id)
-      .order('date')
+    const [txRes, budgetRes] = await Promise.all([
+      supabase.from('transactions')
+        .select('amount, type, date, category_id, categories(name, color, icon)')
+        .eq('user_id', user.id)
+        .order('date'),
+      supabase.from('category_budgets')
+        .select('budget_limit, category_id, month, categories(is_mandatory)')
+        .eq('user_id', user.id),
+    ])
+
+    // mandatory budget per month + which cat_ids are mandatory
+    const catIdIsMandatory = {}
+    const monthMandatoryBudget = {}
+    ;(budgetRes.data || []).forEach(cb => {
+      if (cb.categories?.is_mandatory) {
+        catIdIsMandatory[cb.category_id] = true
+        monthMandatoryBudget[cb.month] = (monthMandatoryBudget[cb.month] || 0) + Number(cb.budget_limit)
+      }
+    })
 
     const salaryMap = {}
     const monthMap = {}
     const monthCatMap = {}
+    const monthMandatorySpend = {}
     const catTotals = {}
 
     ;(txRes.data || []).forEach(tx => {
@@ -58,6 +75,9 @@ export default function Report() {
         }
       } else {
         monthMap[m].expense += Number(tx.amount)
+        if (catIdIsMandatory[tx.category_id]) {
+          monthMandatorySpend[m] = (monthMandatorySpend[m] || 0) + Number(tx.amount)
+        }
         const name = tx.categories?.name || 'Lainnya'
         const color = tx.categories?.color || '#6e6e98'
         monthCatMap[m][name] = (monthCatMap[m][name] || 0) + Number(tx.amount)
@@ -69,16 +89,22 @@ export default function Report() {
     const sortedMonths = Object.keys(monthMap).sort().reverse().map(m => {
       const salary = salaryMap[m] || 0
       const txIncome = monthMap[m].income
-      const expense = monthMap[m].expense
+      const rawExpense = monthMap[m].expense
+      const mandatoryBudget = monthMandatoryBudget[m] || 0
+      const mandatorySpent = monthMandatorySpend[m] || 0
+      const mandatoryAutoDeduct = Math.max(0, mandatoryBudget - mandatorySpent)
+      const effectiveExpense = rawExpense + mandatoryAutoDeduct
+      const income = salary + txIncome
       return {
         month: m,
         label: getMonthLabel(m),
         shortLabel: new Intl.DateTimeFormat('id-ID', { month: 'short', year: '2-digit' }).format(new Date(m + '-01')),
-        income: salary + txIncome,
+        income,
         salary,
         txIncome,
-        expense,
-        net: salary + txIncome - expense,
+        expense: effectiveExpense,
+        rawExpense,
+        net: income - effectiveExpense,
         catBreakdown: monthCatMap[m] || {},
       }
     })
@@ -99,219 +125,121 @@ export default function Report() {
     setLoading(false)
   }
 
-  const totalIncome  = months.reduce((s, m) => s + m.income, 0)
-  const totalExpense = months.reduce((s, m) => s + m.expense, 0)
-  const net          = totalIncome - totalExpense
-  const avgExpense   = months.length ? Math.round(totalExpense / months.length) : 0
-  const avgIncome    = months.length ? Math.round(totalIncome  / months.length) : 0
-  const savingsRate  = totalIncome > 0 ? Math.round((net / totalIncome) * 100) : 0
-  const expRatioPct  = totalIncome > 0 ? Math.round((totalExpense / totalIncome) * 100) : 0
-  const healthyCount = months.filter(m => m.net >= 0).length
-  const topCat       = categories[0]
 
   return (
-    <div className="animate-in">
-      <div className="page-header-banner" style={{ marginBottom: 20 }}>
-        <div className="page-header-icon" style={{ background: 'rgba(96,165,250,0.1)', color: 'var(--info)' }}>
-          <IconBarChart size={18} />
-        </div>
+    <div className="animate-in rpt-page">
+
+      {/* Page header */}
+      <div className="rpt-page-header">
+        <div className="rpt-page-icon"><IconBarChart size={16} /></div>
         <div>
-          <h1 className="page-header-title">Laporan Keuangan</h1>
-          <p className="page-header-sub">Ringkasan dan analisis keuangan kamu</p>
+          <h1 className="rpt-page-title">Laporan</h1>
+          <p className="rpt-page-sub">Ringkasan dan tren keuangan kamu</p>
         </div>
       </div>
 
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 72, borderRadius: 10 }} />)}
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: 80, borderRadius: 'var(--radius-lg)', opacity: 1 - i * 0.2 }} />
+          ))}
         </div>
       ) : months.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <div className="empty-state-icon"><IconBarChart size={22} /></div>
-            <strong>Belum ada data</strong>
-            <p>Mulai catat transaksi untuk melihat laporan keuangan kamu</p>
-          </div>
+        <div className="empty-state">
+          <div className="empty-state-icon"><IconBarChart size={22} /></div>
+          <strong>Belum ada data</strong>
+          <p>Mulai catat transaksi untuk melihat laporan keuangan kamu</p>
         </div>
       ) : (
         <>
-          {/* ── 3 Summary Cards ──────────────────── */}
-          <div className="rpt-summary">
-            <div className="rpt-sum-card rpt-sum-income">
-              <div className="rpt-sum-icon"><IconArrowUp size={14} /></div>
-              <span className="rpt-sum-label">Total Uang Masuk</span>
-              <span className="rpt-sum-val text-success tabular">{formatCurrency(totalIncome)}</span>
-              <span className="rpt-sum-sub">{months.length} bulan tercatat</span>
-            </div>
-            <div className="rpt-sum-card rpt-sum-expense">
-              <div className="rpt-sum-icon"><IconArrowDown size={14} /></div>
-              <span className="rpt-sum-label">Total Uang Keluar</span>
-              <span className="rpt-sum-val text-danger tabular">{formatCurrency(totalExpense)}</span>
-              <span className="rpt-sum-sub">{expRatioPct}% dari total pemasukan</span>
-            </div>
-            <div className="rpt-sum-card rpt-sum-net">
-              <div className="rpt-sum-icon"><IconActivity size={14} /></div>
-              <span className="rpt-sum-label">Total Tersimpan</span>
-              <span className={`rpt-sum-val tabular ${net >= 0 ? 'text-success' : 'text-danger'}`}>
-                {net >= 0 ? '+' : ''}{formatCurrency(net)}
-              </span>
-              <span className="rpt-sum-sub" style={{ color: net >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
-                {net >= 0 ? `${savingsRate}% dari pemasukan` : 'Pengeluaran melebihi pemasukan'}
-              </span>
-            </div>
-          </div>
-
-          {/* ── Insight Strip ─────────────────────── */}
-          <div className="rpt-insights">
-            <div className="rpt-insight-item">
-              <span className="rpt-insight-label">Rata-rata keluar/bulan</span>
-              <span className="rpt-insight-val">{formatCurrency(avgExpense)}</span>
-            </div>
-            {months.length > 1 && (
-              <div className="rpt-insight-item">
-                <span className="rpt-insight-label">Rata-rata masuk/bulan</span>
-                <span className="rpt-insight-val">{formatCurrency(avgIncome)}</span>
+          {/* ── Tren ─────────────────────────────── */}
+          {trendData.length > 1 && (
+            <div className="rpt-section">
+              <div className="rpt-section-head">
+                <span className="rpt-section-label">Tren Keuangan</span>
+                <span className="rpt-section-sub">masuk vs keluar per bulan</span>
               </div>
-            )}
-            <div className="rpt-insight-item">
-              <span className="rpt-insight-label">Bulan keuangan aman</span>
-              <span className="rpt-insight-val" style={{ color: 'var(--success)' }}>
-                {healthyCount} dari {months.length} bulan
-              </span>
-            </div>
-            {topCat && (
-              <div className="rpt-insight-item">
-                <span className="rpt-insight-label">Pengeluaran terbesar</span>
-                <span className="rpt-insight-val" style={{
-                  maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                }}>{topCat.name}</span>
-              </div>
-            )}
-          </div>
-
-          {/* ── Chart ───────────────────────────── */}
-          {trendData.length > 0 && (
-            <div className="card rpt-chart-card">
-              <div className="rpt-chart-head">
-                <div>
-                  <h3 className="rpt-chart-title">Tren Keuangan Bulanan</h3>
-                  <p className="rpt-chart-sub">Perbandingan uang masuk dan keluar setiap bulan</p>
+              <div className="card rpt-chart-card">
+                <div className="rpt-chart-wrap">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#34d399" stopOpacity={0.18} />
+                          <stop offset="95%" stopColor="#34d399" stopOpacity={0}    />
+                        </linearGradient>
+                        <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor="#f87171" stopOpacity={0.18} />
+                          <stop offset="95%" stopColor="#f87171" stopOpacity={0}    />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis dataKey="label"
+                        tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                        axisLine={false} tickLine={false} />
+                      <YAxis tickFormatter={fmt}
+                        tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
+                        axisLine={false} tickLine={false} width={38} />
+                      <Tooltip
+                        formatter={(v, name) => [formatCurrency(v), name]}
+                        contentStyle={{
+                          background: 'var(--bg-card)', border: '1px solid var(--border)',
+                          borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
+                        }} />
+                      <Area type="monotone" dataKey="Pemasukan"   stroke="#34d399" strokeWidth={1.5} fill="url(#gInc)" dot={{ r: 2.5, fill: '#34d399' }} />
+                      <Area type="monotone" dataKey="Pengeluaran" stroke="#f87171" strokeWidth={1.5} fill="url(#gExp)" dot={{ r: 2.5, fill: '#f87171' }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-              </div>
-              <div className="rpt-chart-wrap">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#34d399" stopOpacity={0.22} />
-                        <stop offset="95%" stopColor="#34d399" stopOpacity={0}    />
-                      </linearGradient>
-                      <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#f87171" stopOpacity={0.22} />
-                        <stop offset="95%" stopColor="#f87171" stopOpacity={0}    />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-                      axisLine={false} tickLine={false}
-                    />
-                    <YAxis
-                      tickFormatter={fmt}
-                      tick={{ fontSize: 10, fill: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}
-                      axisLine={false} tickLine={false} width={40}
-                    />
-                    <Tooltip
-                      formatter={(v, name) => [formatCurrency(v), name]}
-                      contentStyle={{
-                        background: 'var(--bg-card)', border: '1px solid var(--border)',
-                        borderRadius: 8, fontSize: 12, fontFamily: 'var(--font-sans)',
-                      }}
-                    />
-                    <Area type="monotone" dataKey="Pemasukan"   stroke="#34d399" strokeWidth={2} fill="url(#gInc)" dot={{ r: 3, fill: '#34d399' }} />
-                    <Area type="monotone" dataKey="Pengeluaran" stroke="#f87171" strokeWidth={2} fill="url(#gExp)" dot={{ r: 3, fill: '#f87171' }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="rpt-legend">
-                <div className="rpt-legend-item">
-                  <span className="rpt-legend-dot" style={{ background: '#34d399' }} />
-                  <span className="rpt-legend-name">Uang Masuk (Pemasukan)</span>
-                </div>
-                <div className="rpt-legend-item">
-                  <span className="rpt-legend-dot" style={{ background: '#f87171' }} />
-                  <span className="rpt-legend-name">Uang Keluar (Pengeluaran)</span>
+                <div className="rpt-legend">
+                  <div className="rpt-legend-item">
+                    <span className="rpt-legend-dot" style={{ background: '#34d399' }} />
+                    <span className="rpt-legend-name">Pemasukan</span>
+                  </div>
+                  <div className="rpt-legend-item">
+                    <span className="rpt-legend-dot" style={{ background: '#f87171' }} />
+                    <span className="rpt-legend-name">Pengeluaran</span>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Kategori Terbesar ─────────────────── */}
-          {categories.length > 0 && (
-            <div className="card rpt-cat-card">
-              <div className="rpt-chart-head">
-                <div>
-                  <h3 className="rpt-chart-title">Pengeluaran Terbesar</h3>
-                  <p className="rpt-chart-sub">Kategori dengan total pengeluaran tertinggi (semua bulan)</p>
+          {/* ── Detail Bulan ──────────────────────── */}
+          {(() => {
+            const m = months[selectedMonthIdx]
+            if (!m) return null
+            const health   = getHealth(m)
+            const expRatio = m.income > 0 ? Math.min((m.expense / m.income) * 100, 100) : 0
+            const expPct   = m.income > 0 ? Math.round((m.expense / m.income) * 100) : 0
+            const catList  = Object.entries(m.catBreakdown).sort((a, b) => b[1] - a[1])
+            return (
+              <div className="rpt-section">
+                <div className="rpt-section-head">
+                  <span className="rpt-section-label">Detail per Bulan</span>
+                  <span className="rpt-section-sub">{months.length} bulan tercatat</span>
                 </div>
-              </div>
-              <div className="rpt-cat-list">
-                {categories.slice(0, 8).map((cat, i) => {
-                  const pctOfExpense = totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0
-                  const pctOfIncome  = totalIncome  > 0 ? (cat.total / totalIncome)  * 100 : 0
-                  return (
-                    <div key={cat.name} className="rpt-cat-row">
-                      <div className="rpt-cat-left">
-                        <span className="rpt-cat-rank">{i + 1}</span>
-                        <span className="rpt-cat-icon" style={{ background: `${cat.color}18` }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, display: 'block' }} />
-                        </span>
-                        <span className="rpt-cat-name">{cat.name}</span>
-                      </div>
-                      <div className="rpt-cat-mid">
-                        <div className="rpt-cat-bar">
-                          <div className="rpt-cat-fill" style={{ width: `${pctOfExpense}%`, background: cat.color }} />
-                        </div>
-                        <span className="rpt-cat-pct">{pctOfExpense.toFixed(0)}%</span>
-                      </div>
-                      <div className="rpt-cat-right">
-                        <span className="rpt-cat-amount tabular">{formatCurrency(cat.total)}</span>
-                        {totalIncome > 0 && (
-                          <span className="rpt-cat-of-income">{pctOfIncome.toFixed(0)}% gaji</span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── Per Bulan ─────────────────────────── */}
-          <div className="rpt-month-list">
-            {months.map(m => {
-              const health   = getHealth(m)
-              const expRatio = m.income > 0 ? Math.min((m.expense / m.income) * 100, 100) : 0
-              const expPct   = m.income > 0 ? Math.round((m.expense / m.income) * 100) : 0
-              const topCats  = Object.entries(m.catBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 3)
-              return (
-                <div key={m.month} className="rpt-month-row" onClick={() => navigate(`/dashboard?month=${m.month}`)}>
-
-                  {/* Row 1: nama bulan + badge */}
-                  <div className="rpt-month-head">
-                    <div className="rpt-month-title-row">
-                      <span className="rpt-month-name">{m.label}</span>
+                <div className="card rpt-pick-card">
+                  {/* Month nav */}
+                  <div className="rpt-pick-nav">
+                    <button className="rpt-pick-btn"
+                      onClick={() => setSelectedMonthIdx(i => i + 1)}
+                      disabled={selectedMonthIdx >= months.length - 1}>‹</button>
+                    <div className="rpt-pick-center">
+                      <span className="rpt-pick-name">{m.label}</span>
                       <span className="rpt-health-badge" style={{ color: health.color, background: health.bg }}>
                         {health.label}
                       </span>
                     </div>
-                    {m.salary > 0 && (
-                      <span className="rpt-month-salary">Gaji {formatCurrency(m.salary)}</span>
-                    )}
+                    <button className="rpt-pick-btn"
+                      onClick={() => setSelectedMonthIdx(i => i - 1)}
+                      disabled={selectedMonthIdx <= 0}>›</button>
                   </div>
+                  {m.salary > 0 && (
+                    <p className="rpt-pick-salary">Gaji {formatCurrency(m.salary)}</p>
+                  )}
 
-                  {/* Row 2: 3 stat */}
+                  {/* Stats */}
                   <div className="rpt-month-stats">
                     <div className="rpt-stat">
                       <span className="rpt-stat-label">Pengeluaran</span>
@@ -335,272 +263,190 @@ export default function Report() {
                     </div>
                   </div>
 
-                  {/* Row 3: bar + chips + cta */}
-                  <div className="rpt-month-footer">
-                    <div className="rpt-exp-bar-row">
-                      <div className="rpt-exp-bar">
-                        <div className="rpt-exp-fill" style={{
-                          width: `${expRatio}%`,
-                          background: health.color,
-                        }} />
-                      </div>
-                      <span className="rpt-exp-label">{expPct}% pengeluaran dari gaji</span>
+                  {/* Expense bar */}
+                  <div className="rpt-exp-bar-row">
+                    <div className="rpt-exp-bar">
+                      <div className="rpt-exp-fill" style={{ width: `${expRatio}%`, background: health.color }} />
                     </div>
-                    {topCats.length > 0 && (
-                      <div className="rpt-month-cats">
-                        {topCats.map(([name]) => {
-                          const c = categories.find(c => c.name === name)
-                          return (
-                            <span key={name} className="rpt-month-cat-chip"
-                              style={{ background: `${c?.color || '#6366f1'}15`, color: c?.color || '#6366f1' }}>
-                              {name}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    )}
-                    <span className="rpt-cta">Lihat detail bulan ini →</span>
+                    <span className="rpt-exp-label">{expPct}%</span>
                   </div>
+
+                  {/* Category breakdown */}
+                  {catList.length > 0 && (
+                    <div className="rpt-month-detail">
+                      {catList.map(([name, amount]) => {
+                        const c = categories.find(c => c.name === name)
+                        const color = c?.color || '#6366f1'
+                        const pct = m.rawExpense > 0 ? (amount / m.rawExpense) * 100 : 0
+                        return (
+                          <div key={name} className="rpt-detail-row">
+                            <span className="rpt-detail-dot" style={{ background: color }} />
+                            <span className="rpt-detail-name">{name}</span>
+                            <div className="rpt-detail-bar">
+                              <div className="rpt-detail-fill" style={{ width: `${pct}%`, background: color }} />
+                            </div>
+                            <span className="rpt-detail-pct tabular">{pct.toFixed(0)}%</span>
+                            <span className="rpt-detail-amount tabular">{formatCurrency(amount)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* CTA */}
+                  <button className="rpt-cta" onClick={() => navigate(`/transactions?month=${m.month}`)}>
+                    Lihat transaksi bulan ini →
+                  </button>
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )
+          })()}
         </>
       )}
 
       <style>{`
-        /* ── Summary Cards ────────────────────── */
-        .rpt-summary {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px; margin-bottom: 12px;
-        }
-        .rpt-sum-card {
-          background: var(--bg-card);
-          backdrop-filter: var(--glass-blur);
-          -webkit-backdrop-filter: var(--glass-blur);
-          border: 1px solid var(--border-glass);
-          border-radius: var(--radius-lg);
-          padding: 18px 20px;
-          display: flex; flex-direction: column; gap: 4px;
-          position: relative; overflow: hidden;
-          box-shadow: var(--shadow); transition: all 0.2s;
-        }
-        .rpt-sum-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-        .rpt-sum-card::before {
-          content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-          width: 3px; border-radius: 0 2px 2px 0;
-        }
-        .rpt-sum-income::before { background: linear-gradient(180deg,#34d399,#10b981); box-shadow:0 0 8px rgba(52,211,153,0.5); }
-        .rpt-sum-expense::before { background: linear-gradient(180deg,#f87171,#ef4444); box-shadow:0 0 8px rgba(248,113,113,0.5); }
-        .rpt-sum-net::before { background: var(--gradient-accent); box-shadow:0 0 8px rgba(99,102,241,0.5); }
-        .rpt-sum-icon {
-          width: 30px; height: 30px; border-radius: 8px;
-          display: flex; align-items: center; justify-content: center;
-          margin-bottom: 4px; flex-shrink: 0;
-        }
-        .rpt-sum-income .rpt-sum-icon { background: var(--success-dim); color: var(--success); }
-        .rpt-sum-expense .rpt-sum-icon { background: var(--danger-dim);  color: var(--danger);  }
-        .rpt-sum-net .rpt-sum-icon     { background: var(--accent-dim);  color: var(--accent);  }
-        .rpt-sum-label {
-          font-size: 0.63rem; text-transform: uppercase;
-          letter-spacing: 0.07em; color: var(--text-muted); font-weight: 700;
-        }
-        .rpt-sum-val {
-          font-size: 1.2rem; font-weight: 800;
-          letter-spacing: -0.035em; line-height: 1.1; margin: 2px 0;
-        }
-        .rpt-sum-sub { font-size: 0.68rem; color: var(--text-muted); font-weight: 500; }
+        .rpt-page { padding-bottom: 56px; }
 
-        /* ── Insight Strip ────────────────────── */
-        .rpt-insights {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 8px; margin-bottom: 12px;
+        /* ── Page Header ─────────────────────── */
+        .rpt-page-header {
+          display: flex; align-items: center; gap: 12px; margin-bottom: 28px;
         }
-        .rpt-insight-item {
-          background: var(--bg-card);
-          backdrop-filter: var(--glass-blur);
-          border: 1px solid var(--border-glass);
-          border-radius: var(--radius-sm);
-          padding: 10px 14px;
-          display: flex; flex-direction: column; gap: 3px;
-          box-shadow: var(--shadow);
-        }
-        .rpt-insight-label {
-          font-size: 0.60rem; font-weight: 700;
-          text-transform: uppercase; letter-spacing: 0.06em;
-          color: var(--text-muted);
-        }
-        .rpt-insight-val {
-          font-size: 0.8125rem; font-weight: 700;
-          color: var(--text-primary); letter-spacing: -0.02em;
-        }
-
-        /* ── Chart ────────────────────────────── */
-        .rpt-chart-card { margin-bottom: 12px; }
-        .rpt-chart-head {
-          display: flex; justify-content: space-between;
-          align-items: flex-start; margin-bottom: 16px; gap: 12px;
-        }
-        .rpt-chart-title {
-          font-size: 0.8125rem; font-weight: 700;
-          color: var(--text-primary); letter-spacing: -0.01em; margin: 0;
-        }
-        .rpt-chart-sub {
-          font-size: 0.68rem; color: var(--text-muted); font-weight: 500; margin-top: 3px;
-        }
-        .rpt-chart-wrap { height: 240px; }
-        .rpt-legend {
-          display: flex; flex-wrap: wrap; gap: 8px 20px;
-          margin-top: 14px; padding-top: 12px;
-          border-top: 1px solid var(--border);
-        }
-        .rpt-legend-item { display: flex; align-items: center; gap: 7px; }
-        .rpt-legend-dot {
-          width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
-        }
-        .rpt-legend-name { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; }
-
-        /* ── Category Breakdown ───────────────── */
-        .rpt-cat-card { margin-bottom: 12px; }
-        .rpt-cat-list { display: flex; flex-direction: column; margin-top: 14px; }
-        .rpt-cat-row {
-          display: flex; align-items: center; gap: 12px;
-          padding: 9px 0; border-bottom: 1px solid var(--border);
-        }
-        .rpt-cat-row:last-child { border-bottom: none; }
-        .rpt-cat-left {
-          display: flex; align-items: center; gap: 8px;
-          width: 160px; flex-shrink: 0;
-        }
-        .rpt-cat-rank {
-          font-size: 0.65rem; font-weight: 700; color: var(--text-muted);
-          width: 14px; text-align: right; flex-shrink: 0;
-        }
-        .rpt-cat-icon {
-          width: 26px; height: 26px; border-radius: 6px;
+        .rpt-page-icon {
+          width: 36px; height: 36px; border-radius: 9px;
+          background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2);
+          color: var(--info);
           display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
-        .rpt-cat-name {
-          font-size: 0.8rem; font-weight: 600; color: var(--text-primary);
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        .rpt-page-title {
+          font-size: 1.1rem; font-weight: 800; letter-spacing: -0.025em;
+          color: var(--text-primary); margin: 0; line-height: 1.2;
         }
-        .rpt-cat-mid {
-          flex: 1; display: flex; align-items: center; gap: 8px;
-        }
-        .rpt-cat-bar {
-          flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden;
-        }
-        .rpt-cat-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
-        .rpt-cat-pct {
-          font-size: 0.68rem; color: var(--text-muted); font-weight: 600;
-          width: 32px; text-align: right; flex-shrink: 0;
-        }
-        .rpt-cat-right {
-          display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
-          width: 100px; flex-shrink: 0;
-        }
-        .rpt-cat-amount {
-          font-size: 0.8rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;
-        }
-        .rpt-cat-of-income {
-          font-size: 0.62rem; color: var(--text-muted); font-weight: 500;
-        }
+        .rpt-page-sub { font-size: 0.72rem; color: var(--text-muted); margin: 2px 0 0; }
 
-        /* ── Monthly List ─────────────────────── */
-        .rpt-month-list { display: flex; flex-direction: column; gap: 10px; }
-        .rpt-month-row {
-          background: var(--bg-card);
-          backdrop-filter: var(--glass-blur);
-          -webkit-backdrop-filter: var(--glass-blur);
-          border: 1px solid var(--border-glass);
-          border-radius: var(--radius-lg);
-          padding: 16px 18px;
-          display: flex; flex-direction: column; gap: 12px;
-          cursor: pointer; transition: all 0.18s;
-          box-shadow: var(--shadow);
+        /* ── Section ─────────────────────────── */
+        .rpt-section { margin-bottom: 32px; }
+        .rpt-section-head {
+          display: flex; flex-direction: column; gap: 2px;
+          padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 12px;
         }
-        .rpt-month-row:hover {
-          border-color: rgba(99,102,241,0.25);
-          transform: translateY(-1px);
-          box-shadow: var(--shadow-lg);
+        .rpt-section-label {
+          font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.1em; color: var(--text-secondary);
         }
+        .rpt-section-sub { font-size: 0.7rem; color: var(--text-muted); font-weight: 500; }
 
-        .rpt-month-head { display: flex; flex-direction: column; gap: 3px; }
-        .rpt-month-title-row {
-          display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        /* ── Chart ────────────────────────────── */
+        .rpt-chart-card { padding: 16px 18px; }
+        .rpt-chart-wrap { height: 220px; }
+        .rpt-legend {
+          display: flex; gap: 16px; margin-top: 12px;
+          padding-top: 10px; border-top: 1px solid var(--border);
         }
-        .rpt-month-name {
-          font-size: 0.9375rem; font-weight: 700; letter-spacing: -0.025em; color: var(--text-primary);
+        .rpt-legend-item { display: flex; align-items: center; gap: 6px; }
+        .rpt-legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+        .rpt-legend-name { font-size: 0.68rem; color: var(--text-secondary); font-weight: 600; }
+
+        /* ── Month Picker ─────────────────────── */
+        .rpt-pick-card { display: flex; flex-direction: column; gap: 14px; }
+        .rpt-pick-nav { display: flex; align-items: center; gap: 10px; }
+        .rpt-pick-btn {
+          width: 28px; height: 28px; border-radius: 6px;
+          border: 1px solid var(--border); background: none;
+          color: var(--text-muted); font-size: 1rem; font-weight: 700;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s; flex-shrink: 0; font-family: var(--font-sans);
+        }
+        .rpt-pick-btn:hover:not(:disabled) {
+          border-color: var(--accent); color: var(--accent); background: var(--accent-dim);
+        }
+        .rpt-pick-btn:disabled { opacity: 0.2; cursor: default; }
+        .rpt-pick-center {
+          flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .rpt-pick-name {
+          font-size: 1rem; font-weight: 800; letter-spacing: -0.025em; color: var(--text-primary);
         }
         .rpt-health-badge {
-          font-size: 0.65rem; font-weight: 700; padding: 3px 10px;
-          border-radius: 99px; flex-shrink: 0; letter-spacing: 0.02em;
+          font-size: 0.58rem; font-weight: 700; padding: 2px 8px;
+          border-radius: 99px; flex-shrink: 0; letter-spacing: 0.05em; text-transform: uppercase;
         }
-        .rpt-month-salary {
-          font-size: 0.7rem; color: var(--text-muted); font-weight: 500;
+        .rpt-pick-salary {
+          font-size: 0.68rem; color: var(--text-muted); font-weight: 500;
+          margin: -6px 0 0; text-align: center;
         }
 
+        /* Stats */
         .rpt-month-stats {
-          display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
-          padding: 10px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+          display: grid; grid-template-columns: repeat(3, 1fr);
+          padding: 12px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
         }
-        .rpt-stat { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
-        .rpt-stat:first-child { padding-left: 0; border-right: 1px solid var(--border); padding-right: 12px; }
+        .rpt-stat { display: flex; flex-direction: column; gap: 3px; padding: 0 10px; }
+        .rpt-stat:first-child { padding-left: 0; border-right: 1px solid var(--border); }
         .rpt-stat:last-child  { padding-right: 0; padding-left: 12px; }
         .rpt-stat:nth-child(2) { padding: 0 12px; border-right: 1px solid var(--border); }
         .rpt-stat-label {
-          font-size: 0.6rem; text-transform: uppercase;
-          letter-spacing: 0.06em; color: var(--text-muted); font-weight: 700;
+          font-size: 0.58rem; text-transform: uppercase;
+          letter-spacing: 0.1em; color: var(--text-muted); font-weight: 700;
         }
-        .rpt-stat-val { font-size: 0.875rem; font-weight: 700; letter-spacing: -0.025em; }
-        .rpt-stat-sub { font-size: 0.62rem; font-weight: 600; color: var(--text-muted); }
+        .rpt-stat-val { font-size: 0.9rem; font-weight: 800; letter-spacing: -0.025em; }
+        .rpt-stat-sub { font-size: 0.6rem; font-weight: 600; color: var(--text-muted); }
 
-        .rpt-month-footer { display: flex; flex-direction: column; gap: 8px; }
-        .rpt-exp-bar-row { display: flex; align-items: center; gap: 10px; }
+        /* Expense bar */
+        .rpt-exp-bar-row { display: flex; align-items: center; gap: 8px; }
         .rpt-exp-bar {
-          flex: 1; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden;
+          flex: 1; height: 3px; background: rgba(255,255,255,0.07);
+          border-radius: 99px; overflow: hidden;
         }
-        .rpt-exp-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
-        .rpt-exp-label {
-          font-size: 0.62rem; color: var(--text-muted); font-weight: 600; flex-shrink: 0;
-        }
-        .rpt-month-cats { display: flex; flex-wrap: wrap; gap: 4px; }
-        .rpt-month-cat-chip {
-          font-size: 0.62rem; font-weight: 600; padding: 2px 8px;
-          border-radius: 99px; white-space: nowrap;
-        }
+        .rpt-exp-fill { height: 100%; border-radius: 99px; transition: width 0.5s ease; }
+        .rpt-exp-label { font-size: 0.6rem; color: var(--text-muted); font-weight: 600; flex-shrink: 0; }
+
+        /* CTA */
         .rpt-cta {
           font-size: 0.68rem; color: var(--accent); font-weight: 700;
-          align-self: flex-end; margin-top: -2px;
+          align-self: flex-end; background: none; border: none;
+          cursor: pointer; font-family: var(--font-sans); padding: 0;
+        }
+        .rpt-cta:hover { opacity: 0.75; }
+
+        /* Category detail rows */
+        .rpt-month-detail {
+          border-top: 1px solid var(--border); padding-top: 8px;
+          display: flex; flex-direction: column;
+        }
+        .rpt-detail-row {
+          display: grid;
+          grid-template-columns: 7px 1fr 80px 28px 90px;
+          align-items: center; gap: 8px;
+          min-height: 36px;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .rpt-detail-row:last-child { border-bottom: none; }
+        .rpt-detail-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .rpt-detail-name {
+          font-size: 0.8rem; font-weight: 600; color: var(--text-primary);
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .rpt-detail-bar {
+          height: 3px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden;
+        }
+        .rpt-detail-fill { height: 100%; border-radius: 99px; }
+        .rpt-detail-pct { font-size: 0.6rem; color: var(--text-muted); font-weight: 600; text-align: right; }
+        .rpt-detail-amount {
+          font-size: 0.8rem; font-weight: 700; letter-spacing: -0.02em;
+          color: var(--text-primary); text-align: right;
         }
 
         /* ── Mobile ───────────────────────────── */
-        @media (max-width: 768px) {
-          .rpt-summary { grid-template-columns: 1fr 1fr; }
-          .rpt-summary .rpt-sum-card:last-child { grid-column: span 2; }
-          .rpt-sum-val { font-size: 1rem; }
-          .rpt-insights { grid-template-columns: 1fr 1fr; }
-          .rpt-chart-wrap { height: 200px; }
-          .rpt-cat-left { width: 110px; }
-          .rpt-cat-right { width: 80px; }
-          .rpt-cat-amount { font-size: 0.75rem; }
-          .rpt-month-row { padding: 12px 14px; }
+        @media (max-width: 640px) {
+          .rpt-chart-wrap { height: 180px; }
+          .rpt-detail-row { grid-template-columns: 7px 1fr 56px; }
+          .rpt-detail-bar, .rpt-detail-pct { display: none; }
+          .rpt-detail-amount { font-size: 0.72rem; }
+          .rpt-stat-val { font-size: 0.8rem; }
         }
-        @media (max-width: 480px) {
-          .rpt-summary { grid-template-columns: 1fr 1fr; }
-          .rpt-insights { grid-template-columns: 1fr 1fr; }
-          .rpt-sum-val { font-size: 0.9rem; }
-          .rpt-cat-row { flex-wrap: wrap; gap: 6px; }
-          .rpt-cat-left { width: 100%; }
-          .rpt-cat-mid { width: 100%; order: 3; }
-          .rpt-cat-right { width: auto; margin-left: auto; flex-direction: row; align-items: center; gap: 6px; }
-          .rpt-cat-rank { display: none; }
-          .rpt-month-stats { grid-template-columns: 1fr 1fr 1fr; }
-          .rpt-stat { padding: 0 4px !important; border: none !important; }
+        @media (max-width: 400px) {
+          .rpt-stat { padding: 0 6px !important; border: none !important; }
           .rpt-stat:first-child { padding-left: 0 !important; }
-          .rpt-stat-val { font-size: 0.78rem; }
         }
       `}</style>
     </div>

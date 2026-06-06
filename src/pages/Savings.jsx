@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getCurrentMonth, getMonthLabel, getToday } from '../utils/formatCurrency'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
-import { IconBookmark, IconShoppingBag, IconCheck, IconPlus, IconTrash, IconUndo, IconCreditCard, IconTarget, IconX, IconPiggyBank } from '../components/Icons'
+import { IconBookmark, IconShoppingBag, IconCheck, IconPlus, IconTrash, IconUndo, IconCreditCard, IconX, IconPiggyBank } from '../components/Icons'
 
 function getMonthOptions() {
   const opts = []
@@ -18,7 +18,6 @@ function getMonthOptions() {
 }
 
 const MONTH_OPTS = getMonthOptions()
-
 const TODAY = getToday()
 
 export default function Plans() {
@@ -35,14 +34,12 @@ export default function Plans() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
-  // Modal ceklist selesai
-  const [doneModal, setDoneModal] = useState(null)   // plan object
-  const [doneSource, setDoneSource] = useState('gaji') // 'tabungan' | 'gaji'
+  const [doneModal, setDoneModal] = useState(null)
+  const [doneSource, setDoneSource] = useState('gaji')
   const [doneSavingsId, setDoneSavingsId] = useState('')
   const [doneCatId, setDoneCatId] = useState('')
   const [doneDate, setDoneDate] = useState(TODAY)
   const [confirming, setConfirming] = useState(false)
-
 
   useEffect(() => { fetchAll() }, [])
 
@@ -71,8 +68,6 @@ export default function Plans() {
       .order('created_at', { ascending: true })
     setPlans(data || [])
   }
-
-
 
   const addPlan = async () => {
     if (!form.name.trim() || !form.amount || !form.targetMonth) return
@@ -105,7 +100,6 @@ export default function Plans() {
       })
       return
     }
-    // Buka modal pilih sumber uang
     setDoneModal(plan)
     setDoneSource('gaji')
     setDoneDate(TODAY)
@@ -122,10 +116,8 @@ export default function Plans() {
       const newAmount = Math.max(0, Number(sv.current_amount) - Number(plan.amount))
       const { error } = await supabase.from('savings').update({ current_amount: newAmount }).eq('id', doneSavingsId)
       if (error) { toast('Gagal update tabungan', 'error'); setConfirming(false); return }
-      // Refresh savings list di state
       setSavings(ss => ss.map(s => s.id === doneSavingsId ? { ...s, current_amount: newAmount } : s))
     } else {
-      // Potongan gaji → insert expense transaction
       const { error } = await supabase.from('transactions').insert({
         user_id: user.id,
         category_id: doneCatId || null,
@@ -161,7 +153,6 @@ export default function Plans() {
     return true
   })
 
-  // group by target_month, sorted ascending
   const grouped = {}
   filtered.forEach(p => {
     if (!grouped[p.target_month]) grouped[p.target_month] = []
@@ -171,178 +162,117 @@ export default function Plans() {
 
   const totalAktif = plans.filter(p => !p.done).reduce((s, p) => s + Number(p.amount), 0)
   const totalSelesai = plans.filter(p => p.done).reduce((s, p) => s + Number(p.amount), 0)
+  const countAktif = plans.filter(p => !p.done).length
+  const countSelesai = plans.filter(p => p.done).length
 
   return (
     <>
-      <div className="animate-in">
-      {/* Header */}
-      <div className="page-header-banner" style={{ marginBottom: 20 }}>
-        <div className="page-header-icon" style={{ background: 'rgba(251,191,36,0.1)', color: 'var(--warning)' }}><IconBookmark size={18} /></div>
-        <div>
-          <h1 className="page-header-title">Rencana</h1>
-          <p className="page-header-sub">Catat apa saja yang ingin dibeli, berapa, dan kapan</p>
-        </div>
-      </div>
+      <div className="animate-in pln-page">
 
-      {/* Stats bar */}
-      <div className="plans-stat-bar" style={{ marginBottom: 20 }}>
-        <div className="plans-stat">
-          <span className="plans-stat-label">Total Rencana</span>
-          <span className="plans-stat-val tabular">{plans.length} item</span>
+        {/* Page header */}
+        <div className="pln-page-header">
+          <div className="pln-page-icon"><IconBookmark size={16} /></div>
+          <div>
+            <h1 className="pln-page-title">Rencana</h1>
+            <p className="pln-page-sub">Catat apa yang ingin dibeli, berapa, dan kapan targetnya</p>
+          </div>
         </div>
-        <div className="plans-stat-divider" />
-        <div className="plans-stat">
-          <span className="plans-stat-label">Belum terbeli</span>
-          <span className="plans-stat-val tabular text-warning">{formatCurrency(totalAktif)}</span>
-        </div>
-        <div className="plans-stat-divider" />
-        <div className="plans-stat">
-          <span className="plans-stat-label">Sudah terbeli</span>
-          <span className="plans-stat-val tabular text-success">{formatCurrency(totalSelesai)}</span>
-        </div>
-      </div>
 
-      {/* Inline add form */}
-      {showForm && (
-        <div className="card plans-form-card animate-in" style={{ marginBottom: 20 }}>
-          <p className="plans-form-title">Tambah Rencana Baru</p>
-          <div className="plans-form-grid">
-            <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
-              <label className="form-label">Nama barang / kebutuhan</label>
-              <input
-                className="form-input"
-                type="text"
-                placeholder="contoh: Beli laptop, Kondangan Budi..."
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                autoFocus
-              />
+        {/* Stats strip */}
+        {plans.length > 0 && (
+          <div className="pln-stats-strip">
+            <div className="pln-stat">
+              <span className="pln-stat-label">Belum Terbeli</span>
+              <span className="pln-stat-val tabular" style={{ color: totalAktif > 0 ? 'var(--warning)' : 'var(--text-primary)' }}>
+                {formatCurrency(totalAktif)}
+              </span>
             </div>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Estimasi harga</label>
-              <CurrencyInput
-                value={form.amount}
-                onChange={raw => setForm(f => ({ ...f, amount: raw }))}
-              />
+            <div className="pln-stat-divider" />
+            <div className="pln-stat">
+              <span className="pln-stat-label">Aktif</span>
+              <span className="pln-stat-val">{countAktif} item</span>
             </div>
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Target bulan</label>
-              <select
-                className="form-select"
-                value={form.targetMonth}
-                onChange={e => setForm(f => ({ ...f, targetMonth: e.target.value }))}
+            <div className="pln-stat-divider" />
+            <div className="pln-stat">
+              <span className="pln-stat-label">Sudah Terbeli</span>
+              <span className="pln-stat-val tabular" style={{ color: countSelesai > 0 ? 'var(--success)' : 'var(--text-primary)' }}>
+                {formatCurrency(totalSelesai)}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Filter row + Add */}
+        <div className="pln-filter-row">
+          <div className="pln-filter-tabs">
+            {['aktif', 'selesai', 'semua'].map(f => (
+              <button
+                key={f}
+                className={`pln-filter-btn ${filter === f ? 'active' : ''}`}
+                onClick={() => setFilter(f)}
               >
-                {MONTH_OPTS.map(o => (
-                  <option key={o.val} value={o.val}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
-              <label className="form-label">Catatan <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opsional)</span></label>
-              <input
-                className="form-input"
-                type="text"
-                placeholder="detail tambahan..."
-                value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              />
-            </div>
+                {f === 'aktif' ? `Aktif (${countAktif})` :
+                 f === 'selesai' ? `Selesai (${countSelesai})` : 'Semua'}
+              </button>
+            ))}
           </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-            <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
-            <button
-              className="btn btn-primary"
-              onClick={addPlan}
-              disabled={!form.name.trim() || !form.amount || saving}
-            >
-              {saving ? 'Menyimpan...' : <><IconPlus size={13} /> Simpan Rencana</>}
-            </button>
+          <button className="pln-add-btn" onClick={() => setShowForm(true)} title="Tambah Rencana">
+            <IconPlus size={11} />
+          </button>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 50, borderRadius: 0, opacity: 1 - i * 0.18 }} />
+            ))}
           </div>
-        </div>
-      )}
-
-      {/* Filter tabs + Tambah */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 20 }}>
-        <div className="plans-filter-tabs">
-          {['aktif', 'selesai', 'semua'].map(f => (
-            <button
-              key={f}
-              className={`plans-filter-btn ${filter === f ? 'active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {f === 'aktif' ? `Aktif (${plans.filter(p => !p.done).length})` :
-               f === 'selesai' ? `Selesai (${plans.filter(p => p.done).length})` : 'Semua'}
-            </button>
-          ))}
-        </div>
-        <button
-          className="btn btn-primary btn-sm"
-          style={{ flexShrink: 0, gap: 6 }}
-          onClick={() => setShowForm(v => !v)}
-        >
-          {showForm ? <><IconX size={13} /> Tutup</> : <><IconPlus size={13} /> Tambah Rencana</>}
-        </button>
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="skeleton" style={{ height: 76, borderRadius: 'var(--radius)' }} />
-          ))}
-        </div>
-      ) : sortedMonths.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon"><IconBookmark size={22} /></div>
-          <strong>
-            {filter === 'aktif' ? 'Belum ada rencana aktif' :
-             filter === 'selesai' ? 'Belum ada rencana selesai' :
-             'Belum ada rencana'}
-          </strong>
-          <p>
-            {filter === 'aktif'
-              ? 'Tekan "+ Tambah Rencana" untuk mulai mencatat.'
-              : 'Selesaikan rencana dengan menekan tombol ✓.'}
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {sortedMonths.map(month => {
-            const items = grouped[month]
-            const monthTotal = items.reduce((s, p) => s + Number(p.amount), 0)
-            return (
-              <div key={month}>
-                {/* Month header */}
-                <div className="plans-month-header">
-                  <span className="plans-month-label">{getMonthLabel(month)}</span>
-                  <span className="plans-month-total tabular">{formatCurrency(monthTotal)}</span>
-                </div>
-
-                {/* Cards */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {items.map(plan => (
-                    <div key={plan.id} className={`plan-card ${plan.done ? 'plan-card-done' : ''}`}>
-                      <div className="plan-card-icon">
-                        {plan.done ? <IconCheck size={15} /> : <IconShoppingBag size={16} />}
-                      </div>
-                      <div className="plan-card-body">
-                        <div className="plan-card-name">{plan.name}</div>
-                        {plan.notes && (
-                          <div className="plan-card-notes">{plan.notes}</div>
-                        )}
-                      </div>
-                      <div className="plan-card-right">
-                        <span className="plan-card-amount tabular">{formatCurrency(plan.amount)}</span>
-                        <div className="plan-card-actions">
+        ) : sortedMonths.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon"><IconBookmark size={22} /></div>
+            <strong>
+              {filter === 'aktif' ? 'Belum ada rencana aktif' :
+               filter === 'selesai' ? 'Belum ada rencana selesai' :
+               'Belum ada rencana'}
+            </strong>
+            <p>
+              {filter === 'aktif'
+                ? 'Tekan + untuk mulai mencatat.'
+                : 'Selesaikan rencana dengan menekan tombol ✓.'}
+            </p>
+          </div>
+        ) : (
+          <div className="pln-sections">
+            {sortedMonths.map(mon => {
+              const items = grouped[mon]
+              const monthTotal = items.reduce((s, p) => s + Number(p.amount), 0)
+              return (
+                <div key={mon} className="pln-section">
+                  <div className="pln-section-head">
+                    <div>
+                      <span className="pln-section-label">{getMonthLabel(mon)}</span>
+                      <span className="pln-section-sub">{items.length} item · {formatCurrency(monthTotal)}</span>
+                    </div>
+                  </div>
+                  <div className="pln-table-body">
+                    {items.map(plan => (
+                      <div key={plan.id} className={`pln-row${plan.done ? ' pln-row-done' : ''}`}>
+                        <div className="pln-row-info">
+                          <span className="pln-row-name">{plan.name}</span>
+                          {plan.notes && <span className="pln-row-notes">{plan.notes}</span>}
+                        </div>
+                        <span className="pln-row-amount tabular">{formatCurrency(plan.amount)}</span>
+                        <div className="pln-row-actions">
                           <button
-                            className={`plan-action-btn ${plan.done ? 'plan-action-undo' : 'plan-action-done'}`}
+                            className={`pln-act ${plan.done ? 'pln-act-undo' : 'pln-act-done'}`}
                             onClick={() => toggleDone(plan)}
                             title={plan.done ? 'Tandai aktif' : 'Tandai selesai'}
                           >
                             {plan.done ? <IconUndo size={12} /> : <IconCheck size={12} />}
                           </button>
                           <button
-                            className="plan-action-btn plan-action-del"
+                            className="pln-act pln-act-del"
                             onClick={() => deletePlan(plan.id)}
                             disabled={deletingId === plan.id}
                             title="Hapus"
@@ -351,436 +281,485 @@ export default function Plans() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Modal: Tambah Rencana */}
+        {showForm && (
+          <div className="modal-overlay" onClick={() => setShowForm(false)}>
+            <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2 className="modal-title">Tambah Rencana</h2>
+                <button className="btn btn-ghost" onClick={() => setShowForm(false)}><IconX size={16} /></button>
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ── Modal: Sumber Uang ───────────────── */}
-      {doneModal && (
-        <div className="modal-overlay" onClick={() => !confirming && setDoneModal(null)}>
-          <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">Tandai Selesai</h2>
-              <button type="button" className="btn btn-ghost" onClick={() => setDoneModal(null)} disabled={confirming}><IconX size={16} /></button>
-            </div>
-
-            {/* Info plan */}
-            <div className="done-plan-info">
-              <div className="done-plan-icon"><IconShoppingBag size={18} /></div>
-              <div>
-                <div className="done-plan-name">{doneModal.name}</div>
-                <div className="done-plan-amount tabular">{formatCurrency(doneModal.amount)}</div>
+              <div className="form-group">
+                <label className="form-label">Nama barang / kebutuhan</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="contoh: Beli laptop, Kondangan Budi..."
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  autoFocus
+                />
               </div>
-            </div>
-
-            <p className="done-modal-q">Dari mana uangnya?</p>
-
-            {/* Toggle source */}
-            <div className="done-source-toggle">
-              <button
-                type="button"
-                className={`done-src-btn ${doneSource === 'gaji' ? 'active' : ''}`}
-                onClick={() => setDoneSource('gaji')}
-              >
-                <span className="done-src-icon"><IconCreditCard size={16} /></span>
-                <span className="done-src-label">Potongan Gaji</span>
-                <span className="done-src-sub">Dicatat sebagai pengeluaran</span>
-              </button>
-              <button
-                type="button"
-                className={`done-src-btn ${doneSource === 'tabungan' ? 'active' : ''}`}
-                onClick={() => setDoneSource('tabungan')}
-              >
-                <span className="done-src-icon"><IconPiggyBank size={16} /></span>
-                <span className="done-src-label">Dari Tabungan</span>
-                <span className="done-src-sub">Kurangi saldo tabungan</span>
-              </button>
-            </div>
-
-            {/* Detail form berdasarkan source */}
-            {doneSource === 'gaji' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Kategori pengeluaran</label>
+                  <label className="form-label">Estimasi harga</label>
+                  <CurrencyInput
+                    value={form.amount}
+                    onChange={raw => setForm(f => ({ ...f, amount: raw }))}
+                  />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Target bulan</label>
                   <select
                     className="form-select"
-                    value={doneCatId}
-                    onChange={e => setDoneCatId(e.target.value)}
+                    value={form.targetMonth}
+                    onChange={e => setForm(f => ({ ...f, targetMonth: e.target.value }))}
                   >
-                    <option value="">— Tanpa kategori —</option>
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                    {MONTH_OPTS.map(o => (
+                      <option key={o.val} value={o.val}>{o.label}</option>
                     ))}
                   </select>
                 </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Tanggal transaksi</label>
-                  <input
-                    className="form-input"
-                    type="date"
-                    value={doneDate}
-                    onChange={e => setDoneDate(e.target.value)}
-                  />
-                </div>
-                <div className="done-preview-box">
-                  <span>Pengeluaran dicatat sebesar</span>
-                  <span className="tabular" style={{ color: 'var(--danger)', fontWeight: 700 }}>
-                    {formatCurrency(doneModal.amount)}
-                  </span>
-                </div>
               </div>
-            )}
-
-            {doneSource === 'tabungan' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
-                {savings.length === 0 ? (
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Belum ada tabungan. Buat dulu di menu lain.
-                  </p>
-                ) : (
-                  <>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Pilih tabungan</label>
-                      <select
-                        className="form-select"
-                        value={doneSavingsId}
-                        onChange={e => setDoneSavingsId(e.target.value)}
-                      >
-                        {savings.map(sv => (
-                          <option key={sv.id} value={sv.id}>
-                            {sv.name} — {formatCurrency(sv.current_amount)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {doneSavingsId && (() => {
-                      const sv = savings.find(s => s.id === doneSavingsId)
-                      const after = Math.max(0, Number(sv?.current_amount || 0) - Number(doneModal.amount))
-                      const cukup = Number(sv?.current_amount || 0) >= Number(doneModal.amount)
-                      return (
-                        <div className={`done-preview-box ${!cukup ? 'done-preview-warn' : ''}`}>
-                          <span>Saldo setelah dikurangi</span>
-                          <span className="tabular" style={{ color: cukup ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
-                            {formatCurrency(after)}
-                          </span>
-                        </div>
-                      )
-                    })()}
-                  </>
-                )}
+              <div className="form-group">
+                <label className="form-label">
+                  Catatan{' '}
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opsional)</span>
+                </label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="detail tambahan..."
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                />
               </div>
-            )}
-
-            <div className="flex gap-8 mt-16">
-              <button type="button" className="btn btn-secondary" onClick={() => setDoneModal(null)} disabled={confirming}>
-                Batal
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ flex: 1 }}
-                onClick={confirmDone}
-                disabled={confirming || (doneSource === 'tabungan' && savings.length === 0)}
-              >
-                {confirming ? 'Menyimpan...' : <><IconCheck size={13} /> Tandai Selesai</>}
-              </button>
+              <div className="flex gap-8 mt-16">
+                <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Batal</button>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  onClick={addPlan}
+                  disabled={!form.name.trim() || !form.amount || saving}
+                >
+                  {saving ? 'Menyimpan...' : <><IconPlus size={13} /> Simpan</>}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <style>{`
-        .plans-stat-bar {
-          display: flex;
-          align-items: center;
-          background: var(--bg-card);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          padding: 14px 20px;
-          gap: 0;
-          flex-wrap: wrap;
-        }
-        .plans-stat {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          padding: 0 20px;
-          flex: 1;
-          min-width: 100px;
-        }
-        .plans-stat:first-child { padding-left: 0; }
-        .plans-stat:last-child { padding-right: 0; }
-        .plans-stat-divider {
-          width: 1px;
-          height: 36px;
-          background: var(--border);
-          flex-shrink: 0;
-        }
-        .plans-stat-label {
-          font-size: 0.65rem;
-          text-transform: uppercase;
-          letter-spacing: 0.07em;
-          color: var(--text-muted);
-          font-weight: 600;
-        }
-        .plans-stat-val {
-          font-size: 1rem;
-          font-weight: 800;
-          letter-spacing: -0.03em;
-          color: var(--text-primary);
-        }
+        {/* Modal: Tandai Selesai */}
+        {doneModal && (
+          <div className="modal-overlay" onClick={() => !confirming && setDoneModal(null)}>
+            <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2 className="modal-title">Tandai Selesai</h2>
+                <button type="button" className="btn btn-ghost" onClick={() => setDoneModal(null)} disabled={confirming}>
+                  <IconX size={16} />
+                </button>
+              </div>
 
-        .plans-form-card { border-color: var(--accent); }
-        .plans-form-title {
-          font-size: 0.875rem;
-          font-weight: 700;
-          color: var(--text-primary);
-          margin-bottom: 16px;
-        }
-        .plans-form-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
+              <div className="pln-done-info">
+                <div className="pln-done-icon"><IconShoppingBag size={16} /></div>
+                <div>
+                  <div className="pln-done-name">{doneModal.name}</div>
+                  <div className="pln-done-amount tabular">{formatCurrency(doneModal.amount)}</div>
+                </div>
+              </div>
 
-        .plans-filter-tabs {
-          display: flex;
-          gap: 6px;
-        }
-        .plans-filter-btn {
-          background: none;
-          border: 1px solid var(--border);
-          border-radius: 99px;
-          padding: 5px 14px;
-          font-family: var(--font-sans);
-          font-size: 0.775rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .plans-filter-btn:hover {
-          color: var(--text-primary);
-          border-color: var(--border-light);
-        }
-        .plans-filter-btn.active {
-          background: var(--accent-dim);
-          border-color: var(--accent);
-          color: var(--accent);
-        }
+              <p className="pln-done-q">Dari mana uangnya?</p>
 
-        .plans-month-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 10px;
-          padding: 0 2px;
-        }
-        .plans-month-label {
-          font-size: 0.72rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: var(--text-secondary);
-        }
-        .plans-month-total {
-          font-size: 0.75rem;
-          font-weight: 700;
-          color: var(--text-muted);
-        }
+              <div className="pln-src-toggle">
+                <button type="button"
+                  className={`pln-src-btn${doneSource === 'gaji' ? ' active' : ''}`}
+                  onClick={() => setDoneSource('gaji')}
+                >
+                  <span className="pln-src-icon"><IconCreditCard size={15} /></span>
+                  <span className="pln-src-label">Potongan Gaji</span>
+                  <span className="pln-src-sub">Dicatat sebagai pengeluaran</span>
+                </button>
+                <button type="button"
+                  className={`pln-src-btn${doneSource === 'tabungan' ? ' active' : ''}`}
+                  onClick={() => setDoneSource('tabungan')}
+                >
+                  <span className="pln-src-icon"><IconPiggyBank size={15} /></span>
+                  <span className="pln-src-label">Dari Tabungan</span>
+                  <span className="pln-src-sub">Kurangi saldo tabungan</span>
+                </button>
+              </div>
 
-        .plan-card {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: var(--bg-card);
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
-          padding: 14px 16px;
-          transition: border-color 0.15s, background 0.15s;
-        }
-        .plan-card:hover { border-color: var(--border-light); background: var(--bg-card-hover); }
-        .plan-card-done {
-          opacity: 0.55;
-        }
-        .plan-card-done .plan-card-name {
-          text-decoration: line-through;
-          color: var(--text-muted);
-        }
+              {doneSource === 'gaji' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Kategori pengeluaran</label>
+                    <select className="form-select" value={doneCatId} onChange={e => setDoneCatId(e.target.value)}>
+                      <option value="">— Tanpa kategori —</option>
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Tanggal transaksi</label>
+                    <input className="form-input" type="date" value={doneDate} onChange={e => setDoneDate(e.target.value)} />
+                  </div>
+                  <div className="pln-preview">
+                    <span>Pengeluaran dicatat sebesar</span>
+                    <span className="tabular" style={{ color: 'var(--danger)', fontWeight: 700 }}>{formatCurrency(doneModal.amount)}</span>
+                  </div>
+                </div>
+              )}
 
-        .plan-card-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: var(--radius-sm);
-          background: var(--bg-input);
-          border: 1px solid var(--border);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1rem;
-          flex-shrink: 0;
-          color: var(--text-secondary);
-        }
-        .plan-card-done .plan-card-icon {
-          background: var(--success-dim);
-          border-color: var(--success);
-          color: var(--success);
-          font-size: 0.85rem;
-          font-weight: 700;
-        }
+              {doneSource === 'tabungan' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                  {savings.length === 0 ? (
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Belum ada tabungan.</p>
+                  ) : (
+                    <>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Pilih tabungan</label>
+                        <select className="form-select" value={doneSavingsId} onChange={e => setDoneSavingsId(e.target.value)}>
+                          {savings.map(sv => (
+                            <option key={sv.id} value={sv.id}>{sv.name} — {formatCurrency(sv.current_amount)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {doneSavingsId && (() => {
+                        const sv = savings.find(s => s.id === doneSavingsId)
+                        const after = Math.max(0, Number(sv?.current_amount || 0) - Number(doneModal.amount))
+                        const cukup = Number(sv?.current_amount || 0) >= Number(doneModal.amount)
+                        return (
+                          <div className={`pln-preview${!cukup ? ' pln-preview-warn' : ''}`}>
+                            <span>Saldo setelah dikurangi</span>
+                            <span className="tabular" style={{ color: cukup ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
+                              {formatCurrency(after)}
+                            </span>
+                          </div>
+                        )
+                      })()}
+                    </>
+                  )}
+                </div>
+              )}
 
-        .plan-card-body {
-          flex: 1;
-          min-width: 0;
-        }
-        .plan-card-name {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: var(--text-primary);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .plan-card-notes {
-          font-size: 0.72rem;
-          color: var(--text-muted);
-          margin-top: 2px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
+              <div className="flex gap-8 mt-16">
+                <button type="button" className="btn btn-secondary" onClick={() => setDoneModal(null)} disabled={confirming}>
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  onClick={confirmDone}
+                  disabled={confirming || (doneSource === 'tabungan' && savings.length === 0)}
+                >
+                  {confirming ? 'Menyimpan...' : <><IconCheck size={13} /> Tandai Selesai</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-        .plan-card-right {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-shrink: 0;
-        }
-        .plan-card-amount {
-          font-size: 0.9rem;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-          color: var(--text-primary);
-        }
-        .plan-card-actions {
-          display: flex;
-          gap: 4px;
-        }
-        .plan-action-btn {
-          width: 28px;
-          height: 28px;
-          border-radius: var(--radius-sm);
-          border: 1px solid var(--border);
-          background: none;
-          cursor: pointer;
-          font-size: 0.75rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.15s;
-          color: var(--text-muted);
-          font-family: var(--font-sans);
-        }
-        .plan-action-done:hover { background: var(--success-dim); border-color: var(--success); color: var(--success); }
-        .plan-action-undo:hover { background: var(--warning-dim); border-color: var(--warning); color: var(--warning); }
-        .plan-action-del:hover { background: var(--danger-dim); border-color: var(--danger); color: var(--danger); }
-        .plan-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        <style>{`
+          .pln-page { padding-bottom: 56px; }
 
-        @media (max-width: 640px) {
-          .plans-stat-bar { gap: 0; padding: 10px 14px; flex-wrap: nowrap; }
-          .plans-stat { padding: 0 10px; }
-          .plans-stat:first-child { padding-left: 0; }
-          .plans-stat:last-child { padding-right: 0; }
-          .plans-stat-val { font-size: 0.8rem; }
-          .plans-stat-label { font-size: 0.6rem; }
-          .plans-form-grid { grid-template-columns: 1fr; }
-          .plans-form-grid .form-group[style*="span 2"] { grid-column: span 1; }
-          .plan-card { padding: 12px; gap: 8px; }
-          .plan-card-amount { font-size: 0.8rem; }
-          .plan-card-body { flex: 1; min-width: 0; }
-          .plan-card-actions { gap: 6px; }
-        }
-        @media (max-width: 400px) {
-          .plans-stat-bar { flex-wrap: wrap; gap: 8px; }
-          .plans-stat-divider { display: none; }
-          .plans-stat { padding: 0; flex: 1 1 auto; }
-        }
+          /* ── Page Header ─────────────────────── */
+          .pln-page-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+          }
+          .pln-page-icon {
+            width: 36px; height: 36px;
+            border-radius: 9px;
+            background: rgba(251,191,36,0.08);
+            border: 1px solid rgba(251,191,36,0.2);
+            color: var(--warning);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+          }
+          .pln-page-title {
+            font-size: 1.1rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            color: var(--text-primary);
+            margin: 0;
+            line-height: 1.2;
+          }
+          .pln-page-sub {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin: 2px 0 0;
+          }
 
-        /* ── Done modal ──────────────────────── */
-        .done-plan-info {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: var(--bg-input);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 12px 14px;
-          margin-bottom: 16px;
-        }
-        .done-plan-icon {
-          width: 36px; height: 36px;
-          border-radius: var(--radius-sm);
-          background: var(--bg-card);
-          border: 1px solid var(--border);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 1rem; flex-shrink: 0;
-        }
-        .done-plan-name {
-          font-size: 0.875rem; font-weight: 700; color: var(--text-primary);
-          margin-bottom: 2px;
-        }
-        .done-plan-amount { font-size: 0.8rem; color: var(--text-secondary); }
+          /* ── Stats Strip ─────────────────────── */
+          .pln-stats-strip {
+            display: flex;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-bottom: 28px;
+          }
+          .pln-stat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 16px 20px;
+          }
+          .pln-stat-divider {
+            width: 1px;
+            background: var(--border);
+            flex-shrink: 0;
+            margin: 12px 0;
+          }
+          .pln-stat-label {
+            font-size: 0.58rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            font-weight: 700;
+          }
+          .pln-stat-val {
+            font-size: 1.05rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--text-primary);
+          }
 
-        .done-modal-q {
-          font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-          letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 10px;
-        }
+          /* ── Filter Row ──────────────────────── */
+          .pln-filter-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 24px;
+          }
+          .pln-filter-tabs { display: flex; gap: 6px; }
+          .pln-filter-btn {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 99px;
+            padding: 5px 14px;
+            font-family: var(--font-sans);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+          }
+          .pln-filter-btn:hover { color: var(--text-primary); border-color: var(--border-light); }
+          .pln-filter-btn.active {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+            color: var(--accent);
+          }
+          .pln-add-btn {
+            width: 28px; height: 28px;
+            border-radius: 7px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s;
+            flex-shrink: 0;
+          }
+          .pln-add-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+          }
 
-        .done-source-toggle {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-        }
-        .done-src-btn {
-          display: flex; flex-direction: column; align-items: flex-start;
-          gap: 3px; padding: 12px 14px;
-          background: var(--bg-input);
-          border: 1.5px solid var(--border);
-          border-radius: var(--radius-sm);
-          cursor: pointer; text-align: left;
-          transition: all 0.15s;
-          font-family: var(--font-sans);
-        }
-        .done-src-btn:hover { border-color: var(--border-light); background: var(--bg-card-hover); }
-        .done-src-btn.active {
-          border-color: var(--accent);
-          background: var(--accent-dim);
-        }
-        .done-src-icon { font-size: 1.1rem; margin-bottom: 2px; }
-        .done-src-label {
-          font-size: 0.8rem; font-weight: 700;
-          color: var(--text-primary); line-height: 1.2;
-        }
-        .done-src-sub {
-          font-size: 0.65rem; color: var(--text-muted);
-          font-weight: 500; line-height: 1.3;
-        }
-        .done-src-btn.active .done-src-label { color: var(--accent); }
+          /* ── Sections ────────────────────────── */
+          .pln-sections { display: flex; flex-direction: column; gap: 32px; }
+          .pln-section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 2px;
+          }
+          .pln-section-label {
+            display: block;
+            font-size: 0.62rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+          }
+          .pln-section-sub {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-top: 2px;
+          }
 
-        .done-preview-box {
-          display: flex; justify-content: space-between; align-items: center;
-          background: var(--bg-input); border: 1px solid var(--border);
-          border-radius: var(--radius-sm); padding: 10px 14px;
-          font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;
-        }
-        .done-preview-warn { border-color: rgba(248,113,113,0.4); background: var(--danger-dim); }
-      `}</style>
-    </div>
-  </>
+          /* ── Table Rows ──────────────────────── */
+          .pln-table-body { display: flex; flex-direction: column; }
+          .pln-row {
+            display: grid;
+            grid-template-columns: 1fr 160px 60px;
+            align-items: center;
+            min-height: 50px;
+            padding: 0 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            position: relative;
+            transition: background 0.12s;
+          }
+          .pln-row::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 2px;
+            border-radius: 1px;
+            background: var(--accent);
+            opacity: 0;
+            transition: opacity 0.12s;
+          }
+          .pln-row:hover { background: rgba(255,255,255,0.02); }
+          .pln-row:hover::before { opacity: 1; }
+          .pln-row:last-child { border-bottom: none; }
+
+          .pln-row-done { opacity: 0.48; }
+          .pln-row-done::before { background: var(--success); opacity: 1; }
+          .pln-row-done .pln-row-name {
+            text-decoration: line-through;
+            color: var(--text-muted);
+          }
+
+          .pln-row-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            padding: 10px 0 10px 8px;
+            min-width: 0;
+          }
+          .pln-row-name {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .pln-row-notes {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .pln-row-amount {
+            font-size: 0.875rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-primary);
+            text-align: right;
+            padding-right: 8px;
+          }
+
+          .pln-row-actions {
+            display: flex;
+            gap: 4px;
+            justify-content: flex-end;
+            opacity: 0;
+            transition: opacity 0.15s;
+          }
+          .pln-row:hover .pln-row-actions { opacity: 1; }
+
+          .pln-act {
+            width: 26px; height: 26px;
+            border-radius: 5px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted);
+            transition: all 0.12s;
+          }
+          .pln-act-done:hover { background: var(--success-dim); color: var(--success); }
+          .pln-act-undo:hover { background: var(--warning-dim); color: var(--warning); }
+          .pln-act-del:hover { background: var(--danger-dim); color: var(--danger); }
+          .pln-act:disabled { opacity: 0.3; cursor: not-allowed; }
+
+          /* ── Done Modal ──────────────────────── */
+          .pln-done-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 14px;
+            margin-bottom: 16px;
+          }
+          .pln-done-icon {
+            width: 32px; height: 32px;
+            border-radius: var(--radius-sm);
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            color: var(--text-secondary);
+          }
+          .pln-done-name { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); }
+          .pln-done-amount { font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; }
+          .pln-done-q {
+            font-size: 0.62rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--text-muted); margin-bottom: 10px;
+          }
+
+          .pln-src-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+          .pln-src-btn {
+            display: flex; flex-direction: column; align-items: flex-start;
+            gap: 2px; padding: 12px 14px;
+            background: var(--bg-input);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer; text-align: left;
+            transition: all 0.15s;
+            font-family: var(--font-sans);
+          }
+          .pln-src-btn:hover { border-color: var(--border-light); }
+          .pln-src-btn.active { border-color: var(--accent); background: var(--accent-dim); }
+          .pln-src-icon { color: var(--text-secondary); margin-bottom: 2px; }
+          .pln-src-label { font-size: 0.8rem; font-weight: 700; color: var(--text-primary); }
+          .pln-src-btn.active .pln-src-label { color: var(--accent); }
+          .pln-src-sub { font-size: 0.62rem; color: var(--text-muted); }
+
+          .pln-preview {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-input); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 10px 14px;
+            font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;
+          }
+          .pln-preview-warn { border-color: rgba(248,113,113,0.4); background: var(--danger-dim); }
+
+          /* ── Mobile ──────────────────────────── */
+          @media (max-width: 640px) {
+            .pln-stat { padding: 12px; }
+            .pln-stat-val { font-size: 0.82rem; }
+            .pln-stat-label { font-size: 0.55rem; }
+            .pln-row { grid-template-columns: 1fr auto auto; gap: 0 6px; }
+            .pln-row-amount { font-size: 0.82rem; padding-right: 0; }
+            .pln-row-actions { opacity: 1; }
+          }
+        `}</style>
+      </div>
+    </>
   )
 }

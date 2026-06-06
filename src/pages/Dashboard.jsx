@@ -10,7 +10,7 @@ import ConfirmModal from '../components/ConfirmModal'
 import { useToast } from '../components/Toast'
 import CurrencyInput from '../components/CurrencyInput'
 import { isMandatory, isMandatoryIncome, isProtected } from '../constants/mandatoryCategories'
-import { IconAlertTriangle, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconSettings, IconPlus, IconX } from '../components/Icons'
+import { IconAlertTriangle, IconArrowUp, IconArrowDown, IconArrowUpRight, IconArrowDownLeft, IconSettings, IconPlus, IconX, IconBookmark } from '../components/Icons'
 import SpotlightCard from '../components/ui/SpotlightCard'
 
 const DEFAULT_PCT = 15
@@ -333,24 +333,32 @@ export default function Dashboard() {
             {formatCurrency(Math.abs(totalSaldo))}
           </div>
         )}
-        {!loading && data.todayExpense > 0 && (
-          <div className="db-daily">
-            {(() => {
-              const budget = user.budget_harian || 0
-              const spent = data.todayExpense
-              const over = budget > 0 && spent >= budget
-              const near = budget > 0 && spent / budget >= 0.8 && !over
-              const color = over ? '#f87171' : near ? '#fbbf24' : 'var(--text-muted)'
-              return (
-                <>
-                  <span style={{ color }}>Hari ini −{formatCurrency(spent)}</span>
-                  {over && <span className="db-daily-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>melebihi limit</span>}
-                  {near && <span className="db-daily-badge" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>hampir limit</span>}
-                </>
-              )
-            })()}
-          </div>
-        )}
+        <div className="db-hero-chips">
+          {!loading && data.todayExpense > 0 && (
+            <div className="db-daily">
+              {(() => {
+                const budget = user.budget_harian || 0
+                const spent = data.todayExpense
+                const over = budget > 0 && spent >= budget
+                const near = budget > 0 && spent / budget >= 0.8 && !over
+                const color = over ? '#f87171' : near ? '#fbbf24' : 'var(--text-primary)'
+                return (
+                  <>
+                    <span style={{ color }}>Hari ini −{formatCurrency(spent)}</span>
+                    {over && <span className="db-daily-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>melebihi limit</span>}
+                    {near && <span className="db-daily-badge" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>hampir limit</span>}
+                  </>
+                )
+              })()}
+            </div>
+          )}
+          {!loading && data.nextMonthPlans.length > 0 && (
+            <button className="db-rencana-chip" onClick={() => setShowRencanaModal(true)}>
+              <IconBookmark size={11} />
+              {data.nextMonthPlans.length} rencana bulan depan
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Stats 2×2 ── */}
@@ -1133,14 +1141,31 @@ export default function Dashboard() {
         }
         .db-neg-sign { font-size: 0.7em; vertical-align: 0.05em; margin-right: 1px; }
 
+        .db-hero-chips {
+          display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+          margin-top: 10px;
+        }
         .db-daily {
-          display: flex; align-items: center; gap: 8px;
-          margin-top: 8px;
-          font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
+          display: flex; align-items: center; gap: 6px;
+          font-size: 0.82rem; font-weight: 700;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 99px; padding: 4px 12px;
         }
         .db-daily-badge {
           font-size: 0.6rem; font-weight: 700; padding: 2px 7px; border-radius: 99px;
         }
+        .db-rencana-chip {
+          display: flex; align-items: center; gap: 5px;
+          font-size: 0.72rem; font-weight: 600;
+          color: var(--warning);
+          background: rgba(251,191,36,0.07);
+          border: 1px solid rgba(251,191,36,0.2);
+          border-radius: 99px; padding: 4px 12px;
+          cursor: pointer; font-family: var(--font-sans);
+          transition: all 0.15s;
+        }
+        .db-rencana-chip:hover { background: rgba(251,191,36,0.13); border-color: rgba(251,191,36,0.35); }
 
         /* ── Stats 2×2 ────────────────────────── */
         .db-stats-grid {
@@ -1342,11 +1367,11 @@ export default function Dashboard() {
         [data-theme="light"] .tab-act-accent { background: var(--accent-dim); border-color: rgba(99,102,241,0.25); }
 
         @media (max-width: 600px) {
-          .dash-tab-card .sect-head { flex-wrap: wrap; gap: 8px; align-items: center; }
-          .dash-tab-toggle { flex: 1; }
+          .dash-tab-card .sect-head { flex-wrap: wrap; gap: 8px; }
+          .dash-tab-toggle { width: 100%; }
           .dash-tab-toggle .dash-tab-btn { flex: 1; text-align: center; }
-          .tab-act-label { display: none; }
-          .tab-act { padding: 7px 9px; border-radius: 8px; }
+          .tab-actions { width: 100%; }
+          .tab-act { flex: 1; justify-content: center; padding: 7px 8px; border-radius: 8px; font-size: 0.65rem; gap: 4px; }
         }
 
         /* ── Two-col layout ──────────────────── */

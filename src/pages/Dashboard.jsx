@@ -689,8 +689,8 @@ export default function Dashboard() {
               const hasPlan = d.planCount > 0
               const hasWishlist = d.wishlistCount > 0
               const dayStyle = isSelected ? undefined
-                : hasPlan ? { color: '#a78bfa', fontWeight: 800, boxShadow: '0 0 0 1.5px rgba(167,139,250,0.35)' }
-                : hasWishlist ? { color: '#fbbf24', fontWeight: 700 }
+                : hasPlan ? { background: 'rgba(167,139,250,0.28)', color: '#c4b5fd', fontWeight: 800 }
+                : hasWishlist ? { background: 'rgba(251,191,36,0.28)', color: '#fcd34d', fontWeight: 700 }
                 : undefined
               return (
                 <div key={d.key} className="sim-cal-item" data-selected={isSelected ? 'true' : undefined}>

@@ -701,10 +701,7 @@ export default function Dashboard() {
                   >
                     {day}
                   </button>
-                  <div className="sim-cal-dots">
-                    {hasPlan && <span className="sim-dot plan">›</span>}
-                    {hasWishlist && <span className="sim-dot wish">›</span>}
-                  </div>
+                  <div className="sim-cal-dots" />
                 </div>
               )
             })}
@@ -714,11 +711,19 @@ export default function Dashboard() {
             <div className="sim-cal-arrow">
               {(() => {
                 const delta = projectedSaldo - totalSaldo
-                return delta > 0
-                  ? <span style={{ color: 'var(--success)' }}>▲</span>
-                  : delta < 0
-                  ? <span style={{ color: 'var(--danger)' }}>▼</span>
-                  : <span style={{ color: 'var(--text-muted)' }}>—</span>
+                const sel = simDates.find(d => d.key === simDate)
+                return (
+                  <>
+                    {delta > 0
+                      ? <span style={{ color: 'var(--success)' }}>▲</span>
+                      : delta < 0
+                      ? <span style={{ color: 'var(--danger)' }}>▼</span>
+                      : <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    }
+                    {sel?.planCount > 0 && <span className="sim-dot plan">›</span>}
+                    {sel?.wishlistCount > 0 && <span className="sim-dot wish">›</span>}
+                  </>
+                )
               })()}
             </div>
           ) : (
@@ -2383,7 +2388,7 @@ export default function Dashboard() {
         .sim-dot.wish { color: var(--warning); transform: rotate(90deg); }
 
         .sim-cal-arrow {
-          display: flex; justify-content: center; align-items: center;
+          display: flex; justify-content: center; align-items: center; gap: 4px;
           padding: 0 0 4px; color: var(--text-muted); font-size: 0.75rem;
         }
 

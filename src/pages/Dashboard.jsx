@@ -167,8 +167,8 @@ export default function Dashboard() {
         allLogsQuery,
         supabase.from('plans').select('*').eq('user_id', user.id).eq('target_month', nmStr).eq('done', false).order('created_at', { ascending: true }),
         histQuery,
-        supabase.from('hutang').select('id, nama, amount, due_date, sumber, jenis, lunas').eq('user_id', user.id).lte('month', month).eq('lunas', false).order('due_date', { ascending: true, nullsFirst: false }),
-        supabase.from('hutang').select('id, nama, amount, jenis, lunas, created_at').eq('user_id', user.id).lte('month', month).eq('sumber', 'tabungan').order('created_at', { ascending: false }),
+        supabase.from('hutang').select('id, nama, amount, due_date, sumber, jenis, lunas').eq('user_id', user.id).eq('month', month).eq('lunas', false).order('due_date', { ascending: true, nullsFirst: false }),
+        supabase.from('hutang').select('id, nama, amount, jenis, lunas, created_at').eq('user_id', user.id).eq('month', month).eq('sumber', 'tabungan').order('created_at', { ascending: false }),
       ])
       const txs = txRes.data || []
       const catBudgetMap = {}
@@ -377,7 +377,7 @@ export default function Dashboard() {
               {(totalSaldo - hutangAktifTotal) < 0 && <span className="db-neg-sign">−</span>}
               {formatCurrency(Math.abs(totalSaldo - hutangAktifTotal))}
             </div>
-            {hutangAktifTotal > 0 && (
+            {hutangAktifTotal > 0 && isCurrentMonth && (
               <button className="db-hutang-chip" onClick={() => setShowHutangDetailModal(true)}>
                 <span className="db-hutang-chip-label">+ hutang</span>
                 <span className="db-hutang-chip-amount">{formatCurrency(totalSaldo)}</span>
@@ -387,7 +387,7 @@ export default function Dashboard() {
           </div>
         )}
         <div className="db-hero-chips">
-          {!loading && data.nextMonthPlans.length > 0 && (
+          {!loading && isCurrentMonth && data.nextMonthPlans.length > 0 && (
             <button className="db-rencana-chip" onClick={() => setShowRencanaModal(true)}>
               <IconBookmark size={11} />
               {data.nextMonthPlans.length} rencana bulan depan

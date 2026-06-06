@@ -490,15 +490,14 @@ export default function Dashboard() {
     }
   }, [simMode, simDates.length])
 
-  // Scroll selected date to center (for tap/click, not auto-scroll)
+  // Scroll selected date to center when clicked (not when auto-scrolled)
   useEffect(() => {
     if (!simDate || !simCalScrollRef.current) return
-    const container = simCalScrollRef.current
-    const selected = container.querySelector('[data-selected="true"]')
-    if (!selected) return
-    const targetLeft = selected.offsetLeft - container.offsetWidth / 2 + selected.offsetWidth / 2
-    if (Math.abs(container.scrollLeft - targetLeft) < ITEM_W) return
-    container.scrollTo({ left: targetLeft, behavior: 'smooth' })
+    const idx = simDates.findIndex(d => d.key === simDate)
+    if (idx < 0) return
+    const targetLeft = idx * ITEM_W
+    if (Math.abs(simCalScrollRef.current.scrollLeft - targetLeft) < ITEM_W) return
+    simCalScrollRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' })
   }, [simDate])
 
   return (

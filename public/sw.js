@@ -1,4 +1,4 @@
-const CACHE = 'cashvell-v1';
+const CACHE = 'cashvell-v3';
 const BASE = '/carvellfinance/';
 
 // Pre-cache shell resources on install
@@ -28,6 +28,9 @@ self.addEventListener('fetch', e => {
 
   // Skip non-GET and cross-origin (Supabase, fonts)
   if (e.request.method !== 'GET' || !url.origin.includes(self.location.origin)) return;
+
+  // Skip /src/ paths (Vite dev server source files — must not be cached)
+  if (url.pathname.includes('/src/')) return;
 
   // Navigation: network-first, fallback to cached shell
   if (e.request.mode === 'navigate') {

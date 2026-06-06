@@ -1,5 +1,22 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, lazy, Suspense, Component } from 'react'
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(e) { return { error: e } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, color: '#f87171', fontFamily: 'monospace', fontSize: 13, background: '#07070f', minHeight: '100vh' }}>
+          <strong>Runtime Error:</strong><br />
+          {this.state.error.message}<br /><br />
+          <pre style={{ whiteSpace: 'pre-wrap', color: '#888' }}>{this.state.error.stack}</pre>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastProvider } from './components/Toast'
 import { PageHeaderProvider, usePageHeader } from './context/PageHeaderContext'
@@ -98,14 +115,16 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <PageHeaderProvider>
-          <Aurora />
-          <AppRoutes />
-          <DevOverlay />
-        </PageHeaderProvider>
-      </ToastProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ToastProvider>
+          <PageHeaderProvider>
+            <Aurora />
+            <AppRoutes />
+            <DevOverlay />
+          </PageHeaderProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }

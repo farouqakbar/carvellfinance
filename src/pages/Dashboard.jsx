@@ -300,21 +300,6 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [overBudgetCats.length])
 
-  // Auto-scroll sub-item Tabungan (Tabungan Bulanan ↔ Dana Darurat ↔ ...)
-  const statsSavingsCount = data.categories.filter(c => isSavings(c)).length
-  useEffect(() => {
-    if (loading || statsSavingsCount <= 1) return
-    const t = setInterval(() => setTabunganSubIdx(i => (i + 1) % statsSavingsCount), 2500)
-    return () => clearInterval(t)
-  }, [loading, statsSavingsCount])
-
-  // Auto-scroll sub-item Pengeluaran (Wajib → Rutin → Tambahan → loop)
-  useEffect(() => {
-    if (loading) return
-    const t = setInterval(() => setPengeluaranSubIdx(i => (i + 1) % 3), 3000)
-    return () => clearInterval(t)
-  }, [loading])
-
   // Mandatory: hanya pakai budget yang sudah di-set secara eksplisit
   const mandatoryBudgetTotal = data.categories
     .filter(c => isMandatory(c))
@@ -344,6 +329,25 @@ export default function Dashboard() {
     { label: 'Rutin',    spent: statsRutinCats.reduce((s, c) => s + (c.spent || 0), 0),    budget: statsRutinCats.reduce((s, c) => s + Number(c.budget_limit || 0), 0),    color: '#fbbf24' },
     { label: 'Tambahan', spent: statsTambahanCats.reduce((s, c) => s + (c.spent || 0), 0), budget: statsTambahanCats.reduce((s, c) => s + Number(c.budget_limit || 0), 0), color: '#f97316' },
   ]
+  // Hanya slide/kategori yang punya data
+  const activeTabunganCats = statsSavingsCats.filter(c => Number(c.budget_limit) > 0)
+  const activePengeluaranSlides = pengeluaranSubSlides.filter(s => s.spent > 0)
+  const safeTabunganIdx = activeTabunganCats.length > 0 ? tabunganSubIdx % activeTabunganCats.length : 0
+  const safePengeluaranIdx = activePengeluaranSlides.length > 0 ? pengeluaranSubIdx % activePengeluaranSlides.length : 0
+
+  // Auto-scroll Tabungan — hanya cycle yang punya budget
+  useEffect(() => {
+    if (loading || activeTabunganCats.length <= 1) return
+    const t = setInterval(() => setTabunganSubIdx(i => (i + 1) % activeTabunganCats.length), 2500)
+    return () => clearInterval(t)
+  }, [loading, activeTabunganCats.length])
+
+  // Auto-scroll Pengeluaran — hanya cycle tipe yang ada spending-nya
+  useEffect(() => {
+    if (loading || activePengeluaranSlides.length <= 1) return
+    const t = setInterval(() => setPengeluaranSubIdx(i => (i + 1) % activePengeluaranSlides.length), 3000)
+    return () => clearInterval(t)
+  }, [loading, activePengeluaranSlides.length])
 
   const totalSaldo = data.cumulativeBalance - data.cumulativeMandatoryBudget
   const hutangAktifTotal = (data.hutangList || [])
@@ -408,19 +412,25 @@ export default function Dashboard() {
             <span className="db-stat-sub">{data.salary > 0 ? 'bulan ini' : 'belum dicatat'}</span>
           </button>
 
-          {/* Card 2: Tabungan — auto-scroll antar savings category */}
+          {/* Card 2: Tabungan — auto-scroll hanya savings yang ada budget */}
           <button className="db-stat db-stat-btn" onClick={() => setShowTabunganModal(true)}>
             <span className="db-stat-label">TABUNGAN</span>
-            {statsSavingsCats.length > 0 ? (
+            {activeTabunganCats.length > 0 ? (
               <>
-                <span className="db-stat-val tabular" style={{ color: (statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0 ? '#818cf8' : 'var(--text-muted)' }}>
-                  {(statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0
-                    ? formatCurrency(statsSavingsCats[tabunganSubIdx].budget_limit)
-                    : '—'}
+                <span className="db-stat-val tabular" style={{ color: '#818cf8' }}>
+                  {formatCurrency(activeTabunganCats[safeTabunganIdx]?.budget_limit || 0)}
                 </span>
-                <span className="db-stat-sub" style={{ color: statsSavingsCats[tabunganSubIdx]?.color }}>
-                  {statsSavingsCats[tabunganSubIdx]?.name || '—'}
+                <span className="db-stat-sub" style={{ color: activeTabunganCats[safeTabunganIdx]?.color }}>
+                  {activeTabunganCats[safeTabunganIdx]?.name || '—'}
                 </span>
+                {activeTabunganCats.length > 1 && (
+                  <div className="db-sub-dots">
+                    {activeTabunganCats.map((_, i) => (
+                      <span key={i} className={`db-sub-dot${safeTabunganIdx === i ? ' active' : ''}`}
+                        onClick={e => { e.stopPropagation(); setTabunganSubIdx(i) }} />
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -428,33 +438,34 @@ export default function Dashboard() {
                 <span className="db-stat-sub">belum diatur</span>
               </>
             )}
-            {statsSavingsCats.length > 1 && (
-              <div className="db-sub-dots">
-                {statsSavingsCats.map((_, i) => (
-                  <span key={i} className={`db-sub-dot${tabunganSubIdx === i ? ' active' : ''}`}
-                    onClick={e => { e.stopPropagation(); setTabunganSubIdx(i) }} />
-                ))}
-              </div>
-            )}
           </button>
 
-          {/* Card 3: Pengeluaran — auto-scroll Wajib/Rutin/Tambahan */}
-          <button className="db-stat db-stat-btn" onClick={() => pengeluaranSubSlides[pengeluaranSubIdx]?.action?.()}>
+          {/* Card 3: Pengeluaran — auto-scroll hanya tipe yang ada spending */}
+          <button className="db-stat db-stat-btn" onClick={() => activePengeluaranSlides[safePengeluaranIdx]?.action?.()}>
             <span className="db-stat-label">PENGELUARAN</span>
-            <span className="db-stat-val tabular" style={{ color: (pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0 ? '#f87171' : 'var(--text-muted)' }}>
-              {(pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0
-                ? `−${formatCurrency(pengeluaranSubSlides[pengeluaranSubIdx].spent)}`
-                : '—'}
-            </span>
-            <span className="db-stat-sub" style={{ color: pengeluaranSubSlides[pengeluaranSubIdx]?.color }}>
-              {pengeluaranSubSlides[pengeluaranSubIdx]?.label}
-            </span>
-            <div className="db-sub-dots">
-              {pengeluaranSubSlides.map((_, i) => (
-                <span key={i} className={`db-sub-dot${pengeluaranSubIdx === i ? ' active' : ''}`}
-                  onClick={e => { e.stopPropagation(); setPengeluaranSubIdx(i) }} />
-              ))}
-            </div>
+            {activePengeluaranSlides.length > 0 ? (
+              <>
+                <span className="db-stat-val tabular" style={{ color: '#f87171' }}>
+                  −{formatCurrency(activePengeluaranSlides[safePengeluaranIdx]?.spent || 0)}
+                </span>
+                <span className="db-stat-sub" style={{ color: activePengeluaranSlides[safePengeluaranIdx]?.color }}>
+                  {activePengeluaranSlides[safePengeluaranIdx]?.label}
+                </span>
+                {activePengeluaranSlides.length > 1 && (
+                  <div className="db-sub-dots">
+                    {activePengeluaranSlides.map((_, i) => (
+                      <span key={i} className={`db-sub-dot${safePengeluaranIdx === i ? ' active' : ''}`}
+                        onClick={e => { e.stopPropagation(); setPengeluaranSubIdx(i) }} />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="db-stat-val tabular" style={{ color: 'var(--text-muted)' }}>—</span>
+                <span className="db-stat-sub">belum ada</span>
+              </>
+            )}
           </button>
 
           {/* Card 4: Rencana */}

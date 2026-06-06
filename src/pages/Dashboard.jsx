@@ -484,7 +484,7 @@ export default function Dashboard() {
       {loading && <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius-lg)' }} />}
 
       {/* ── Card Pengeluaran Hari Ini ─────────── */}
-      {!loading && data.todayExpense > 0 && (() => {
+      {!loading && isCurrentMonth && data.todayExpense > 0 && (() => {
         const budget = user.budget_harian || 0
         const spent = data.todayExpense
         const over = budget > 0 && spent >= budget

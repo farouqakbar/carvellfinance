@@ -272,30 +272,28 @@ export default function Plans() {
           <div className="pln-tab-content">
 
             {/* Plan stats strip */}
-            {planEvents.length > 0 && (
-              <div className="pln-stats-strip">
-                <div className="pln-stat">
-                  <span className="pln-stat-label">Pemasukan</span>
-                  <span className="pln-stat-val tabular" style={{ color: 'var(--success)' }}>
-                    +{formatCurrency(planIncomeTotal)}
-                  </span>
-                </div>
-                <div className="pln-stat-divider" />
-                <div className="pln-stat">
-                  <span className="pln-stat-label">Pengeluaran</span>
-                  <span className="pln-stat-val tabular" style={{ color: 'var(--danger)' }}>
-                    −{formatCurrency(planExpenseTotal)}
-                  </span>
-                </div>
-                <div className="pln-stat-divider" />
-                <div className="pln-stat">
-                  <span className="pln-stat-label">Net</span>
-                  <span className="pln-stat-val tabular" style={{ color: planNet >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                    {planNet >= 0 ? '+' : '−'}{formatCurrency(Math.abs(planNet))}
-                  </span>
-                </div>
+            <div className="pln-stats-strip">
+              <div className="pln-stat">
+                <span className="pln-stat-label">Pemasukan</span>
+                <span className="pln-stat-val tabular" style={{ color: 'var(--success)' }}>
+                  +{formatCurrency(planIncomeTotal)}
+                </span>
               </div>
-            )}
+              <div className="pln-stat-divider" />
+              <div className="pln-stat">
+                <span className="pln-stat-label">Pengeluaran</span>
+                <span className="pln-stat-val tabular" style={{ color: 'var(--danger)' }}>
+                  −{formatCurrency(planExpenseTotal)}
+                </span>
+              </div>
+              <div className="pln-stat-divider" />
+              <div className="pln-stat">
+                <span className="pln-stat-label">Net</span>
+                <span className="pln-stat-val tabular" style={{ color: planNet >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                  {planNet >= 0 ? '+' : '−'}{formatCurrency(Math.abs(planNet))}
+                </span>
+              </div>
+            </div>
 
             {/* Add button row */}
             <div className="pln-filter-row">

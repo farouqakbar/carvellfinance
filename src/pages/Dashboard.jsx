@@ -707,19 +707,12 @@ export default function Dashboard() {
             })}
           </div>
 
-          {simDate && projectedSaldo !== null ? (
+          {simDate ? (
             <div className="sim-cal-arrow">
               {(() => {
-                const delta = projectedSaldo - totalSaldo
                 const sel = simDates.find(d => d.key === simDate)
                 return (
                   <>
-                    {delta > 0
-                      ? <span style={{ color: 'var(--success)' }}>▲</span>
-                      : delta < 0
-                      ? <span style={{ color: 'var(--danger)' }}>▼</span>
-                      : <span style={{ color: 'var(--text-muted)' }}>—</span>
-                    }
                     {sel?.planCount > 0 && <span className="sim-dot plan">›</span>}
                     {sel?.wishlistCount > 0 && <span className="sim-dot wish">›</span>}
                   </>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -37,7 +37,10 @@ export default function Dashboard() {
     categories: [], transactions: [], savings: [], savingsLogs: [], categorySpend: [], hutangList: [], hutangTabunganList: [],
     todayExpense: 0, totalTabungan: 0, tabunganPerMonth: [], nextMonthPlans: [], cumulativeBalance: 0, cumulativeMandatoryBudget: 0,
     gajiTx: null, gajiCatId: null,
+    planEvents: [], allWishlist: [],
   })
+  const [simMode, setSimMode] = useState(false)
+  const [simDate, setSimDate] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showTxForm, setShowTxForm] = useState(false)
   const [showCatManager, setShowCatManager] = useState(false)
@@ -66,6 +69,8 @@ export default function Dashboard() {
   const [alertIdx, setAlertIdx] = useState(0)
   const [tabunganSubIdx, setTabunganSubIdx] = useState(0)
   const [pengeluaranSubIdx, setPengeluaranSubIdx] = useState(0)
+  const [planWishlistIdx, setPlanWishlistIdx] = useState(0)
+  const [showPlanWishlistModal, setShowPlanWishlistModal] = useState(false)
 
   useEffect(() => {
     if (user.recording_start_month && month < user.recording_start_month) {
@@ -147,7 +152,7 @@ export default function Dashboard() {
       let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id, month, categories(is_mandatory, name, category_type)').eq('user_id', user.id).lte('month', month)
       if (recordStart) allLogsQuery = allLogsQuery.gte('month', recordStart)
 
-      const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes, hutangRes, hutangTabunganRes] = await Promise.all([
+      const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes, hutangRes, hutangTabunganRes, planEventsRes, allWishlistRes] = await Promise.all([
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         Promise.all([
           supabase.from('categories').select('*').eq('user_id', user.id).is('month', null),
@@ -169,6 +174,8 @@ export default function Dashboard() {
         histQuery,
         supabase.from('hutang').select('id, nama, amount, due_date, sumber, jenis, lunas').eq('user_id', user.id).eq('month', month).eq('lunas', false).order('due_date', { ascending: true, nullsFirst: false }),
         supabase.from('hutang').select('id, nama, amount, jenis, lunas, created_at').eq('user_id', user.id).eq('month', month).eq('sumber', 'tabungan').order('created_at', { ascending: false }),
+        supabase.from('plan_events').select('*').eq('user_id', user.id).order('date', { ascending: true }),
+        supabase.from('plans').select('*').eq('user_id', user.id).eq('done', false).order('target_month', { ascending: true }),
       ])
       const txs = txRes.data || []
       const catBudgetMap = {}
@@ -235,6 +242,8 @@ export default function Dashboard() {
         cumulativeMandatoryBudget: (allLogsRes.data || [])
           .filter(cb => cb.categories?.is_mandatory === true)
           .reduce((s, cb) => s + Number(cb.budget_limit), 0),
+        planEvents: planEventsRes.data || [],
+        allWishlist: allWishlistRes.data || [],
       })
     } finally { setLoading(false) }
   }
@@ -349,6 +358,16 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [loading, activePengeluaranSlides.length])
 
+  // Auto-scroll Plan & Wishlist — hanya cycle kalau keduanya ada
+  useEffect(() => {
+    if (loading) return
+    const pc = (data.planEvents || []).length
+    const wc = (data.allWishlist || []).length
+    if (pc === 0 || wc === 0) return
+    const t = setInterval(() => setPlanWishlistIdx(i => (i + 1) % 2), 3000)
+    return () => clearInterval(t)
+  }, [loading, data.planEvents, data.allWishlist])
+
   const totalSaldo = data.cumulativeBalance - data.cumulativeMandatoryBudget
   const hutangAktifTotal = (data.hutangList || [])
     .filter(h => h.jenis === 'hutang')
@@ -362,22 +381,92 @@ export default function Dashboard() {
   const sisaBelanja = batasBelanja - data.totalExpense
   const overBatasBelanja = data.salary > 0 && monthlyTabungan > 0 && data.totalExpense > batasBelanja
 
+  // ── Simulation ────────────────────────────────────────────────
+  const todayStr = getToday()
+  const currentMonthStr = getCurrentMonth()
+
+  const simDates = useMemo(() => {
+    const map = new Map()
+    ;(data.planEvents || []).forEach(e => {
+      const entry = map.get(e.date) || { key: e.date, planCount: 0, wishlistCount: 0 }
+      entry.planCount++
+      map.set(e.date, entry)
+    })
+    ;(data.allWishlist || []).forEach(p => {
+      const [y, m] = p.target_month.split('-').map(Number)
+      const lastDayNum = new Date(y, m, 0).getDate()
+      const key = `${y}-${String(m).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`
+      const entry = map.get(key) || { key, planCount: 0, wishlistCount: 0 }
+      entry.wishlistCount++
+      map.set(key, entry)
+    })
+    return Array.from(map.values()).sort((a, b) => a.key.localeCompare(b.key))
+  }, [data.planEvents, data.allWishlist])
+
+  const projectedSaldo = useMemo(() => {
+    if (!simMode || !simDate) return null
+    const simMonth = simDate.slice(0, 7)
+    const planIncome = (data.planEvents || [])
+      .filter(e => e.type === 'income' && e.date >= todayStr && e.date <= simDate)
+      .reduce((s, e) => s + Number(e.amount), 0)
+    const planExpense = (data.planEvents || [])
+      .filter(e => e.type === 'expense' && e.date >= todayStr && e.date <= simDate)
+      .reduce((s, e) => s + Number(e.amount), 0)
+    const wishlistCost = (data.allWishlist || [])
+      .filter(p => p.target_month >= currentMonthStr && p.target_month <= simMonth)
+      .reduce((s, p) => s + Number(p.amount), 0)
+    return totalSaldo + planIncome - planExpense - wishlistCost
+  }, [simMode, simDate, data.planEvents, data.allWishlist, totalSaldo])
+
+  const toggleSimMode = () => {
+    setSimMode(v => !v)
+    setSimDate(null)
+  }
+
   return (
     <div className="animate-in">
     <div className="db-page">
 
       {/* ── Saldo Hero ── */}
       <div className="db-hero">
-        <span className="db-eyebrow">{hutangAktifTotal > 0 ? 'SALDO BERSIH' : 'TOTAL SALDO'}</span>
+        <span className="db-eyebrow">
+          {simMode && simDate
+            ? `PROYEKSI · ${new Date(simDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`
+            : hutangAktifTotal > 0 ? 'SALDO BERSIH' : 'TOTAL SALDO'
+          }
+        </span>
         {loading ? (
           <div className="skeleton" style={{ height: 56, width: 220, borderRadius: 8, marginTop: 6 }} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
-            <div className={`db-balance${(totalSaldo - hutangAktifTotal) < 0 ? ' neg' : ''}`}>
-              {(totalSaldo - hutangAktifTotal) < 0 && <span className="db-neg-sign">−</span>}
-              {formatCurrency(Math.abs(totalSaldo - hutangAktifTotal))}
-            </div>
-            {hutangAktifTotal > 0 && isCurrentMonth && (
+            {(() => {
+              const displayVal = simMode && simDate !== null
+                ? (projectedSaldo - hutangAktifTotal)
+                : (totalSaldo - hutangAktifTotal)
+              const isNeg = displayVal < 0
+              return (
+                <>
+                  <div className={`db-balance${isNeg ? ' neg' : ''}`}>
+                    {isNeg && <span className="db-neg-sign">−</span>}
+                    {formatCurrency(Math.abs(displayVal))}
+                  </div>
+                  {simMode && simDate !== null && projectedSaldo !== null && (
+                    <div className="db-sim-delta">
+                      {(() => {
+                        const delta = (projectedSaldo - hutangAktifTotal) - (totalSaldo - hutangAktifTotal)
+                        const isPos = delta >= 0
+                        return (
+                          <span style={{ color: isPos ? 'var(--success)' : 'var(--danger)' }}>
+                            {isPos ? '▲' : '▼'} {isPos ? '+' : '−'}{formatCurrency(Math.abs(delta))} dari sekarang
+                          </span>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+            {hutangAktifTotal > 0 && isCurrentMonth && !simMode && (
               <button className="db-hutang-chip" onClick={() => setShowHutangDetailModal(true)}>
                 <span className="db-hutang-chip-label">+ hutang</span>
                 <span className="db-hutang-chip-amount">{formatCurrency(totalSaldo)}</span>
@@ -387,7 +476,7 @@ export default function Dashboard() {
           </div>
         )}
         <div className="db-hero-chips">
-          {!loading && isCurrentMonth && data.nextMonthPlans.length > 0 && (
+          {!loading && isCurrentMonth && data.nextMonthPlans.length > 0 && !simMode && (
             <button className="db-rencana-chip" onClick={() => setShowRencanaModal(true)}>
               <IconBookmark size={11} />
               {data.nextMonthPlans.length} rencana bulan depan
@@ -468,23 +557,139 @@ export default function Dashboard() {
             )}
           </button>
 
-          {/* Card 4: Rencana */}
-          <button className="db-stat db-stat-btn" onClick={() => setShowRencanaModal(true)}>
-            <span className="db-stat-label">RENCANA</span>
-            <span className="db-stat-val tabular" style={{ color: data.nextMonthPlans.length > 0 ? '#fbbf24' : 'var(--text-muted)' }}>
-              {data.nextMonthPlans.length > 0 ? data.nextMonthPlans.length : '—'}
-            </span>
-            <span className="db-stat-sub">
-              {data.nextMonthPlans.length > 0 ? 'rencana bulan depan' : 'belum ada rencana'}
-            </span>
-          </button>
+          {/* Card 4: Plan & Wishlist + Sim Toggle */}
+          {(() => {
+            const planCount = (data.planEvents || []).length
+            const wishlistCount = (data.allWishlist || []).length
+            const total = planCount + wishlistCount
+            const hasBoth = planCount > 0 && wishlistCount > 0
+            const safeIdx = hasBoth ? planWishlistIdx % 2 : (planCount > 0 ? 0 : 1)
+            const showPlan = planCount > 0 && (!hasBoth || safeIdx === 0)
+            const displayVal = showPlan ? planCount : wishlistCount
+            const displayColor = showPlan ? '#818cf8' : '#fbbf24'
+            const displaySub = showPlan ? 'plan events' : 'wishlist aktif'
+            return (
+              <div className={`db-stat${simMode ? ' db-stat-sim' : ''}`} style={{ cursor: 'pointer' }} onClick={() => setShowPlanWishlistModal(true)}>
+                <span className="db-stat-label">PLAN &amp; WISHLIST</span>
+                <span className="db-stat-val tabular" style={{ color: total > 0 ? displayColor : 'var(--text-muted)' }}>
+                  {displayVal > 0 ? displayVal : '—'}
+                </span>
+                <span className="db-stat-sub" style={{ color: total > 0 ? displayColor : undefined }}>
+                  {total > 0 ? displaySub : 'belum ada'}
+                </span>
+                {isCurrentMonth && (
+                  <button
+                    className={`sim-toggle${simMode ? ' active' : ''}`}
+                    onClick={e => { e.stopPropagation(); toggleSimMode() }}
+                    title={simMode ? 'Matikan Simulasi' : 'Mode Simulasi'}
+                  />
+                )}
+              </div>
+            )
+          })()}
 
         </div>
       )}
       {loading && <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius-lg)' }} />}
 
+      {/* ── Simulation Date Strip ─────────────── */}
+      {!loading && isCurrentMonth && simMode && (
+        <div className="sim-wrap">
+          {simDates.length === 0 ? (
+            <div className="sim-empty">
+              Belum ada plan event atau wishlist — tambahkan di halaman <a href="/carvellfinance/savings" style={{ color: 'var(--accent)' }}>Plan &amp; Wishlist</a>
+            </div>
+          ) : (
+            <div className="sim-strip-scroll">
+              {simDates.map(d => {
+                const isWishlistOnly = d.planCount === 0 && d.wishlistCount > 0
+                const dateObj = new Date(d.key + 'T00:00:00')
+                const day = dateObj.getDate()
+                const monLabel = dateObj.toLocaleDateString('id-ID', { month: 'short' })
+                const yr = dateObj.getFullYear()
+                const isThisYear = yr === new Date().getFullYear()
+                const isSelected = simDate === d.key
+                return (
+                  <button
+                    key={d.key}
+                    className={`sim-chip${isSelected ? ' active' : ''}`}
+                    onClick={() => setSimDate(isSelected ? null : d.key)}
+                  >
+                    {isWishlistOnly ? (
+                      <>
+                        <span className="sim-chip-day">{monLabel}</span>
+                        <span className="sim-chip-mon">{`'${String(yr).slice(2)}`}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="sim-chip-day">{day}</span>
+                        <span className="sim-chip-mon">{monLabel}{!isThisYear ? ` '${String(yr).slice(2)}` : ''}</span>
+                      </>
+                    )}
+                    <div className="sim-chip-dots">
+                      {d.planCount > 0 && <span className="sim-dot plan" />}
+                      {d.wishlistCount > 0 && <span className="sim-dot wish" />}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Breakdown panel when date is selected */}
+          {simDate && (
+            <div className="sim-breakdown">
+              {(() => {
+                const simMonth = simDate.slice(0, 7)
+                const planEventsUpTo = (data.planEvents || []).filter(e => e.date >= todayStr && e.date <= simDate)
+                const wishlistUpTo = (data.allWishlist || []).filter(p => p.target_month >= currentMonthStr && p.target_month <= simMonth)
+                const hasAnything = planEventsUpTo.length > 0 || wishlistUpTo.length > 0
+                return hasAnything ? (
+                  <>
+                    {planEventsUpTo.length > 0 && (
+                      <div className="sim-bk-group">
+                        <span className="sim-bk-label">Plan events s/d {new Date(simDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                        {planEventsUpTo.map(e => (
+                          <div key={e.id} className="sim-bk-row">
+                            <span className="sim-bk-date">{new Date(e.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                            <span className="sim-bk-name">{e.title}</span>
+                            <span className="sim-bk-amt" style={{ color: e.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                              {e.type === 'income' ? '+' : '−'}{formatCurrency(e.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {wishlistUpTo.length > 0 && (
+                      <div className="sim-bk-group">
+                        <span className="sim-bk-label">Wishlist s/d {simMonth}</span>
+                        {wishlistUpTo.map(p => (
+                          <div key={p.id} className="sim-bk-row">
+                            <span className="sim-bk-date">{p.target_month}</span>
+                            <span className="sim-bk-name">{p.name}</span>
+                            <span className="sim-bk-amt" style={{ color: 'var(--danger)' }}>−{formatCurrency(p.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', padding: '6px 0' }}>
+                    Tidak ada event dari hari ini s/d tanggal ini.
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {!simDate && (
+            <div className="sim-hint">Pilih tanggal untuk lihat proyeksi saldo</div>
+          )}
+        </div>
+      )}
+
       {/* ── Card Pengeluaran Hari Ini ─────────── */}
-      {!loading && isCurrentMonth && data.todayExpense > 0 && (() => {
+      {!loading && isCurrentMonth && data.todayExpense > 0 && !simMode && (() => {
         const budget = user.budget_harian || 0
         const spent = data.todayExpense
         const over = budget > 0 && spent >= budget
@@ -911,6 +1116,84 @@ export default function Dashboard() {
                   {formatCurrency(data.totalTabungan)}
                 </span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Plan & Wishlist Detail Modal ───────── */}
+      {showPlanWishlistModal && (
+        <div className="modal-overlay" onClick={() => setShowPlanWishlistModal(false)}>
+          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Plan &amp; Wishlist</h2>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Semua event dan target pembelian</p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Link to="/savings" className="btn btn-ghost btn-sm" style={{ fontSize: '0.72rem' }} onClick={() => setShowPlanWishlistModal(false)}>Kelola →</Link>
+                <button className="btn btn-ghost" onClick={() => setShowPlanWishlistModal(false)}><IconX size={16} /></button>
+              </div>
+            </div>
+
+            {/* Plan Events */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#818cf8', marginBottom: 8 }}>
+                Plan Events ({(data.planEvents || []).length})
+              </div>
+              {(data.planEvents || []).length === 0 ? (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 0' }}>Belum ada plan event.</div>
+              ) : (
+                <div className="wajib-rows">
+                  {(data.planEvents || []).map(e => (
+                    <div key={e.id} className="wajib-row">
+                      <div className="wajib-left">
+                        <span className="brow-icon" style={{ background: e.type === 'income' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)', color: e.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                          {e.type === 'income' ? <IconArrowUp size={13} /> : <IconArrowDown size={13} />}
+                        </span>
+                        <div>
+                          <div className="brow-name">{e.title}</div>
+                          <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+                            {new Date(e.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="wajib-amount tabular" style={{ color: e.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                        {e.type === 'income' ? '+' : '−'}{formatCurrency(e.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="wajib-divider" style={{ margin: '4px 0 16px' }} />
+
+            {/* Wishlist */}
+            <div>
+              <div style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#fbbf24', marginBottom: 8 }}>
+                Wishlist ({(data.allWishlist || []).length})
+              </div>
+              {(data.allWishlist || []).length === 0 ? (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 0' }}>Belum ada wishlist aktif.</div>
+              ) : (
+                <div className="wajib-rows">
+                  {(data.allWishlist || []).map(p => (
+                    <div key={p.id} className="wajib-row">
+                      <div className="wajib-left">
+                        <span className="brow-icon" style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24' }}>
+                          <IconBookmark size={13} />
+                        </span>
+                        <div>
+                          <div className="brow-name">{p.name}</div>
+                          <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{getMonthLabel(p.target_month)}</div>
+                        </div>
+                      </div>
+                      <span className="wajib-amount tabular" style={{ color: '#fbbf24' }}>{formatCurrency(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1925,6 +2208,116 @@ export default function Dashboard() {
           font-size: 0.8125rem; font-weight: 700; color: var(--text-primary);
           min-width: 90px; text-align: right;
         }
+
+        /* ── Simulation toggle ────────────────── */
+        .db-stat-sim { background: rgba(99,102,241,0.06) !important; }
+        [data-theme="light"] .db-stat-sim { background: var(--accent-dim) !important; }
+
+        .sim-toggle {
+          width: 28px; height: 16px; border-radius: 99px; border: none;
+          background: rgba(255,255,255,0.12); position: relative; cursor: pointer;
+          transition: background 0.2s; flex-shrink: 0; padding: 0;
+        }
+        .sim-toggle::after {
+          content: ''; position: absolute; top: 2px; left: 2px;
+          width: 12px; height: 12px; border-radius: 50%;
+          background: rgba(255,255,255,0.5); transition: transform 0.2s, background 0.2s;
+        }
+        .sim-toggle.active { background: var(--accent); }
+        .sim-toggle.active::after { transform: translateX(12px); background: #fff; }
+        [data-theme="light"] .sim-toggle { background: rgba(0,0,0,0.12); }
+        [data-theme="light"] .sim-toggle::after { background: rgba(0,0,0,0.35); }
+        [data-theme="light"] .sim-toggle.active { background: var(--accent); }
+        [data-theme="light"] .sim-toggle.active::after { background: #fff; }
+
+        /* ── Sim delta (hero) ─────────────────── */
+        .db-sim-delta {
+          font-size: 0.78rem; font-weight: 700; letter-spacing: -0.01em;
+          margin-top: 2px;
+        }
+
+        /* ── Simulation wrap ──────────────────── */
+        .sim-wrap {
+          border: 1px solid rgba(99,102,241,0.2);
+          border-radius: var(--radius-lg);
+          background: rgba(99,102,241,0.04);
+          overflow: hidden;
+        }
+        [data-theme="light"] .sim-wrap { background: var(--accent-dim); border-color: rgba(99,102,241,0.15); }
+
+        .sim-strip-scroll {
+          display: flex; gap: 6px; padding: 12px 14px;
+          overflow-x: auto; scrollbar-width: none;
+        }
+        .sim-strip-scroll::-webkit-scrollbar { display: none; }
+
+        .sim-chip {
+          display: flex; flex-direction: column; align-items: center; gap: 2px;
+          padding: 8px 10px; border-radius: 8px; flex-shrink: 0;
+          border: 1px solid rgba(255,255,255,0.08);
+          background: transparent; cursor: pointer;
+          transition: all 0.15s; font-family: var(--font-sans);
+          min-width: 46px;
+        }
+        .sim-chip:hover { background: rgba(255,255,255,0.06); border-color: rgba(99,102,241,0.3); }
+        .sim-chip.active {
+          background: var(--accent); border-color: var(--accent);
+          box-shadow: 0 2px 8px rgba(99,102,241,0.35);
+        }
+        [data-theme="light"] .sim-chip { border-color: rgba(0,0,0,0.09); }
+        [data-theme="light"] .sim-chip:hover { background: rgba(99,102,241,0.07); border-color: rgba(99,102,241,0.25); }
+        [data-theme="light"] .sim-chip.active { border-color: var(--accent); }
+
+        .sim-chip-day {
+          font-size: 1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1;
+          color: var(--text-primary);
+        }
+        .sim-chip.active .sim-chip-day { color: #fff; }
+        .sim-chip-mon {
+          font-size: 0.58rem; font-weight: 600; letter-spacing: 0.03em;
+          color: var(--text-muted); text-transform: capitalize; white-space: nowrap;
+        }
+        .sim-chip.active .sim-chip-mon { color: rgba(255,255,255,0.8); }
+
+        .sim-chip-dots { display: flex; gap: 3px; margin-top: 2px; }
+        .sim-dot {
+          width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+        }
+        .sim-dot.plan { background: var(--accent); }
+        .sim-dot.wish { background: var(--warning); }
+        .sim-chip.active .sim-dot.plan { background: rgba(255,255,255,0.7); }
+        .sim-chip.active .sim-dot.wish { background: rgba(255,255,255,0.7); }
+
+        .sim-hint {
+          font-size: 0.65rem; color: var(--text-muted); text-align: center;
+          padding: 6px 14px 10px; font-weight: 500;
+        }
+        .sim-empty {
+          font-size: 0.72rem; color: var(--text-muted);
+          padding: 14px 16px; text-align: center;
+        }
+
+        /* Breakdown panel */
+        .sim-breakdown {
+          border-top: 1px solid rgba(255,255,255,0.06);
+          padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;
+        }
+        [data-theme="light"] .sim-breakdown { border-top-color: rgba(0,0,0,0.07); }
+        .sim-bk-group { display: flex; flex-direction: column; gap: 4px; }
+        .sim-bk-label {
+          font-size: 0.58rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 4px;
+        }
+        .sim-bk-row {
+          display: grid; grid-template-columns: 50px 1fr auto;
+          align-items: center; gap: 8px;
+          padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .sim-bk-row:last-child { border-bottom: none; }
+        [data-theme="light"] .sim-bk-row { border-bottom-color: rgba(0,0,0,0.05); }
+        .sim-bk-date { font-size: 0.62rem; color: var(--text-muted); font-weight: 500; }
+        .sim-bk-name { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sim-bk-amt { font-size: 0.8rem; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; }
 
         /* ── Mobile ───────────────────────────── */
         @media (max-width: 768px) {

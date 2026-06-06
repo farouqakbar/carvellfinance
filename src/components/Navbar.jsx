@@ -6,7 +6,7 @@ import { IconGrid, IconBookmark, IconBarChart, IconMoon, IconSun, IconLogOut, Ic
 
 const navItems = [
   { to: '/dashboard', Icon: IconGrid,     label: 'Dashboard' },
-  { to: '/savings',   Icon: IconBookmark, label: 'Rencana'   },
+  { to: '/savings',   Icon: IconBookmark, label: 'Plan & Wishlist' },
   { to: '/report',    Icon: IconBarChart, label: 'Laporan'   },
 ]
 

@@ -55,6 +55,10 @@ export default function CategoriesV2() {
   const [hutangForm, setHutangForm] = useState({ jenis: 'hutang', nama: '', amount: '', due_date: '', sumber: 'saldo' })
   const [hutangSaving, setHutangSaving] = useState(false)
   const [confirmDelHutang, setConfirmDelHutang] = useState(null)
+  const [payingHutang, setPayingHutang] = useState(null)
+  const [paySource, setPaySource] = useState(null)
+  const [payingSavingsId, setPayingSavingsId] = useState(null)
+  const [payingLoading, setPayingLoading] = useState(false)
   const [quickAddCatId, setQuickAddCatId] = useState(null)
   const [quickAddForm, setQuickAddForm] = useState({ date: '', amount: '' })
 
@@ -272,6 +276,18 @@ export default function CategoriesV2() {
       toast(h.jenis === 'hutang' ? 'Hutang ditandai lunas' : 'Piutang diterima', 'success')
       fetchHutang(); fetchAll()
     } catch (err) { toast(err.message, 'error') }
+  }
+
+  const markLunasWithSource = async (h, sumber, savingsId) => {
+    setPayingLoading(true)
+    try {
+      await reverseFinancial(h.jenis, sumber, savingsId, Number(h.amount), h.nama, null)
+      const { error } = await supabase.from('hutang').update({ lunas: true }).eq('id', h.id)
+      if (error) throw error
+      toast(h.jenis === 'hutang' ? 'Hutang ditandai lunas' : 'Piutang diterima', 'success')
+      setPayingHutang(null); setPaySource(null); setPayingSavingsId(null)
+      fetchHutang(); fetchAll()
+    } catch (err) { toast(err.message, 'error') } finally { setPayingLoading(false) }
   }
 
   const deleteHutang = async () => {
@@ -564,7 +580,7 @@ export default function CategoriesV2() {
 
         <div className="cv2-cell-actions">
           {!h.lunas && (
-            <button className="cv2-icon-btn" style={{ color: '#34d399' }} onClick={() => markLunas(h.id)} title="Tandai Lunas">
+            <button className="cv2-icon-btn" style={{ color: '#34d399' }} onClick={() => { setPayingHutang(h); setPaySource(null); setPayingSavingsId(null) }} title="Tandai Lunas">
               <IconCheck size={11} />
             </button>
           )}
@@ -721,6 +737,98 @@ export default function CategoriesV2() {
           message={`Hapus "${confirmDel.name}"? Transaksi bulan ini untuk kategori ini juga akan terhapus.`}
           confirmLabel="Hapus" onConfirm={doDelete} onCancel={() => setConfirmDel(null)} />
       )}
+      {/* ── Bayar Hutang Modal ─────────────── */}
+      {payingHutang && (
+        <div className="modal-overlay" onClick={() => { setPayingHutang(null); setPaySource(null); setPayingSavingsId(null) }}>
+          <div className="modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+
+            {/* Step 1 — pilih sumber */}
+            {!paySource && (
+              <>
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title">{payingHutang.jenis === 'hutang' ? 'Hutang Terbayar' : 'Piutang Diterima'}</h2>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{payingHutang.nama} · {formatCurrency(payingHutang.amount)}</p>
+                  </div>
+                  <button className="btn btn-ghost" onClick={() => setPayingHutang(null)}><IconX size={16} /></button>
+                </div>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+                  {payingHutang.jenis === 'hutang' ? 'Bayar dari mana?' : 'Uang masuk ke mana?'}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', gap: 10 }} onClick={() => setPaySource('tabungan')}>
+                    <span style={{ fontSize: '1rem' }}>🏦</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>Tabungan</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                        {payingHutang.jenis === 'hutang' ? 'Kurangi dari kantong tabungan' : 'Tambah ke kantong tabungan'}
+                      </div>
+                    </div>
+                  </button>
+                  <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', gap: 10 }} onClick={() => setPaySource('saldo')}>
+                    <span style={{ fontSize: '1rem' }}>💳</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>Saldo</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                        {payingHutang.jenis === 'hutang' ? 'Bayar langsung dari saldo' : 'Terima ke saldo'}
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2 — pilih kantong tabungan */}
+            {paySource === 'tabungan' && !payingSavingsId && (
+              <>
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title">Pilih Tabungan</h2>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{formatCurrency(payingHutang.amount)}</p>
+                  </div>
+                  <button className="btn btn-ghost" onClick={() => setPaySource(null)}><IconX size={16} /></button>
+                </div>
+                <div className="wajib-rows">
+                  {savings.map(s => (
+                    <div key={s.id} className="wajib-row" style={{ cursor: 'pointer' }} onClick={() => setPayingSavingsId(s.id)}>
+                      <span className="brow-name">{s.name}</span>
+                      <span className="wajib-amount tabular" style={{ color: Number(s.current_amount) >= Number(payingHutang.amount) ? '#34d399' : '#f87171' }}>
+                        {formatCurrency(Number(s.current_amount))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Step 3 — konfirmasi */}
+            {paySource && (paySource === 'saldo' || payingSavingsId) && (
+              <>
+                <div className="modal-header">
+                  <h2 className="modal-title">Konfirmasi</h2>
+                  <button className="btn btn-ghost" onClick={() => { paySource === 'saldo' ? setPaySource(null) : setPayingSavingsId(null) }}><IconX size={16} /></button>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 16 }}>
+                  Tandai {payingHutang.jenis} ke <strong style={{ color: 'var(--text-primary)' }}>{payingHutang.nama}</strong> sebesar{' '}
+                  <strong style={{ color: payingHutang.jenis === 'hutang' ? '#f87171' : '#f59e0b' }}>{formatCurrency(payingHutang.amount)}</strong> sebagai <strong style={{ color: '#34d399' }}>lunas</strong>
+                  {paySource === 'tabungan' && (
+                    <> dari tabungan <strong style={{ color: 'var(--text-primary)' }}>{savings.find(s => s.id === payingSavingsId)?.name}</strong></>
+                  )}?
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={() => { setPayingHutang(null); setPaySource(null); setPayingSavingsId(null) }}>Batal</button>
+                  <button className="btn btn-primary" disabled={payingLoading}
+                    onClick={() => markLunasWithSource(payingHutang, paySource, payingSavingsId)}>
+                    {payingLoading ? 'Menyimpan...' : 'Konfirmasi Lunas'}
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
       {confirmDelHutang && (
         <ConfirmModal title="Hapus Hutang"
           message={`Hapus catatan hutang ke "${confirmDelHutang.nama}"?`}

@@ -27,7 +27,7 @@ function nextMonth(m) {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user, updateProfile } = useAuth()
   const { setHeader } = usePageHeader()
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -49,6 +49,14 @@ export default function Dashboard() {
   const [showTabunganModal, setShowTabunganModal] = useState(false)
   const [showRencanaModal, setShowRencanaModal] = useState(false)
   const [showGajiModal, setShowGajiModal] = useState(false)
+  const [showHutangDetailModal, setShowHutangDetailModal] = useState(false)
+  const [payingHutang, setPayingHutang] = useState(null) // hutang item yang akan dibayar
+  const [paySource, setPaySource] = useState(null)       // 'tabungan' | 'saldo'
+  const [payingSavingsId, setPayingSavingsId] = useState(null)
+  const [payingLoading, setPayingLoading] = useState(false)
+  const [showBudgetHarianModal, setShowBudgetHarianModal] = useState(false)
+  const [budgetHarianInput, setBudgetHarianInput] = useState('')
+  const [budgetHarianSaving, setBudgetHarianSaving] = useState(false)
   const [gajiForm, setGajiForm] = useState({ amount: '', note: '', date: '' })
   const [gajiSaving, setGajiSaving] = useState(false)
   const [showMonthPicker, setShowMonthPicker] = useState(false)
@@ -356,41 +364,25 @@ export default function Dashboard() {
 
       {/* ── Saldo Hero ── */}
       <div className="db-hero">
-        <span className="db-eyebrow">TOTAL SALDO</span>
+        <span className="db-eyebrow">{hutangAktifTotal > 0 ? 'SALDO BERSIH' : 'TOTAL SALDO'}</span>
         {loading ? (
           <div className="skeleton" style={{ height: 56, width: 220, borderRadius: 8, marginTop: 6 }} />
         ) : (
-          <>
-            <div className={`db-balance${totalSaldo < 0 ? ' neg' : ''}${hutangAktifTotal > 0 && totalSaldo >= 0 ? ' hutang' : ''}`}>
-              {totalSaldo < 0 && <span className="db-neg-sign">−</span>}
-              {formatCurrency(Math.abs(totalSaldo))}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+            <div className={`db-balance${(totalSaldo - hutangAktifTotal) < 0 ? ' neg' : ''}`}>
+              {(totalSaldo - hutangAktifTotal) < 0 && <span className="db-neg-sign">−</span>}
+              {formatCurrency(Math.abs(totalSaldo - hutangAktifTotal))}
             </div>
             {hutangAktifTotal > 0 && (
-              <span className="db-hutang-note">
-                ⚠ termasuk hutang {formatCurrency(hutangAktifTotal)}
-              </span>
+              <button className="db-hutang-chip" onClick={() => setShowHutangDetailModal(true)}>
+                <span className="db-hutang-chip-label">+ hutang</span>
+                <span className="db-hutang-chip-amount">{formatCurrency(totalSaldo)}</span>
+                <span className="db-hutang-chip-arrow">›</span>
+              </button>
             )}
-          </>
+          </div>
         )}
         <div className="db-hero-chips">
-          {!loading && data.todayExpense > 0 && (
-            <div className="db-daily">
-              {(() => {
-                const budget = user.budget_harian || 0
-                const spent = data.todayExpense
-                const over = budget > 0 && spent >= budget
-                const near = budget > 0 && spent / budget >= 0.8 && !over
-                const color = over ? '#f87171' : near ? '#fbbf24' : 'var(--text-primary)'
-                return (
-                  <>
-                    <span style={{ color }}>Hari ini −{formatCurrency(spent)}</span>
-                    {over && <span className="db-daily-badge" style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>melebihi limit</span>}
-                    {near && <span className="db-daily-badge" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>hampir limit</span>}
-                  </>
-                )
-              })()}
-            </div>
-          )}
           {!loading && data.nextMonthPlans.length > 0 && (
             <button className="db-rencana-chip" onClick={() => setShowRencanaModal(true)}>
               <IconBookmark size={11} />
@@ -479,6 +471,47 @@ export default function Dashboard() {
         </div>
       )}
       {loading && <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius-lg)' }} />}
+
+      {/* ── Card Pengeluaran Hari Ini ─────────── */}
+      {!loading && data.todayExpense > 0 && (() => {
+        const budget = user.budget_harian || 0
+        const spent = data.todayExpense
+        const over = budget > 0 && spent >= budget
+        const near = budget > 0 && spent / budget >= 0.8 && !over
+        const safe = budget > 0 && !over && !near
+        const accentColor = over ? '#f87171' : near ? '#fbbf24' : safe ? '#34d399' : '#818cf8'
+        const bgColor = over ? 'rgba(248,113,113,0.06)' : near ? 'rgba(251,191,36,0.06)' : safe ? 'rgba(52,211,153,0.06)' : 'rgba(129,140,248,0.06)'
+        const borderColor = over ? 'rgba(248,113,113,0.25)' : near ? 'rgba(251,191,36,0.25)' : safe ? 'rgba(52,211,153,0.25)' : 'rgba(129,140,248,0.25)'
+        const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0
+        return (
+          <div
+            className="db-daily-card db-daily-card-clickable"
+            style={{ background: bgColor, borderColor }}
+            onClick={() => { setBudgetHarianInput(budget > 0 ? String(budget) : ''); setShowBudgetHarianModal(true) }}
+          >
+            <div className="db-daily-card-left">
+              <span className="db-daily-card-label">PENGELUARAN HARI INI</span>
+              <span className="db-daily-card-amount tabular" style={{ color: accentColor }}>
+                −{formatCurrency(spent)}
+              </span>
+            </div>
+            <div className="db-daily-card-right">
+              {budget > 0 ? (
+                <>
+                  <div className="db-daily-card-track">
+                    <div className="db-daily-card-fill" style={{ width: `${pct}%`, background: accentColor }} />
+                  </div>
+                  <span className="db-daily-card-sub" style={{ color: accentColor }}>
+                    {over ? 'Melebihi' : near ? 'Hampir' : `${Math.round(pct)}%`} dari {formatCurrency(budget)}
+                  </span>
+                </>
+              ) : (
+                <span className="db-daily-card-sub" style={{ color: '#818cf8' }}>Atur budget harian →</span>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── My Transaction / My Budget tab ──── */}
       {(() => {
@@ -913,6 +946,187 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Hutang Detail Modal ─────────────── */}
+      {showHutangDetailModal && (
+        <div className="modal-overlay" onClick={() => { setShowHutangDetailModal(false); setPayingHutang(null); setPaySource(null) }}>
+          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+
+            {/* Step 1 — daftar hutang */}
+            {!payingHutang && (
+              <>
+                <div className="modal-header">
+                  <h2 className="modal-title">Detail Pinjaman</h2>
+                  <button className="btn btn-ghost" onClick={() => setShowHutangDetailModal(false)}><IconX size={16} /></button>
+                </div>
+                <div className="wajib-rows">
+                  {(data.hutangList || []).filter(h => h.jenis === 'hutang').map(h => (
+                    <div key={h.id} className="wajib-row">
+                      <div className="wajib-left">
+                        <span className="brow-icon" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>
+                          <IconArrowDown size={13} />
+                        </span>
+                        <span className="brow-name">{h.nama}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span className="wajib-amount tabular">{formatCurrency(Number(h.amount))}</span>
+                        <button className="btn btn-sm" style={{ fontSize: '0.65rem', padding: '3px 10px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)', borderRadius: 99 }}
+                          onClick={() => { setPayingHutang(h); setPaySource(null); setPayingSavingsId(null) }}>
+                          Bayar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="wajib-divider" />
+                  <div className="wajib-row" style={{ paddingTop: 10 }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>Total Pinjaman</span>
+                    <span className="wajib-amount tabular" style={{ color: '#fbbf24' }}>−{formatCurrency(hutangAktifTotal)}</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Step 2 — pilih sumber bayar */}
+            {payingHutang && !paySource && (
+              <>
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title">Hutang Terbayar</h2>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{payingHutang.nama} · {formatCurrency(payingHutang.amount)}</p>
+                  </div>
+                  <button className="btn btn-ghost" onClick={() => setPayingHutang(null)}><IconX size={16} /></button>
+                </div>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 14 }}>Bayar dari mana?</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', gap: 10 }}
+                    onClick={() => setPaySource('tabungan')}>
+                    <span style={{ fontSize: '1rem' }}>🏦</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>Tabungan</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>Kurangi dari kantong tabungan</div>
+                    </div>
+                  </button>
+                  <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', gap: 10 }}
+                    onClick={() => setPaySource('saldo')}>
+                    <span style={{ fontSize: '1rem' }}>💳</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>Saldo</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>Bayar langsung dari saldo</div>
+                    </div>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 3a — pilih kantong tabungan */}
+            {payingHutang && paySource === 'tabungan' && !payingSavingsId && (
+              <>
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title">Pilih Tabungan</h2>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{formatCurrency(payingHutang.amount)} akan dikurangi</p>
+                  </div>
+                  <button className="btn btn-ghost" onClick={() => setPaySource(null)}><IconX size={16} /></button>
+                </div>
+                <div className="wajib-rows">
+                  {(data.savings || []).map(s => (
+                    <div key={s.id} className="wajib-row" style={{ cursor: 'pointer' }}
+                      onClick={() => setPayingSavingsId(s.id)}>
+                      <span className="brow-name">{s.name}</span>
+                      <span className="wajib-amount tabular" style={{ color: Number(s.current_amount) >= Number(payingHutang.amount) ? '#34d399' : '#f87171' }}>
+                        {formatCurrency(Number(s.current_amount))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Step 3b/4 — konfirmasi */}
+            {payingHutang && paySource && (paySource === 'saldo' || payingSavingsId) && (
+              <>
+                <div className="modal-header">
+                  <div>
+                    <h2 className="modal-title">Konfirmasi</h2>
+                  </div>
+                  <button className="btn btn-ghost" onClick={() => { paySource === 'saldo' ? setPaySource(null) : setPayingSavingsId(null) }}><IconX size={16} /></button>
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 16 }}>
+                  Tandai hutang ke <strong style={{ color: 'var(--text-primary)' }}>{payingHutang.nama}</strong> sebesar{' '}
+                  <strong style={{ color: '#fbbf24' }}>{formatCurrency(payingHutang.amount)}</strong> sebagai <strong style={{ color: '#34d399' }}>lunas</strong>
+                  {paySource === 'tabungan' && (
+                    <> dari tabungan <strong style={{ color: 'var(--text-primary)' }}>{(data.savings || []).find(s => s.id === payingSavingsId)?.name}</strong></>
+                  )}?
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={() => { setPayingHutang(null); setPaySource(null); setPayingSavingsId(null) }}>Batal</button>
+                  <button className="btn btn-primary" disabled={payingLoading}
+                    onClick={async () => {
+                      setPayingLoading(true)
+                      try {
+                        if (paySource === 'tabungan') {
+                          const sav = (data.savings || []).find(s => s.id === payingSavingsId)
+                          await supabase.from('savings').update({ current_amount: Number(sav.current_amount) - Number(payingHutang.amount) }).eq('id', payingSavingsId)
+                        }
+                        await supabase.from('hutang').update({ lunas: true }).eq('id', payingHutang.id)
+                        await fetchDashboard()
+                        setShowHutangDetailModal(false)
+                        setPayingHutang(null); setPaySource(null); setPayingSavingsId(null)
+                      } finally { setPayingLoading(false) }
+                    }}>
+                    {payingLoading ? 'Menyimpan...' : 'Konfirmasi Lunas'}
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ── Budget Harian Modal ─────────────── */}
+      {showBudgetHarianModal && (
+        <div className="modal-overlay" onClick={() => setShowBudgetHarianModal(false)}>
+          <div className="modal" style={{ maxWidth: 340 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Budget Harian</h2>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>Batas pengeluaran per hari</p>
+              </div>
+              <button className="btn btn-ghost" onClick={() => setShowBudgetHarianModal(false)}><IconX size={16} /></button>
+            </div>
+            <div style={{ padding: '4px 0 8px' }}>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Jumlah per hari</label>
+              <input
+                className="form-input"
+                type="number"
+                placeholder="cth: 50000"
+                value={budgetHarianInput}
+                onChange={e => setBudgetHarianInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+              <button className="btn btn-secondary" onClick={() => setShowBudgetHarianModal(false)}>Batal</button>
+              <button
+                className="btn btn-primary"
+                disabled={budgetHarianSaving || !budgetHarianInput}
+                onClick={async () => {
+                  setBudgetHarianSaving(true)
+                  try {
+                    await updateProfile({ budget_harian: parseFloat(budgetHarianInput) || 0 })
+                    setShowBudgetHarianModal(false)
+                  } finally {
+                    setBudgetHarianSaving(false)
+                  }
+                }}
+              >
+                {budgetHarianSaving ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Keuangan Wajib Modal ────────────── */}
       {showWajibModal && (
         <div className="modal-overlay" onClick={() => setShowWajibModal(false)}>
@@ -1207,19 +1421,25 @@ export default function Dashboard() {
           -webkit-background-clip: text; background-clip: text;
           -webkit-text-fill-color: transparent;
         }
-        .db-balance.hutang {
-          background: linear-gradient(135deg, #fde68a 0%, #fbbf24 55%, #f59e0b 100%);
-          -webkit-background-clip: text; background-clip: text;
-          -webkit-text-fill-color: transparent;
+        .db-hutang-chip {
+          display: inline-flex; align-items: center; gap: 5px;
+          align-self: flex-start; width: fit-content;
+          background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.22);
+          border-radius: 99px; padding: 4px 10px 4px 8px;
+          cursor: pointer; margin-top: 7px;
+          transition: background 0.15s;
         }
-        [data-theme="light"] .db-balance.hutang {
-          background: linear-gradient(135deg, #92400e 0%, #b45309 55%, #d97706 100%);
-          -webkit-background-clip: text; background-clip: text;
-          -webkit-text-fill-color: transparent;
+        .db-hutang-chip:hover { background: rgba(251,191,36,0.18); }
+        .db-hutang-chip-label {
+          font-size: 0.6rem; font-weight: 600; color: rgba(251,191,36,0.8);
+          text-transform: uppercase; letter-spacing: 0.06em;
         }
-        .db-hutang-note {
-          display: block; font-size: 0.62rem; font-weight: 600;
-          color: #fbbf24; margin-top: 2px; letter-spacing: 0.01em;
+        .db-hutang-chip-amount {
+          font-size: 0.7rem; font-weight: 700; color: #fbbf24;
+          font-variant-numeric: tabular-nums;
+        }
+        .db-hutang-chip-arrow {
+          font-size: 0.85rem; color: rgba(251,191,36,0.5); line-height: 1;
         }
         [data-theme="light"] .db-balance {
           background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 45%, #4f46e5 100%);
@@ -1258,6 +1478,43 @@ export default function Dashboard() {
           transition: all 0.15s;
         }
         .db-rencana-chip:hover { background: rgba(251,191,36,0.13); border-color: rgba(251,191,36,0.35); }
+
+        /* ── Card Hari Ini ──────────────────────── */
+        .db-daily-card {
+          border: 1px solid;
+          border-radius: var(--radius-lg);
+          display: flex; align-items: center; gap: 14px;
+          padding: 12px 16px;
+          transition: background 0.2s, border-color 0.2s;
+        }
+        .db-daily-card-left {
+          display: flex; flex-direction: column; gap: 3px; flex-shrink: 0;
+        }
+        .db-daily-card-clickable { cursor: pointer; }
+        .db-daily-card-clickable:hover { filter: brightness(1.04); }
+        .db-daily-card-label {
+          font-size: 0.55rem; font-weight: 700; letter-spacing: 0.1em;
+          text-transform: uppercase; color: var(--text-muted);
+        }
+        .db-daily-card-amount {
+          font-size: 1.05rem; font-weight: 800;
+          letter-spacing: -0.025em; font-variant-numeric: tabular-nums; line-height: 1;
+        }
+        .db-daily-card-right {
+          flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+        }
+        .db-daily-card-track {
+          height: 5px; border-radius: 99px;
+          background: rgba(255,255,255,0.1); overflow: hidden;
+        }
+        [data-theme="light"] .db-daily-card-track { background: rgba(0,0,0,0.08); }
+        .db-daily-card-fill {
+          height: 100%; border-radius: 99px; transition: width 0.4s ease;
+        }
+        .db-daily-card-sub {
+          font-size: 0.62rem; font-weight: 600;
+          text-align: right; opacity: 0.8;
+        }
 
         /* ── Stats 2×2 ──────────────────────────── */
         .db-stats-grid {

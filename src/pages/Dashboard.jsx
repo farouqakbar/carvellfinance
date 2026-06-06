@@ -2369,10 +2369,10 @@ export default function Dashboard() {
         }
         .sim-cal-day:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
         .sim-cal-day.active {
-          background: var(--text-primary); color: var(--bg-page, #0d0d0d);
+          background: #a78bfa; color: #fff;
           font-weight: 800;
         }
-        [data-theme="light"] .sim-cal-day.active { background: #1a1a1a; color: #fff; }
+        [data-theme="light"] .sim-cal-day.active { background: #7c3aed; color: #fff; }
 
         .sim-cal-dots { display: flex; gap: 2px; height: 10px; align-items: center; }
         .sim-dot {

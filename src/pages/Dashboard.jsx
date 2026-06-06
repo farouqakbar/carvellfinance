@@ -56,8 +56,6 @@ export default function Dashboard() {
   const [showPct, setShowPct] = useState(false)
   const [dashTab, setDashTab] = useState('transaction')
   const [alertIdx, setAlertIdx] = useState(0)
-  const [statsIdx, setStatsIdx] = useState(0)
-  const [statsCarouselTouchX, setStatsCarouselTouchX] = useState(null)
   const [tabunganSubIdx, setTabunganSubIdx] = useState(0)
   const [pengeluaranSubIdx, setPengeluaranSubIdx] = useState(0)
 
@@ -294,12 +292,20 @@ export default function Dashboard() {
     return () => clearInterval(t)
   }, [overBudgetCats.length])
 
-  // Auto-scroll stats carousel — reset timer setiap kali statsIdx berubah (manual atau auto)
+  // Auto-scroll sub-item Tabungan (Tabungan Bulanan ↔ Dana Darurat ↔ ...)
+  const statsSavingsCount = data.categories.filter(c => isSavings(c)).length
+  useEffect(() => {
+    if (loading || statsSavingsCount <= 1) return
+    const t = setInterval(() => setTabunganSubIdx(i => (i + 1) % statsSavingsCount), 2500)
+    return () => clearInterval(t)
+  }, [loading, statsSavingsCount])
+
+  // Auto-scroll sub-item Pengeluaran (Wajib → Rutin → Tambahan → loop)
   useEffect(() => {
     if (loading) return
-    const t = setInterval(() => setStatsIdx(i => (i + 1) % 4), 3500)
+    const t = setInterval(() => setPengeluaranSubIdx(i => (i + 1) % 3), 3000)
     return () => clearInterval(t)
-  }, [loading, statsIdx])
+  }, [loading])
 
   // Mandatory: hanya pakai budget yang sudah di-set secara eksplisit
   const mandatoryBudgetTotal = data.categories
@@ -384,112 +390,85 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Stats Carousel (4 cards, auto-scroll) ── */}
+      {/* ── Stats 2×2 (4 card, masing-masing auto-scroll sub-item) ── */}
       {!loading && (
-        <div
-          className="db-stats-carousel"
-          onTouchStart={e => setStatsCarouselTouchX(e.touches[0].clientX)}
-          onTouchEnd={e => {
-            if (statsCarouselTouchX === null) return
-            const dx = e.changedTouches[0].clientX - statsCarouselTouchX
-            setStatsCarouselTouchX(null)
-            if (dx < -40) setStatsIdx(i => Math.min(i + 1, 3))
-            else if (dx > 40) setStatsIdx(i => Math.max(i - 1, 0))
-          }}
-        >
-          <div className="db-stats-track" style={{ transform: `translateX(-${statsIdx * 100}%)` }}>
+        <div className="db-stats-grid">
 
-            {/* Slide 0: Pemasukan */}
-            <div className="db-stats-slide">
-              <button className="db-stat db-stat-btn" onClick={() => {
-                setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '', date: data.gajiTx?.date || `${month}-01` })
-                setShowGajiModal(true)
-              }}>
-                <span className="db-stat-label">PEMASUKAN</span>
-                <span className="db-stat-val tabular" style={{ color: data.salary > 0 ? '#34d399' : 'var(--text-muted)' }}>
-                  {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
-                </span>
-                <span className="db-stat-sub">{data.salary > 0 ? 'bulan ini' : 'belum dicatat'}</span>
-              </button>
-            </div>
+          {/* Card 1: Pemasukan */}
+          <button className="db-stat db-stat-btn" onClick={() => {
+            setGajiForm({ amount: data.gajiTx ? String(data.gajiTx.amount) : '', note: data.gajiTx?.description || '', date: data.gajiTx?.date || `${month}-01` })
+            setShowGajiModal(true)
+          }}>
+            <span className="db-stat-label">PEMASUKAN</span>
+            <span className="db-stat-val tabular" style={{ color: data.salary > 0 ? '#34d399' : 'var(--text-muted)' }}>
+              {data.salary > 0 ? `+${formatCurrency(data.salary)}` : '—'}
+            </span>
+            <span className="db-stat-sub">{data.salary > 0 ? 'bulan ini' : 'belum dicatat'}</span>
+          </button>
 
-            {/* Slide 1: Tabungan */}
-            <div className="db-stats-slide">
-              <button className="db-stat db-stat-btn" onClick={() => setShowTabunganModal(true)}>
-                <span className="db-stat-label">TABUNGAN</span>
-                {statsSavingsCats.length > 0 ? (
-                  <>
-                    <span className="db-stat-val tabular" style={{ color: (statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0 ? '#818cf8' : 'var(--text-muted)' }}>
-                      {(statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0
-                        ? formatCurrency(statsSavingsCats[tabunganSubIdx].budget_limit)
-                        : '—'}
-                    </span>
-                    <span className="db-stat-sub" style={{ color: statsSavingsCats[tabunganSubIdx]?.color }}>
-                      {statsSavingsCats[tabunganSubIdx]?.name || '—'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="db-stat-val tabular" style={{ color: 'var(--text-muted)' }}>—</span>
-                    <span className="db-stat-sub">belum diatur</span>
-                  </>
-                )}
-                {statsSavingsCats.length > 1 && (
-                  <div className="db-sub-dots">
-                    {statsSavingsCats.map((_, i) => (
-                      <span key={i} className={`db-sub-dot${tabunganSubIdx === i ? ' active' : ''}`}
-                        onClick={e => { e.stopPropagation(); setTabunganSubIdx(i) }} />
-                    ))}
-                  </div>
-                )}
-              </button>
-            </div>
-
-            {/* Slide 2: Pengeluaran */}
-            <div className="db-stats-slide">
-              <button className="db-stat db-stat-btn" onClick={() => pengeluaranSubSlides[pengeluaranSubIdx]?.action?.()}>
-                <span className="db-stat-label">PENGELUARAN</span>
-                <span className="db-stat-val tabular" style={{ color: (pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0 ? '#f87171' : 'var(--text-muted)' }}>
-                  {(pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0
-                    ? `−${formatCurrency(pengeluaranSubSlides[pengeluaranSubIdx].spent)}`
+          {/* Card 2: Tabungan — auto-scroll antar savings category */}
+          <button className="db-stat db-stat-btn" onClick={() => setShowTabunganModal(true)}>
+            <span className="db-stat-label">TABUNGAN</span>
+            {statsSavingsCats.length > 0 ? (
+              <>
+                <span className="db-stat-val tabular" style={{ color: (statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0 ? '#818cf8' : 'var(--text-muted)' }}>
+                  {(statsSavingsCats[tabunganSubIdx]?.budget_limit || 0) > 0
+                    ? formatCurrency(statsSavingsCats[tabunganSubIdx].budget_limit)
                     : '—'}
                 </span>
-                <span className="db-stat-sub" style={{ color: pengeluaranSubSlides[pengeluaranSubIdx]?.color }}>
-                  {pengeluaranSubSlides[pengeluaranSubIdx]?.label}
+                <span className="db-stat-sub" style={{ color: statsSavingsCats[tabunganSubIdx]?.color }}>
+                  {statsSavingsCats[tabunganSubIdx]?.name || '—'}
                 </span>
-                <div className="db-sub-dots">
-                  {pengeluaranSubSlides.map((_, i) => (
-                    <span key={i} className={`db-sub-dot${pengeluaranSubIdx === i ? ' active' : ''}`}
-                      onClick={e => { e.stopPropagation(); setPengeluaranSubIdx(i) }} />
-                  ))}
-                </div>
-              </button>
+              </>
+            ) : (
+              <>
+                <span className="db-stat-val tabular" style={{ color: 'var(--text-muted)' }}>—</span>
+                <span className="db-stat-sub">belum diatur</span>
+              </>
+            )}
+            {statsSavingsCats.length > 1 && (
+              <div className="db-sub-dots">
+                {statsSavingsCats.map((_, i) => (
+                  <span key={i} className={`db-sub-dot${tabunganSubIdx === i ? ' active' : ''}`}
+                    onClick={e => { e.stopPropagation(); setTabunganSubIdx(i) }} />
+                ))}
+              </div>
+            )}
+          </button>
+
+          {/* Card 3: Pengeluaran — auto-scroll Wajib/Rutin/Tambahan */}
+          <button className="db-stat db-stat-btn" onClick={() => pengeluaranSubSlides[pengeluaranSubIdx]?.action?.()}>
+            <span className="db-stat-label">PENGELUARAN</span>
+            <span className="db-stat-val tabular" style={{ color: (pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0 ? '#f87171' : 'var(--text-muted)' }}>
+              {(pengeluaranSubSlides[pengeluaranSubIdx]?.spent || 0) > 0
+                ? `−${formatCurrency(pengeluaranSubSlides[pengeluaranSubIdx].spent)}`
+                : '—'}
+            </span>
+            <span className="db-stat-sub" style={{ color: pengeluaranSubSlides[pengeluaranSubIdx]?.color }}>
+              {pengeluaranSubSlides[pengeluaranSubIdx]?.label}
+            </span>
+            <div className="db-sub-dots">
+              {pengeluaranSubSlides.map((_, i) => (
+                <span key={i} className={`db-sub-dot${pengeluaranSubIdx === i ? ' active' : ''}`}
+                  onClick={e => { e.stopPropagation(); setPengeluaranSubIdx(i) }} />
+              ))}
             </div>
+          </button>
 
-            {/* Slide 3: Rencana */}
-            <div className="db-stats-slide">
-              <button className="db-stat db-stat-btn" onClick={() => setShowRencanaModal(true)}>
-                <span className="db-stat-label">RENCANA</span>
-                <span className="db-stat-val tabular" style={{ color: data.nextMonthPlans.length > 0 ? '#fbbf24' : 'var(--text-muted)' }}>
-                  {data.nextMonthPlans.length > 0 ? data.nextMonthPlans.length : '—'}
-                </span>
-                <span className="db-stat-sub">
-                  {data.nextMonthPlans.length > 0 ? 'rencana bulan depan' : 'belum ada rencana'}
-                </span>
-              </button>
-            </div>
+          {/* Card 4: Rencana */}
+          <button className="db-stat db-stat-btn" onClick={() => setShowRencanaModal(true)}>
+            <span className="db-stat-label">RENCANA</span>
+            <span className="db-stat-val tabular" style={{ color: data.nextMonthPlans.length > 0 ? '#fbbf24' : 'var(--text-muted)' }}>
+              {data.nextMonthPlans.length > 0 ? data.nextMonthPlans.length : '—'}
+            </span>
+            <span className="db-stat-sub">
+              {data.nextMonthPlans.length > 0 ? 'rencana bulan depan' : 'belum ada rencana'}
+            </span>
+          </button>
 
-          </div>
-
-          {/* Outer navigation dots */}
-          <div className="db-outer-dots">
-            {[0, 1, 2, 3].map(i => (
-              <span key={i} className={`db-outer-dot${statsIdx === i ? ' active' : ''}`} onClick={() => setStatsIdx(i)} />
-            ))}
-          </div>
         </div>
       )}
-      {loading && <div className="skeleton" style={{ height: 108, borderRadius: 'var(--radius-lg)' }} />}
+      {loading && <div className="skeleton" style={{ height: 120, borderRadius: 'var(--radius-lg)' }} />}
 
       {/* ── My Transaction / My Budget tab ──── */}
       {(() => {
@@ -1256,27 +1235,21 @@ export default function Dashboard() {
         }
         .db-rencana-chip:hover { background: rgba(251,191,36,0.13); border-color: rgba(251,191,36,0.35); }
 
-        /* ── Stats Carousel ──────────────────────── */
-        .db-stats-carousel {
+        /* ── Stats 2×2 ──────────────────────────── */
+        .db-stats-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1px;
+          background: var(--border);
           border: 1px solid var(--border);
           border-radius: var(--radius-lg);
           overflow: hidden;
-          background: var(--bg-card);
-          touch-action: pan-y;
-        }
-        .db-stats-track {
-          display: flex;
-          transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-          will-change: transform;
-        }
-        .db-stats-slide {
-          flex: 0 0 100%; width: 100%;
         }
         .db-stat {
           display: flex; flex-direction: column; align-items: center; gap: 4px;
-          padding: 16px 20px;
+          padding: 14px 12px;
           background: var(--bg-card);
-          text-align: center; border: none; width: 100%;
+          text-align: center; border: none;
           font-family: var(--font-sans); cursor: default;
           transition: background 0.12s;
         }
@@ -1288,36 +1261,26 @@ export default function Dashboard() {
           text-transform: uppercase; color: var(--text-muted);
         }
         .db-stat-val {
-          font-size: 1.05rem; font-weight: 800;
+          font-size: 0.9rem; font-weight: 800;
           letter-spacing: -0.025em; font-variant-numeric: tabular-nums;
           color: var(--text-primary);
         }
         .db-stat-sub {
-          font-size: 0.6rem; font-weight: 500; color: var(--text-muted);
+          font-size: 0.58rem; font-weight: 500;
+          color: var(--text-muted);
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
         }
         .db-sub-dots {
-          display: flex; gap: 5px; margin-top: 4px; justify-content: center;
+          display: flex; gap: 4px; margin-top: 3px; justify-content: center;
         }
         .db-sub-dot {
           width: 4px; height: 4px; border-radius: 50%;
           background: var(--text-muted); opacity: 0.25; flex-shrink: 0;
-          transition: opacity 0.15s; cursor: pointer;
+          transition: opacity 0.2s; cursor: pointer;
           padding: 3px; box-sizing: content-box;
         }
         .db-sub-dot.active { opacity: 0.9; background: var(--text-primary); }
-        .db-sub-dot:hover { opacity: 0.6; }
-        .db-outer-dots {
-          display: flex; justify-content: center; align-items: center; gap: 6px;
-          padding: 6px 0 8px;
-          border-top: 1px solid var(--border);
-        }
-        .db-outer-dot {
-          height: 5px; width: 5px; border-radius: 99px;
-          background: var(--text-muted); opacity: 0.3;
-          cursor: pointer; transition: all 0.25s ease; flex-shrink: 0;
-        }
-        .db-outer-dot.active { opacity: 1; background: var(--accent); width: 16px; }
-        .db-outer-dot:hover:not(.active) { opacity: 0.55; }
+        .db-sub-dot:hover { opacity: 0.55; }
 
         /* ── Stats strip ──────────────────────── */
         .stats-strip {

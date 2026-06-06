@@ -338,6 +338,9 @@ export default function Dashboard() {
   ]
 
   const totalSaldo = data.cumulativeBalance - data.cumulativeMandatoryBudget
+  const hutangAktifTotal = (data.hutangList || [])
+    .filter(h => h.jenis === 'hutang')
+    .reduce((s, h) => s + Number(h.amount), 0)
   // Sisa belanja bulan ini
   const freeBalance = data.salary - data.totalExpense - monthlyTabungan
   const spendingPct = data.salary > 0 ? (data.totalExpense / data.salary) * 100 : 0
@@ -357,10 +360,17 @@ export default function Dashboard() {
         {loading ? (
           <div className="skeleton" style={{ height: 56, width: 220, borderRadius: 8, marginTop: 6 }} />
         ) : (
-          <div className={`db-balance${totalSaldo < 0 ? ' neg' : ''}`}>
-            {totalSaldo < 0 && <span className="db-neg-sign">−</span>}
-            {formatCurrency(Math.abs(totalSaldo))}
-          </div>
+          <>
+            <div className={`db-balance${totalSaldo < 0 ? ' neg' : ''}${hutangAktifTotal > 0 && totalSaldo >= 0 ? ' hutang' : ''}`}>
+              {totalSaldo < 0 && <span className="db-neg-sign">−</span>}
+              {formatCurrency(Math.abs(totalSaldo))}
+            </div>
+            {hutangAktifTotal > 0 && (
+              <span className="db-hutang-note">
+                ⚠ termasuk hutang {formatCurrency(hutangAktifTotal)}
+              </span>
+            )}
+          </>
         )}
         <div className="db-hero-chips">
           {!loading && data.todayExpense > 0 && (
@@ -1196,6 +1206,20 @@ export default function Dashboard() {
           background: linear-gradient(135deg, #fca5a5 0%, #f87171 60%, #ef4444 100%);
           -webkit-background-clip: text; background-clip: text;
           -webkit-text-fill-color: transparent;
+        }
+        .db-balance.hutang {
+          background: linear-gradient(135deg, #fde68a 0%, #fbbf24 55%, #f59e0b 100%);
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        [data-theme="light"] .db-balance.hutang {
+          background: linear-gradient(135deg, #92400e 0%, #b45309 55%, #d97706 100%);
+          -webkit-background-clip: text; background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .db-hutang-note {
+          display: block; font-size: 0.62rem; font-weight: 600;
+          color: #fbbf24; margin-top: 2px; letter-spacing: 0.01em;
         }
         [data-theme="light"] .db-balance {
           background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 45%, #4f46e5 100%);

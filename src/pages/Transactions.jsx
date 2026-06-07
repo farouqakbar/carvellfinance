@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -43,6 +43,23 @@ export default function Transactions() {
 
   useEffect(() => { fetchAll() }, [month])
 
+  // Realtime: auto-refresh saat transaksi berubah
+  const fetchAllRef = useRef(null)
+  useEffect(() => { fetchAllRef.current = fetchAll })
+  useEffect(() => {
+    const channel = supabase
+      .channel(`tx-realtime-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${user.id}` },
+        () => { fetchAllRef.current?.() })
+      .subscribe()
+    const onFocus = () => fetchAllRef.current?.()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [user.id])
+
   useEffect(() => {
     setHeader(
       <>
@@ -69,7 +86,10 @@ export default function Transactions() {
     let histQuery = supabase.from('transactions').select('amount, type').eq('user_id', user.id).lte('date', endDate)
     if (recordStart) histQuery = histQuery.gte('date', `${recordStart}-01`)
 
-    let mandBudgetsQuery = supabase.from('category_budgets').select('budget_limit, category_id').eq('user_id', user.id).lte('month', month)
+    // mandBudgets pakai join categories agar bisa filter is_mandatory dengan benar lintas bulan
+    let mandBudgetsQuery = supabase.from('category_budgets')
+      .select('budget_limit, category_id, categories(is_mandatory)')
+      .eq('user_id', user.id).lte('month', month)
     if (recordStart) mandBudgetsQuery = mandBudgetsQuery.gte('month', recordStart)
 
     const [txRes, catRes, histRes, mandBudgetsRes, curMonthBudgetsRes] = await Promise.all([
@@ -90,8 +110,9 @@ export default function Transactions() {
       budget_limit: curBudgetMap[cat.id] !== undefined ? curBudgetMap[cat.id] : (cat.budget_limit || 0),
     }))
     const cumBalance = (histRes.data || []).reduce((s, t) => s + (t.type === 'income' ? Number(t.amount) : -Number(t.amount)), 0) + (user.saldo_awal || 0)
+    // Pakai joined categories dari mandBudgetsRes agar mandatory dari bulan lain juga ikut
     const cumMandatory = (mandBudgetsRes.data || [])
-      .filter(cb => cats.find(c => c.id === cb.category_id && c.is_mandatory))
+      .filter(cb => cb.categories?.is_mandatory === true)
       .reduce((s, cb) => s + Number(cb.budget_limit), 0)
     setTransactions(txRes.data || [])
     setCategories(catsWithBudget)

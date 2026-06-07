@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../context/AuthContext'
@@ -80,6 +80,24 @@ export default function Dashboard() {
     }
     fetchDashboard()
   }, [month, user?.recording_start_month])
+
+  // Realtime: auto-refresh saat transaksi berubah (add/edit/delete dari halaman manapun)
+  const fetchDashboardRef = useRef(null)
+  useEffect(() => { fetchDashboardRef.current = fetchDashboard })
+  useEffect(() => {
+    const channel = supabase
+      .channel(`dash-realtime-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${user.id}` },
+        () => { fetchDashboardRef.current?.() })
+      .subscribe()
+    // Refetch saat tab aktif kembali (user berpindah tab lalu kembali)
+    const onFocus = () => fetchDashboardRef.current?.()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      supabase.removeChannel(channel)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [user.id])
 
   useEffect(() => {
     const isCurrent = month === getCurrentMonth()
@@ -229,7 +247,10 @@ export default function Dashboard() {
           .filter(cb => (cb.categories?.category_type === 'savings' || cb.categories?.name === 'Tabungan Bulanan') && Number(cb.budget_limit) > 0)
           .sort((a, b) => a.month.localeCompare(b.month)),
         totalTabungan: (user.tabungan_awal || 0)
-          + (allLogsRes.data || []).filter(cb => cb.categories?.category_type === 'savings').reduce((s, cb) => s + Number(cb.budget_limit), 0)
+          + (allLogsRes.data || []).filter(cb =>
+              isSavings(cb.categories) ||
+              ['Tabungan Bulanan', 'Dana Darurat'].includes(cb.categories?.name)
+            ).reduce((s, cb) => s + Number(cb.budget_limit), 0)
           + (savingsLedgerRes.data || []).reduce((s, l) => s + Number(l.amount), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
         nextMonthPlans: plansRes.data || [],

@@ -1,4 +1,4 @@
-const CACHE = 'cashvell-v4';
+const CACHE = 'cashvell-v5';
 const BASE = '/carvellfinance/';
 
 // Pre-cache shell resources on install

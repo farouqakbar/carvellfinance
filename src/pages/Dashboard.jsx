@@ -251,7 +251,8 @@ export default function Dashboard() {
               isSavings(cb.categories) ||
               ['Tabungan Bulanan', 'Dana Darurat'].includes(cb.categories?.name)
             ).reduce((s, cb) => s + Number(cb.budget_limit), 0)
-          + (savingsLedgerRes.data || []).reduce((s, l) => s + Number(l.amount), 0),
+          + (savingsLedgerRes.data || []).reduce((s, l) => s + Number(l.amount), 0)
+          - (hutangTabunganAllRes.data || []).filter(h => h.jenis === 'hutang').reduce((s, h) => s + Number(h.amount), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
         nextMonthPlans: plansRes.data || [],
         gajiTx: gajiTxs[0] || null,
@@ -393,8 +394,9 @@ export default function Dashboard() {
   }, [loading, data.planEvents, data.allWishlist])
 
   const totalSaldo = data.cumulativeBalance - data.cumulativeMandatoryBudget
+  // Hanya saldo-sourced hutang yang punya income tx, sehingga boleh di-deduct dari saldo
   const hutangAktifTotal = (data.hutangList || [])
-    .filter(h => h.jenis === 'hutang')
+    .filter(h => h.jenis === 'hutang' && h.sumber === 'saldo')
     .reduce((s, h) => s + Number(h.amount), 0)
   // Sisa belanja bulan ini
   const freeBalance = data.salary - data.totalExpense - monthlyTabungan
@@ -1381,7 +1383,7 @@ export default function Dashboard() {
                   <button className="btn btn-ghost" onClick={() => setShowHutangDetailModal(false)}><IconX size={16} /></button>
                 </div>
                 <div className="wajib-rows">
-                  {(data.hutangList || []).filter(h => h.jenis === 'hutang').map(h => (
+                  {(data.hutangList || []).filter(h => h.jenis === 'hutang' && h.sumber === 'saldo').map(h => (
                     <div key={h.id} className="wajib-row">
                       <div className="wajib-left">
                         <span className="brow-icon" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>

@@ -28,7 +28,7 @@ export default function Plans() {
   const toast = useToast()
 
   // ── Tab ──────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('wishlist')
+  const [activeTab, setActiveTab] = useState('plan')
 
   // ── Wishlist state ───────────────────────────────────────────────
   const [plans, setPlans] = useState([])
@@ -50,7 +50,7 @@ export default function Plans() {
   // ── Plan events state ────────────────────────────────────────────
   const [planEvents, setPlanEvents] = useState([])
   const [showPlanForm, setShowPlanForm] = useState(false)
-  const [planForm, setPlanForm] = useState({ title: '', type: 'expense', amount: '', date: TODAY, notes: '' })
+  const [planForm, setPlanForm] = useState({ title: '', type: 'expense', amount: '', date: TODAY, notes: '', category_id: '' })
   const [savingPlan, setSavingPlan] = useState(false)
   const [deletingPlanId, setDeletingPlanId] = useState(null)
 
@@ -63,7 +63,7 @@ export default function Plans() {
         .order('target_month', { ascending: true })
         .order('created_at', { ascending: true }),
       supabase.from('savings').select('*').eq('user_id', user.id).order('name'),
-      supabase.from('categories').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('categories').select('*').eq('user_id', user.id).is('month', null).order('name'),
       supabase.from('plan_events').select('*').eq('user_id', user.id).order('date', { ascending: true }),
     ])
     setPlans(plansRes.data || [])
@@ -140,6 +140,10 @@ export default function Plans() {
       const { error } = await supabase.from('savings').update({ current_amount: newAmount }).eq('id', doneSavingsId)
       if (error) { toast('Gagal update tabungan', 'error'); setConfirming(false); return }
       setSavings(ss => ss.map(s => s.id === doneSavingsId ? { ...s, current_amount: newAmount } : s))
+      await supabase.from('savings_ledger').insert({
+        user_id: user.id, savings_id: doneSavingsId,
+        amount: -Number(plan.amount), month: doneDate.substring(0, 7), date: doneDate,
+      })
     } else {
       const { error } = await supabase.from('transactions').insert({
         user_id: user.id,
@@ -181,10 +185,11 @@ export default function Plans() {
       amount: parseFloat(planForm.amount),
       date: planForm.date,
       notes: planForm.notes.trim(),
+      category_id: planForm.category_id || null,
     })
     if (!error) {
       toast('Plan event ditambahkan', 'success')
-      setPlanForm({ title: '', type: 'expense', amount: '', date: TODAY, notes: '' })
+      setPlanForm({ title: '', type: 'expense', amount: '', date: TODAY, notes: '', category_id: '' })
       setShowPlanForm(false)
       fetchPlanEvents()
     } else {
@@ -379,6 +384,8 @@ export default function Plans() {
           </div>
         )}
 
+
+
         {/* ══════════════════════════════════════
             WISHLIST TAB
         ══════════════════════════════════════ */}
@@ -515,7 +522,7 @@ export default function Plans() {
                 <div className="pln-src-toggle">
                   <button type="button"
                     className={`pln-src-btn${planForm.type === 'income' ? ' active' : ''}`}
-                    onClick={() => setPlanForm(f => ({ ...f, type: 'income' }))}
+                    onClick={() => setPlanForm(f => ({ ...f, type: 'income', category_id: '' }))}
                   >
                     <span className="pln-src-icon" style={{ color: 'var(--success)' }}><IconArrowUp size={15} /></span>
                     <span className="pln-src-label">Pemasukan</span>
@@ -523,13 +530,29 @@ export default function Plans() {
                   </button>
                   <button type="button"
                     className={`pln-src-btn${planForm.type === 'expense' ? ' active' : ''}`}
-                    onClick={() => setPlanForm(f => ({ ...f, type: 'expense' }))}
+                    onClick={() => setPlanForm(f => ({ ...f, type: 'expense', category_id: '' }))}
                   >
                     <span className="pln-src-icon" style={{ color: 'var(--danger)' }}><IconArrowDown size={15} /></span>
                     <span className="pln-src-label">Pengeluaran</span>
                     <span className="pln-src-sub">Tagihan, cicilan, belanja</span>
                   </button>
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Kategori{' '}
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(opsional)</span>
+                </label>
+                <select
+                  className="form-select"
+                  value={planForm.category_id}
+                  onChange={e => setPlanForm(f => ({ ...f, category_id: e.target.value }))}
+                >
+                  <option value="">— Tanpa kategori —</option>
+                  {categories.filter((c, i, arr) => arr.findIndex(x => x.name === c.name) === i)
+                    .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               </div>
 
               <div className="form-group">

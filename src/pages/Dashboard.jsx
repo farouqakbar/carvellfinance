@@ -153,7 +153,7 @@ export default function Dashboard() {
       let allLogsQuery = supabase.from('category_budgets').select('budget_limit, category_id, month, categories(is_mandatory, name, category_type)').eq('user_id', user.id).lte('month', month)
       if (recordStart) allLogsQuery = allLogsQuery.gte('month', recordStart)
 
-      const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes, hutangRes, hutangTabunganRes, planEventsRes, allWishlistRes] = await Promise.all([
+      const [txRes, catRes, savingsRes, logsRes, todayRes, catBudgetsRes, allLogsRes, plansRes, histRes, hutangRes, hutangTabunganRes, planEventsRes, allWishlistRes, hutangTabunganAllRes, savingsLedgerRes] = await Promise.all([
         supabase.from('transactions').select('*, categories(name, color, icon)').eq('user_id', user.id).gte('date', startDate).lte('date', endDate).order('date', { ascending: false }),
         Promise.all([
           supabase.from('categories').select('*').eq('user_id', user.id).is('month', null),
@@ -173,10 +173,12 @@ export default function Dashboard() {
         allLogsQuery,
         supabase.from('plans').select('*').eq('user_id', user.id).eq('target_month', nmStr).eq('done', false).order('created_at', { ascending: true }),
         histQuery,
-        supabase.from('hutang').select('id, nama, amount, due_date, sumber, jenis, lunas').eq('user_id', user.id).eq('month', month).eq('lunas', false).order('due_date', { ascending: true, nullsFirst: false }),
-        supabase.from('hutang').select('id, nama, amount, jenis, lunas, created_at').eq('user_id', user.id).eq('month', month).eq('sumber', 'tabungan').order('created_at', { ascending: false }),
+        supabase.from('hutang').select('id, nama, amount, due_date, sumber, jenis, lunas').eq('user_id', user.id).lte('month', month).eq('lunas', false).order('due_date', { ascending: true, nullsFirst: false }),
+        supabase.from('hutang').select('id, nama, amount, jenis, lunas, created_at').eq('user_id', user.id).lte('month', month).eq('sumber', 'tabungan').eq('lunas', false).order('created_at', { ascending: false }),
         supabase.from('plan_events').select('*').eq('user_id', user.id).order('date', { ascending: true }),
         supabase.from('plans').select('*').eq('user_id', user.id).eq('done', false).order('target_month', { ascending: true }),
+        supabase.from('hutang').select('amount, jenis, savings_id').eq('user_id', user.id).eq('sumber', 'tabungan').eq('lunas', false),
+        supabase.from('savings_ledger').select('amount').eq('user_id', user.id).lte('month', month),
       ])
       const txs = txRes.data || []
       const catBudgetMap = {}
@@ -226,11 +228,9 @@ export default function Dashboard() {
         tabunganPerMonth: (allLogsRes.data || [])
           .filter(cb => (cb.categories?.category_type === 'savings' || cb.categories?.name === 'Tabungan Bulanan') && Number(cb.budget_limit) > 0)
           .sort((a, b) => a.month.localeCompare(b.month)),
-        totalTabungan: (allLogsRes.data || [])
-          .filter(cb => cb.categories?.category_type === 'savings' || cb.categories?.name === 'Tabungan Bulanan')
-          .reduce((s, cb) => s + Number(cb.budget_limit), 0)
-          + (user.tabungan_awal || 0)
-          - (hutangTabunganRes.data || []).filter(h => !h.lunas).reduce((s, h) => s + Number(h.amount), 0),
+        totalTabungan: (user.tabungan_awal || 0)
+          + (allLogsRes.data || []).filter(cb => cb.categories?.category_type === 'savings').reduce((s, cb) => s + Number(cb.budget_limit), 0)
+          + (savingsLedgerRes.data || []).reduce((s, l) => s + Number(l.amount), 0),
         categorySpend: Object.values(catSpendMap).sort((a, b) => b.amount - a.amount),
         nextMonthPlans: plansRes.data || [],
         gajiTx: gajiTxs[0] || null,
@@ -557,10 +557,10 @@ export default function Dashboard() {
                 </>
               )
             })()}
-            {hutangAktifTotal > 0 && isCurrentMonth && !simMode && (
+            {hutangAktifTotal > 0 && !simMode && (
               <button className="db-hutang-chip" onClick={() => setShowHutangDetailModal(true)}>
-                <span className="db-hutang-chip-label">+ hutang</span>
-                <span className="db-hutang-chip-amount">{formatCurrency(totalSaldo)}</span>
+                <span className="db-hutang-chip-label">hutang</span>
+                <span className="db-hutang-chip-amount">{formatCurrency(hutangAktifTotal)}</span>
                 <span className="db-hutang-chip-arrow">›</span>
               </button>
             )}
@@ -592,25 +592,15 @@ export default function Dashboard() {
             <span className="db-stat-sub">{data.salary > 0 ? 'bulan ini' : 'belum dicatat'}</span>
           </button>
 
-          {/* Card 2: Tabungan — auto-scroll hanya savings yang ada budget */}
+          {/* Card 2: Tabungan — total kumulatif semua bulan */}
           <button className="db-stat db-stat-btn" onClick={() => setShowTabunganModal(true)}>
             <span className="db-stat-label">TABUNGAN</span>
-            {activeTabunganCats.length > 0 ? (
+            {data.totalTabungan > 0 ? (
               <>
                 <span className="db-stat-val tabular" style={{ color: '#818cf8' }}>
-                  {formatCurrency(activeTabunganCats[safeTabunganIdx]?.budget_limit || 0)}
+                  {formatCurrency(data.totalTabungan)}
                 </span>
-                <span className="db-stat-sub" style={{ color: activeTabunganCats[safeTabunganIdx]?.color }}>
-                  {activeTabunganCats[safeTabunganIdx]?.name || '—'}
-                </span>
-                {activeTabunganCats.length > 1 && (
-                  <div className="db-sub-dots">
-                    {activeTabunganCats.map((_, i) => (
-                      <span key={i} className={`db-sub-dot${safeTabunganIdx === i ? ' active' : ''}`}
-                        onClick={e => { e.stopPropagation(); setTabunganSubIdx(i) }} />
-                    ))}
-                  </div>
-                )}
+                <span className="db-stat-sub">total tabungan</span>
               </>
             ) : (
               <>
@@ -1474,15 +1464,24 @@ export default function Dashboard() {
                     onClick={async () => {
                       setPayingLoading(true)
                       try {
+                        const today = getToday()
                         if (paySource === 'tabungan') {
                           const sav = (data.savings || []).find(s => s.id === payingSavingsId)
-                          await supabase.from('savings').update({ current_amount: Number(sav.current_amount) - Number(payingHutang.amount) }).eq('id', payingSavingsId)
+                          const newAmt = Math.max(0, Number(sav.current_amount) - Number(payingHutang.amount))
+                          const { error: savErr } = await supabase.from('savings').update({ current_amount: newAmt }).eq('id', payingSavingsId)
+                          if (savErr) { toast(savErr.message, 'error'); return }
+                          await supabase.from('savings_ledger').insert({ user_id: user.id, savings_id: payingSavingsId, amount: -Number(payingHutang.amount), month: today.substring(0, 7), date: today })
+                        } else if (paySource === 'saldo') {
+                          const { error: txErr } = await supabase.from('transactions').insert({ user_id: user.id, type: 'expense', amount: Number(payingHutang.amount), description: `Bayar hutang - ${payingHutang.nama}`, date: today, category_id: null })
+                          if (txErr) { toast(txErr.message, 'error'); return }
                         }
-                        await supabase.from('hutang').update({ lunas: true }).eq('id', payingHutang.id)
+                        const { error: lunaErr } = await supabase.from('hutang').update({ lunas: true }).eq('id', payingHutang.id)
+                        if (lunaErr) { toast(lunaErr.message, 'error'); return }
+                        toast('Hutang lunas ✓', 'success')
                         await fetchDashboard()
                         setShowHutangDetailModal(false)
                         setPayingHutang(null); setPaySource(null); setPayingSavingsId(null)
-                      } finally { setPayingLoading(false) }
+                      } catch (e) { toast(e.message, 'error') } finally { setPayingLoading(false) }
                     }}>
                     {payingLoading ? 'Menyimpan...' : 'Konfirmasi Lunas'}
                   </button>

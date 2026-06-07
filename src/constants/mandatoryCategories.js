@@ -22,6 +22,4 @@ export const isTambahan = (cat) =>
 // Categories that cannot be deleted
 export const PROTECTED_NAMES = ['Gaji', 'Pemasukan Bulanan', 'Tabungan Bulanan', 'Dana Darurat']
 export const isProtected = (cat) =>
-  PROTECTED_NAMES.includes(cat.name) ||
-  cat.category_type === 'income' ||
-  cat.category_type === 'savings'
+  PROTECTED_NAMES.includes(cat.name)

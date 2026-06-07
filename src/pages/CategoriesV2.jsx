@@ -36,6 +36,11 @@ export default function CategoriesV2() {
   const [showForm, setShowForm] = useState(false)
   const [editData, setEditData] = useState(null)
   const [budgetEdit, setBudgetEdit] = useState(null)
+  const [savingsExpense, setSavingsExpense] = useState({ amount: '', date: getToday(), kantongId: '' })
+  const [savingExpense, setSavingExpense] = useState(false)
+  const [savingsWithdrawCat, setSavingsWithdrawCat] = useState(null)
+  const [savingsCumulative, setSavingsCumulative] = useState({}) // category_id → cumulative budget
+  const [hutangTabunganTotal, setHutangTabunganTotal] = useState(0)
   const [confirmDel, setConfirmDel] = useState(null)
   const [searchParams] = useSearchParams()
   const [month, setMonth] = useState(() => searchParams.get('month') || getCurrentMonth())
@@ -95,11 +100,14 @@ export default function CategoriesV2() {
     ].sort((a, b) => a.name.localeCompare(b.name))
     const seen = new Set()
     const rawCats = merged.filter(c => { if (seen.has(c.name)) return false; seen.add(c.name); return true })
-    const [txRes, incomeTxRes, catBudgetsRes, savingsRes] = await Promise.all([
+    const [txRes, incomeTxRes, catBudgetsRes, savingsRes, allSavingsBudgetsRes, hutangTabunganRes, ledgerRes] = await Promise.all([
       supabase.from('transactions').select('category_id, amount').eq('user_id', user.id).eq('type', 'expense').gte('date', startDate).lte('date', endDate),
       supabase.from('transactions').select('id, category_id, amount, description, date').eq('user_id', user.id).eq('type', 'income').gte('date', startDate).lte('date', endDate),
       supabase.from('category_budgets').select('category_id, budget_limit').eq('user_id', user.id).eq('month', month),
       supabase.from('savings').select('id, name, current_amount').eq('user_id', user.id).order('name'),
+      supabase.from('category_budgets').select('category_id, budget_limit, categories(category_type, name)').eq('user_id', user.id).lte('month', month),
+      supabase.from('hutang').select('amount').eq('user_id', user.id).eq('sumber', 'tabungan').eq('lunas', false),
+      supabase.from('savings_ledger').select('savings_id, amount').eq('user_id', user.id).lte('month', month),
     ])
     const catBudgetMap = {}
     ;(catBudgetsRes.data || []).forEach(cb => { catBudgetMap[cb.category_id] = Number(cb.budget_limit) })
@@ -113,7 +121,21 @@ export default function CategoriesV2() {
     setSalary(gajiTxList.reduce((s, t) => s + Number(t.amount), 0))
     setGajiCatId(gajiCat?.id || null)
     setGajiTx(gajiTxList[0] || null)
-    setSavings(savingsRes.data || [])
+    // future ledger changes per kantong — untuk isolasi bulan (current_amount - future = balance at month)
+    const ledgerByKantong = {}
+    ;(ledgerRes.data || []).forEach(l => { ledgerByKantong[l.savings_id] = (ledgerByKantong[l.savings_id] || 0) + Number(l.amount) })
+    const savingsWithLedger = (savingsRes.data || []).map(sv => ({
+      ...sv,
+      ledger_amount: ledgerByKantong[sv.id] ?? null,
+    }))
+    setSavings(savingsWithLedger)
+    const cumul = {}
+    ;(allSavingsBudgetsRes.data || [])
+      .filter(cb => cb.categories?.category_type === 'savings' || cb.categories?.name === 'Tabungan Bulanan')
+      .forEach(cb => { cumul[cb.category_id] = (cumul[cb.category_id] || 0) + Number(cb.budget_limit) })
+    setSavingsCumulative(cumul)
+    const hutangTotal = (hutangTabunganRes.data || []).reduce((s, h) => s + Number(h.amount), 0)
+    setHutangTabunganTotal(hutangTotal)
     setLoading(false)
   }
 
@@ -169,6 +191,47 @@ export default function CategoriesV2() {
     const pct = salary > 0 && cat.budget_limit > 0 ? ((cat.budget_limit / salary) * 100).toFixed(1) : ''
     setBudgetEdit({ id: cat.id, nominal, pct })
   }
+
+  const openSavingsWithdraw = (cat) => {
+    const matched = savings.find(s => s.name.toLowerCase() === cat.name.toLowerCase())
+    setSavingsExpense({ amount: '', date: getToday(), kantongId: matched?.id || (savings[0]?.id || '') })
+    setSavingsWithdrawCat(cat)
+  }
+
+  const ledgerInsert = async (savings_id, amount, date) => {
+    const m = date.substring(0, 7)
+    await supabase.from('savings_ledger').insert({ user_id: user.id, savings_id, amount, month: m, date })
+  }
+
+  const recordSavingsExpense = async () => {
+    if (!savingsWithdrawCat) return
+    if (!savingsExpense.amount || parseFloat(savingsExpense.amount) <= 0) {
+      toast('Masukkan jumlah pengeluaran', 'error')
+      return
+    }
+    setSavingExpense(true)
+    let kantongId = savingsExpense.kantongId || savings[0]?.id
+    let sv = savings.find(s => s.id === kantongId) || savings[0]
+    if (!sv) {
+      const initBalance = savingsCumulative[savingsWithdrawCat.id] || 0
+      const { data: newK, error: kErr } = await supabase
+        .from('savings')
+        .insert({ user_id: user.id, name: savingsWithdrawCat.name, current_amount: initBalance, target_amount: 0 })
+        .select('id, name, current_amount').single()
+      if (kErr) { toast('Gagal buat kantong: ' + kErr.message, 'error'); setSavingExpense(false); return }
+      sv = newK
+    }
+    const amt = parseFloat(savingsExpense.amount)
+    const newAmount = Math.max(0, Number(sv.current_amount) - amt)
+    const { error } = await supabase.from('savings').update({ current_amount: newAmount }).eq('id', sv.id)
+    if (error) { toast(error.message, 'error'); setSavingExpense(false); return }
+    await ledgerInsert(sv.id, -amt, savingsExpense.date || getToday())
+    toast('Pengeluaran tabungan dicatat ✓', 'success')
+    setSavingsExpense(f => ({ amount: '', date: getToday(), kantongId: f.kantongId }))
+    setSavingExpense(false)
+    setSavingsWithdrawCat(null)
+    fetchAll()
+  }
   const handleNominalChange = (raw) => {
     const nom = parseFloat(raw) || 0
     setBudgetEdit(b => ({ ...b, nominal: raw, pct: salary > 0 && nom > 0 ? ((nom / salary) * 100).toFixed(1) : '' }))
@@ -212,9 +275,11 @@ export default function CategoriesV2() {
     } else if (sumber === 'tabungan' && savings_id) {
       const { data: sav, error: savErr } = await supabase.from('savings').select('current_amount').eq('id', savings_id).single()
       if (savErr) throw savErr
-      const next = isIncoming ? Number(sav.current_amount) + amount : Math.max(0, Number(sav.current_amount) - amount)
+      const delta = isIncoming ? amount : -amount
+      const next = Math.max(0, Number(sav.current_amount) + delta)
       const { error } = await supabase.from('savings').update({ current_amount: next }).eq('id', savings_id)
       if (error) throw error
+      await ledgerInsert(savings_id, delta, today)
     }
     return linked_tx_id
   }
@@ -239,9 +304,11 @@ export default function CategoriesV2() {
       const { data: sav, error: savErr } = await supabase.from('savings').select('current_amount').eq('id', savings_id).single()
       if (savErr) throw savErr
       if (sav) {
-        const next = wasIncoming ? Math.max(0, Number(sav.current_amount) - amount) : Number(sav.current_amount) + amount
+        const delta = wasIncoming ? -amount : amount
+        const next = Math.max(0, Number(sav.current_amount) + delta)
         const { error } = await supabase.from('savings').update({ current_amount: next }).eq('id', savings_id)
         if (error) throw error
+        await ledgerInsert(savings_id, delta, today)
       }
     }
   }
@@ -251,7 +318,17 @@ export default function CategoriesV2() {
     if (!hutangForm.nama.trim() || !amount) return
     setHutangSaving(true)
     try {
-      const savings_id = hutangForm.sumber === 'tabungan' ? (savings[0]?.id || null) : null
+      let savings_id = hutangForm.sumber === 'tabungan' ? (savings[0]?.id || null) : null
+      if (hutangForm.sumber === 'tabungan' && !savings_id) {
+        const initBalance = hutangForm.jenis === 'hutang' ? 0 : (user.tabungan_awal || 0)
+        const { data: newK } = await supabase
+          .from('savings').insert({ user_id: user.id, name: 'Tabungan', current_amount: initBalance, target_amount: 0 })
+          .select('id').single()
+        if (newK) {
+          savings_id = newK.id
+          await fetchAll()
+        }
+      }
       const linked_tx_id = await applyFinancial(hutangForm.jenis, hutangForm.sumber, savings_id, amount, hutangForm.nama.trim())
       const { error } = await supabase.from('hutang').insert({
         user_id: user.id, jenis: hutangForm.jenis, nama: hutangForm.nama.trim(),
@@ -433,9 +510,11 @@ export default function CategoriesV2() {
             <button className="cv2-icon-btn" onClick={() => { setEditData(cat); setShowForm(true) }} title="Edit">
               <IconEdit size={11} />
             </button>
-            <button className="cv2-icon-btn cv2-icon-danger" onClick={() => setConfirmDel({ id: cat.id, name: cat.name })} title="Hapus">
-              <IconTrash size={11} />
-            </button>
+            {!isProtected(cat) && (
+              <button className="cv2-icon-btn cv2-icon-danger" onClick={() => setConfirmDel({ id: cat.id, name: cat.name })} title="Hapus">
+                <IconTrash size={11} />
+              </button>
+            )}
           </div>
 
           {budget > 0 && (
@@ -468,6 +547,8 @@ export default function CategoriesV2() {
     const salaryPct = salary > 0 && budget > 0 ? Math.round((budget / salary) * 100) : null
     const isPlanned = !!cat.is_planned
     const isSav = type === 'savings'
+    const kantong = isSav ? savings.find(s => s.name.toLowerCase() === cat.name.toLowerCase()) : null
+    const cumulative = isSav ? (savingsCumulative[cat.id] || 0) + (kantong?.ledger_amount || 0) : 0
     const accentColor = isSav ? (cat.color || '#6366f1') : (cat.color || '#f87171')
     const tagBg = isSav ? 'rgba(99,102,241,0.1)' : 'rgba(248,113,113,0.1)'
     const tagColor = isSav ? '#818cf8' : '#f87171'
@@ -495,11 +576,25 @@ export default function CategoriesV2() {
         </div>
 
         <div className="cv2-cell-amount">
-          <span className="cv2-amount-main tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
-          <span className="cv2-amount-sub">per bulan</span>
+          {isSav ? (
+            <>
+              <span className="cv2-amount-main tabular" style={{ color: '#818cf8' }}>{cumulative > 0 ? formatCurrency(cumulative) : '—'}</span>
+              <span className="cv2-amount-sub tabular">{budget > 0 ? `+${formatCurrency(budget)}/bln` : 'belum diatur'}</span>
+            </>
+          ) : (
+            <>
+              <span className="cv2-amount-main tabular">{budget > 0 ? formatCurrency(budget) : '—'}</span>
+              <span className="cv2-amount-sub">per bulan</span>
+            </>
+          )}
         </div>
 
         <div className="cv2-cell-actions">
+          {isSav && (
+            <button className="cv2-icon-btn cv2-icon-danger cv2-sav-withdraw-btn" onClick={() => openSavingsWithdraw(cat)} title="Catat pengeluaran tabungan">
+              <IconArrowDown size={11} />
+            </button>
+          )}
           <button className="cv2-icon-btn" onClick={() => openBudgetEdit(cat)} title="Ubah Budget"><IconEdit size={11} /></button>
           {!isProtected(cat) && (
             <button className="cv2-icon-btn cv2-icon-danger" onClick={() => setConfirmDel({ id: cat.id, name: cat.name })} title="Hapus"><IconTrash size={11} /></button>
@@ -976,7 +1071,13 @@ export default function CategoriesV2() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">
-                {editData?.id ? 'Edit Kategori' : editData?.is_mandatory ? 'Pengeluaran Wajib Baru' : editData?.is_monthly ? 'Pengeluaran Rutin Baru' : 'Kategori Baru'}
+                {editData?.id
+                  ? 'Edit Kategori'
+                  : editData?.category_type === 'savings' ? 'Tabungan Baru'
+                  : editData?.category_type === 'wajib' || editData?.is_mandatory ? 'Pengeluaran Wajib Baru'
+                  : editData?.category_type === 'rutin' || editData?.is_monthly ? 'Pengeluaran Rutin Baru'
+                  : editData?.category_type === 'income' ? 'Pemasukan Baru'
+                  : 'Kategori Baru'}
               </h2>
               <button className="btn btn-ghost" onClick={() => setShowForm(false)}><IconX size={16} /></button>
             </div>
@@ -1031,10 +1132,82 @@ export default function CategoriesV2() {
                 <button className="btn btn-secondary" onClick={() => setBudgetEdit(null)}>Batal</button>
                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveBudget}>Simpan</button>
               </div>
+
             </div>
           </div>
         )
       })()}
+
+      {/* Modal: Pengeluaran Tabungan */}
+      {savingsWithdrawCat && (
+        <div className="modal-overlay" onClick={() => !savingExpense && setSavingsWithdrawCat(null)}>
+          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">Pengeluaran — {savingsWithdrawCat.name}</h2>
+              <button className="btn btn-ghost" onClick={() => setSavingsWithdrawCat(null)} disabled={savingExpense}><IconX size={16} /></button>
+            </div>
+            {savings.length === 0 && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+                Kantong tabungan akan dibuat otomatis dari kategori ini.
+              </p>
+            )}
+            {savings.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">Dari kantong</label>
+                <select
+                  className="form-select"
+                  value={savingsExpense.kantongId}
+                  onChange={e => setSavingsExpense(f => ({ ...f, kantongId: e.target.value }))}
+                >
+                  {savings.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} — {formatCurrency(s.current_amount)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Jumlah</label>
+                <CurrencyInput
+                  value={savingsExpense.amount}
+                  onChange={raw => setSavingsExpense(f => ({ ...f, amount: raw }))}
+                />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Tanggal</label>
+                <input
+                  className="form-input"
+                  type="date"
+                  value={savingsExpense.date}
+                  onChange={e => setSavingsExpense(f => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+            </div>
+            {savingsExpense.amount > 0 && savingsExpense.kantongId && (() => {
+              const sv = savings.find(s => s.id === savingsExpense.kantongId)
+              const after = Math.max(0, Number(sv?.current_amount || 0) - parseFloat(savingsExpense.amount))
+              const cukup = Number(sv?.current_amount || 0) >= parseFloat(savingsExpense.amount)
+              return (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-input)', border: `1px solid ${cukup ? 'var(--border)' : 'rgba(248,113,113,0.4)'}`, borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500, marginTop: 12 }}>
+                  <span>Sisa kantong</span>
+                  <span className="tabular" style={{ color: cukup ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>{formatCurrency(after)}</span>
+                </div>
+              )
+            })()}
+            <div className="flex gap-8 mt-16">
+              <button className="btn btn-secondary" onClick={() => setSavingsWithdrawCat(null)} disabled={savingExpense}>Batal</button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={recordSavingsExpense}
+                disabled={savingExpense}
+              >
+                {savingExpense ? 'Menyimpan...' : <><IconArrowDown size={13} /> Catat Pengeluaran</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .cv2-page { padding: 0 0 56px; }
@@ -1253,6 +1426,7 @@ export default function CategoriesV2() {
           transition: opacity 0.15s;
         }
         .cv2-row:hover .cv2-cell-actions { opacity: 1; }
+        .cv2-sav-withdraw-btn { opacity: 1 !important; }
         .cv2-icon-btn {
           width: 26px; height: 26px;
           border-radius: 5px;

@@ -21,6 +21,25 @@ async function hashPassword(password) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Recovery code — alfabet tanpa karakter ambigu (I, O, 0, 1) supaya gampang disalin manual.
+// 32 simbol, 256 % 32 === 0 → tidak ada modulo bias.
+const RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function makeRecoveryCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const c = Array.from(bytes, b => RECOVERY_ALPHABET[b % 32]);
+  return `CV-${c.slice(0, 4).join("")}-${c.slice(4, 8).join("")}-${c.slice(8, 12).join("")}`;
+}
+
+// Toleran terhadap spasi, strip, dan huruf kecil saat user mengetik ulang kodenya.
+function normalizeRecoveryCode(code) {
+  return (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function hashRecoveryCode(code) {
+  return hashPassword("cashvell-recovery:" + normalizeRecoveryCode(code));
+}
+
 async function seedDefaultCategories(userId) {
   // Rename "Pemasukan Bulanan" → "Gaji" in-place (preserves category_id, transactions stay linked)
   await supabase.from("categories")
@@ -57,16 +76,18 @@ async function seedDefaultCategories(userId) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Kode plaintext hanya hidup di memori — ditampilkan sekali lewat RecoveryCodeModal.
+  const [pendingRecoveryCode, setPendingRecoveryCode] = useState(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
         const u = JSON.parse(stored);
-        supabase.from("user_profiles").select("id").eq("id", u.id).maybeSingle()
+        supabase.from("user_profiles").select("id, recovery_code_hash").eq("id", u.id).maybeSingle()
           .then(({ data }) => {
             if (data) {
-              setUser(u);
+              setUser({ ...u, has_recovery_code: !!data.recovery_code_hash });
               seedDefaultCategories(u.id);
             } else {
               localStorage.removeItem(STORAGE_KEY);
@@ -82,7 +103,7 @@ export function AuthProvider({ children }) {
   const signIn = async (username, password) => {
     const { data, error } = await supabase
       .from("user_profiles")
-      .select("id, username, full_name, password_hash, recording_start_month, saldo_awal, tabungan_awal, budget_harian")
+      .select("id, username, full_name, password_hash, recovery_code_hash, recording_start_month, saldo_awal, tabungan_awal, budget_harian")
       .eq("username", username.toLowerCase())
       .single();
 
@@ -99,6 +120,8 @@ export function AuthProvider({ children }) {
       saldo_awal: Number(data.saldo_awal) || 0,
       tabungan_awal: Number(data.tabungan_awal) || 0,
       budget_harian: Number(data.budget_harian) || 0,
+      has_recovery_code: !!data.recovery_code_hash,
+      recovery_ack: !!data.recovery_code_hash, // login di device lain: anggap sudah tersimpan
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     setUser(userData);
@@ -115,9 +138,11 @@ export function AuthProvider({ children }) {
     if (existing) throw new Error("Username sudah digunakan");
 
     const password_hash = await hashPassword(password);
+    const recoveryCode = makeRecoveryCode();
+    const recovery_code_hash = await hashRecoveryCode(recoveryCode);
     const { data, error } = await supabase
       .from("user_profiles")
-      .insert({ username: username.toLowerCase(), password_hash, full_name: username })
+      .insert({ username: username.toLowerCase(), password_hash, recovery_code_hash, full_name: username })
       .select("id, username, full_name, recording_start_month, saldo_awal, tabungan_awal, budget_harian")
       .single();
 
@@ -134,11 +159,101 @@ export function AuthProvider({ children }) {
       saldo_awal: 0,
       tabungan_awal: 0,
       budget_harian: 0,
+      has_recovery_code: true,
+      recovery_ack: false, // jadi true setelah user konfirmasi sudah menyimpan kodenya
       isNewUser: true,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     setUser(userData);
+    setPendingRecoveryCode({ code: recoveryCode, reason: "signup" });
     await seedDefaultCategories(userData.id);
+  };
+
+  // Ganti password dari dalam app — hash lama diambil ulang dari DB, bukan dari localStorage.
+  const changePassword = async (currentPassword, newPassword) => {
+    if (!user) throw new Error("Kamu belum masuk");
+    if (newPassword.length < 6) throw new Error("Password baru minimal 6 karakter");
+
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("password_hash")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error || !data) throw new Error("Gagal memuat akun");
+
+    const currentHash = await hashPassword(currentPassword);
+    if (currentHash !== data.password_hash) throw new Error("Password saat ini salah");
+
+    const newHash = await hashPassword(newPassword);
+    if (newHash === currentHash) throw new Error("Password baru harus berbeda dari yang sekarang");
+
+    const { error: updateError } = await supabase
+      .from("user_profiles")
+      .update({ password_hash: newHash })
+      .eq("id", user.id);
+
+    if (updateError) throw new Error("Gagal mengubah password");
+  };
+
+  // Buat / buat-ulang recovery code. Kode lama langsung tidak berlaku.
+  const regenerateRecoveryCode = async (currentPassword) => {
+    if (!user) throw new Error("Kamu belum masuk");
+
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("password_hash")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error || !data) throw new Error("Gagal memuat akun");
+
+    const currentHash = await hashPassword(currentPassword);
+    if (currentHash !== data.password_hash) throw new Error("Password salah");
+
+    const code = makeRecoveryCode();
+    const { error: updateError } = await supabase
+      .from("user_profiles")
+      .update({ recovery_code_hash: await hashRecoveryCode(code) })
+      .eq("id", user.id);
+
+    if (updateError) throw new Error("Gagal membuat recovery code");
+
+    const updatedUser = { ...user, has_recovery_code: true, recovery_ack: false };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedUser));
+    setUser(updatedUser);
+    setPendingRecoveryCode({ code, reason: "regenerate" });
+    return code;
+  };
+
+  // Lupa password: username + recovery code → password baru.
+  // Kode sekali pakai — selalu diganti kode baru yang dikembalikan ke pemanggil.
+  const resetPasswordWithCode = async (username, code, newPassword) => {
+    if (newPassword.length < 6) throw new Error("Password baru minimal 6 karakter");
+
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("id, recovery_code_hash")
+      .eq("username", (username || "").toLowerCase().trim())
+      .maybeSingle();
+
+    const inputHash = await hashRecoveryCode(code);
+    if (error || !data || !data.recovery_code_hash || inputHash !== data.recovery_code_hash) {
+      throw new Error("Username atau recovery code tidak cocok");
+    }
+
+    const nextCode = makeRecoveryCode();
+    const { error: updateError } = await supabase
+      .from("user_profiles")
+      .update({
+        password_hash: await hashPassword(newPassword),
+        recovery_code_hash: await hashRecoveryCode(nextCode),
+      })
+      .eq("id", data.id);
+
+    if (updateError) throw new Error("Gagal mengatur ulang password");
+
+    return nextCode;
   };
 
   const updateProfile = async (updates) => {
@@ -164,10 +279,24 @@ export function AuthProvider({ children }) {
   const signOut = () => {
     localStorage.removeItem(STORAGE_KEY);
     setUser(null);
+    setPendingRecoveryCode(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateProfile }}>
+    <AuthContext.Provider value={{
+      user, loading, signIn, signUp, signOut, updateProfile,
+      changePassword, regenerateRecoveryCode, resetPasswordWithCode,
+      pendingRecoveryCode,
+      dismissRecoveryCode: () => {
+        setPendingRecoveryCode(null);
+        setUser(prev => {
+          if (!prev || prev.recovery_ack) return prev;
+          const next = { ...prev, recovery_ack: true };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          return next;
+        });
+      },
+    }}>
       {children}
     </AuthContext.Provider>
   );

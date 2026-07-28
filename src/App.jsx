@@ -23,6 +23,7 @@ import { PageHeaderProvider, usePageHeader } from './context/PageHeaderContext'
 import Navbar from './components/Navbar'
 import OnboardingModal from './components/OnboardingModal'
 import ProfileModal from './components/ProfileModal'
+import RecoveryCodeModal from './components/RecoveryCodeModal'
 import DevOverlay from './components/DevOverlay'
 import Aurora from './components/ui/Aurora'
 import './index.css'
@@ -51,7 +52,7 @@ function PageLoader() {
 }
 
 function AppRoutes() {
-  const { user } = useAuth()
+  const { user, pendingRecoveryCode, dismissRecoveryCode } = useAuth()
   const { header } = usePageHeader()
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('theme') !== 'light'
@@ -99,11 +100,20 @@ function AppRoutes() {
                   </main>
                 </div>
               </div>
-              {showOnboarding && (
+              {/* Recovery code harus dicatat dulu sebelum onboarding jalan */}
+              {showOnboarding && !pendingRecoveryCode && (
                 <OnboardingModal onClose={() => setShowOnboarding(false)} />
               )}
               {showProfile && (
                 <ProfileModal onClose={() => setShowProfile(false)} />
+              )}
+              {pendingRecoveryCode && (
+                <RecoveryCodeModal
+                  code={pendingRecoveryCode.code}
+                  reason={pendingRecoveryCode.reason}
+                  username={user?.username}
+                  onClose={dismissRecoveryCode}
+                />
               )}
             </ProtectedRoute>
           } />

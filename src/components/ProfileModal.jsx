@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../services/supabaseClient'
 import CurrencyInput from './CurrencyInput'
 import { useToast } from './Toast'
-import { IconX, IconAlertTriangle } from './Icons'
+import { IconX, IconAlertTriangle, IconLock, IconKey } from './Icons'
 
 function getPastMonthOptions() {
   const opts = []
@@ -20,7 +20,7 @@ function getPastMonthOptions() {
 const MONTH_OPTS = getPastMonthOptions()
 
 export default function ProfileModal({ onClose }) {
-  const { user, updateProfile } = useAuth()
+  const { user, updateProfile, changePassword, regenerateRecoveryCode } = useAuth()
   const toast = useToast()
 
   const [fullName, setFullName] = useState(user?.full_name || '')
@@ -31,6 +31,51 @@ export default function ProfileModal({ onClose }) {
   const [saving, setSaving] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetting, setResetting] = useState(false)
+
+  const [showPwForm, setShowPwForm] = useState(false)
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+
+  const [showRcForm, setShowRcForm] = useState(false)
+  const [rcPassword, setRcPassword] = useState('')
+  const [rcSaving, setRcSaving] = useState(false)
+
+  const hasRecoveryCode = !!user?.has_recovery_code
+  // Belum punya kode, ATAU punya tapi belum sempat dicatat (mis. refresh saat modal muncul)
+  const needsRecoveryCode = !hasRecoveryCode || !user?.recovery_ack
+
+  const handleChangePassword = async () => {
+    if (pwForm.next.length < 6) return toast('Password baru minimal 6 karakter', 'error')
+    if (pwForm.next !== pwForm.confirm) return toast('Konfirmasi password tidak cocok', 'error')
+
+    setPwSaving(true)
+    try {
+      await changePassword(pwForm.current, pwForm.next)
+      toast('Password berhasil diganti', 'success')
+      setPwForm({ current: '', next: '', confirm: '' })
+      setShowPwForm(false)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setPwSaving(false)
+    }
+  }
+
+  const handleRegenerateCode = async () => {
+    if (!rcPassword) return toast('Masukkan password kamu', 'error')
+
+    setRcSaving(true)
+    try {
+      // Kode barunya ditampilkan lewat RecoveryCodeModal di App
+      await regenerateRecoveryCode(rcPassword)
+      setRcPassword('')
+      setShowRcForm(false)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setRcSaving(false)
+    }
+  }
 
   const handleReset = async () => {
     setResetting(true)
@@ -147,6 +192,130 @@ export default function ProfileModal({ onClose }) {
             </button>
           </div>
 
+          {/* ── Keamanan ── */}
+          <div className="pf-sec">
+            <div className="pf-sec-label">KEAMANAN</div>
+
+            {/* Ganti password */}
+            {!showPwForm ? (
+              <button className="pf-sec-btn" onClick={() => setShowPwForm(true)} disabled={saving}>
+                <IconLock size={14} />
+                <span>Ganti password</span>
+              </button>
+            ) : (
+              <div className="pf-sec-panel">
+                <div className="pf-group">
+                  <label className="pf-label">Password saat ini</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={pwForm.current}
+                    onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div className="pf-group">
+                  <label className="pf-label">Password baru</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    placeholder="Minimal 6 karakter"
+                    value={pwForm.next}
+                    onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))}
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="pf-group">
+                  <label className="pf-label">Konfirmasi password baru</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    placeholder="Ulangi password baru"
+                    value={pwForm.confirm}
+                    onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={pwSaving}
+                    onClick={() => {
+                      setShowPwForm(false)
+                      setPwForm({ current: '', next: '', confirm: '' })
+                    }}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    onClick={handleChangePassword}
+                    disabled={pwSaving}
+                  >
+                    {pwSaving ? 'Menyimpan...' : 'Simpan Password'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Recovery code */}
+            {needsRecoveryCode && (
+              <div className="pf-sec-alert">
+                <IconAlertTriangle size={14} />
+                <span>
+                  {hasRecoveryCode
+                    ? <>Kamu belum sempat menyimpan <strong>recovery code</strong>. Buat ulang biar kodenya bisa dicatat.</>
+                    : <>Akun kamu belum punya <strong>recovery code</strong>. Tanpa ini, password yang lupa tidak bisa dipulihkan.</>}
+                </span>
+              </div>
+            )}
+
+            {!showRcForm ? (
+              <button className="pf-sec-btn" onClick={() => setShowRcForm(true)} disabled={saving}>
+                <IconKey size={14} />
+                <span>{hasRecoveryCode ? 'Buat ulang recovery code' : 'Buat recovery code'}</span>
+              </button>
+            ) : (
+              <div className="pf-sec-panel">
+                <p className="pf-hint" style={{ marginTop: 0 }}>
+                  {hasRecoveryCode
+                    ? 'Kode lama akan langsung tidak berlaku. Kode baru cuma ditampilkan sekali.'
+                    : 'Kode cuma ditampilkan sekali — pastikan kamu langsung menyimpannya.'}
+                </p>
+                <div className="pf-group">
+                  <label className="pf-label">Konfirmasi dengan password kamu</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={rcPassword}
+                    onChange={e => setRcPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={rcSaving}
+                    onClick={() => { setShowRcForm(false); setRcPassword('') }}
+                  >
+                    Batal
+                  </button>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    onClick={handleRegenerateCode}
+                    disabled={rcSaving}
+                  >
+                    {rcSaving ? 'Membuat...' : 'Buat Kode'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* ── Danger zone ── */}
           <div className="pf-danger-zone">
             <div className="pf-danger-label">ZONA BERBAHAYA</div>
@@ -206,6 +375,44 @@ export default function ProfileModal({ onClose }) {
         .pf-group { display: flex; flex-direction: column; gap: 6px; }
         .pf-label { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); }
         .pf-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+
+        .pf-sec {
+          border-top: 1px solid var(--border-glass);
+          padding-top: 16px;
+          display: flex; flex-direction: column; gap: 10px;
+        }
+        .pf-sec-label {
+          font-size: 0.55rem; font-weight: 700; letter-spacing: 0.12em;
+          color: var(--text-muted); text-transform: uppercase;
+        }
+        .pf-sec-btn {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 7px 14px; border-radius: 7px;
+          font-size: 0.78rem; font-weight: 600;
+          color: var(--text-primary);
+          background: var(--accent-dim);
+          border: 1px solid rgba(99,102,241,0.25);
+          cursor: pointer; transition: all 0.15s;
+          font-family: var(--font-sans);
+          align-self: flex-start;
+        }
+        .pf-sec-btn:hover { border-color: var(--accent); }
+        .pf-sec-btn svg { color: var(--accent); flex-shrink: 0; }
+        .pf-sec-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .pf-sec-panel {
+          display: flex; flex-direction: column; gap: 12px;
+          background: var(--accent-dim);
+          border: 1px solid rgba(99,102,241,0.2);
+          border-radius: 9px; padding: 12px;
+        }
+        .pf-sec-alert {
+          display: flex; align-items: flex-start; gap: 8px;
+          background: rgba(245,158,11,0.07);
+          border: 1px solid rgba(245,158,11,0.22);
+          border-radius: 9px; padding: 10px 12px;
+          font-size: 0.73rem; line-height: 1.55; color: #f59e0b;
+        }
+        .pf-sec-alert svg { flex-shrink: 0; margin-top: 2px; }
 
         .pf-danger-zone {
           border-top: 1px solid rgba(248,113,113,0.15);

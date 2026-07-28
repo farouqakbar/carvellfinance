@@ -1,16 +1,21 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { copyToClipboard } from '../utils/clipboard'
 import { LogoWordmark, LogoMark } from '../components/Logo'
-import { IconGrid, IconTag, IconPiggyBank, IconBarChart } from '../components/Icons'
+import { IconGrid, IconTag, IconPiggyBank, IconBarChart, IconKey, IconCopy, IconCheck, IconAlertTriangle } from '../components/Icons'
+
+const EMPTY_FORM = { username: '', password: '', confirmPassword: '', recoveryCode: '' }
 
 export default function Login() {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, resetPasswordWithCode } = useAuth()
   const navigate = useNavigate()
   const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ username: '', password: '', confirmPassword: '' })
+  const [form, setForm] = useState(EMPTY_FORM)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetDone, setResetDone] = useState(null) // { username, code }
+  const [copied, setCopied] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -23,14 +28,24 @@ export default function Login() {
       if (form.password !== form.confirmPassword) return setError('Password tidak cocok')
     }
 
+    if (mode === 'forgot') {
+      if (!form.recoveryCode.trim()) return setError('Masukkan recovery code kamu')
+      if (form.password.length < 6) return setError('Password baru minimal 6 karakter')
+      if (form.password !== form.confirmPassword) return setError('Password tidak cocok')
+    }
+
     setLoading(true)
     try {
       if (mode === 'login') {
         await signIn(form.username, form.password)
-      } else {
+        navigate('/dashboard')
+      } else if (mode === 'register') {
         await signUp(form.username, form.password)
+        navigate('/dashboard')
+      } else {
+        const nextCode = await resetPasswordWithCode(form.username, form.recoveryCode, form.password)
+        setResetDone({ username: form.username, code: nextCode })
       }
-      navigate('/dashboard')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -41,7 +56,22 @@ export default function Login() {
   const switchMode = (m) => {
     setMode(m)
     setError('')
-    setForm({ username: '', password: '', confirmPassword: '' })
+    setResetDone(null)
+    setCopied(false)
+    setForm(EMPTY_FORM)
+  }
+
+  const handleCopyCode = async () => {
+    if (await copyToClipboard(resetDone.code)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const TITLES = {
+    login: { title: 'Selamat datang', sub: 'Masuk dengan username dan password kamu' },
+    register: { title: 'Buat akun', sub: 'Pilih username dan password' },
+    forgot: { title: 'Lupa password', sub: 'Masukkan recovery code kamu untuk mengatur password baru' },
   }
 
   return (
@@ -88,15 +118,42 @@ export default function Login() {
             <LogoWordmark dark={false} size="md" id="login-mobile-logo" />
           </div>
 
+          {resetDone ? (
+            <>
+              <div className="login-form-header">
+                <h2 className="login-form-title">Password berhasil diganti</h2>
+                <p className="login-form-sub">
+                  Recovery code lama sudah dipakai dan tidak berlaku. Simpan kode baru di bawah ini.
+                </p>
+              </div>
+
+              <div className="login-code-box">
+                <code className="login-code">{resetDone.code}</code>
+              </div>
+
+              <button type="button" className="btn btn-ghost btn-sm login-copy-btn" onClick={handleCopyCode}>
+                {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                {copied ? 'Tersalin' : 'Salin kode baru'}
+              </button>
+
+              <div className="login-warn">
+                <IconAlertTriangle size={14} />
+                <span>Kode ini cuma ditampilkan sekali. Catat sekarang sebelum lanjut.</span>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary btn-block login-submit-btn"
+                onClick={() => switchMode('login')}
+              >
+                Lanjut ke Masuk
+              </button>
+            </>
+          ) : (
+          <>
           <div className="login-form-header">
-            <h2 className="login-form-title">
-              {mode === 'login' ? 'Selamat datang' : 'Buat akun'}
-            </h2>
-            <p className="login-form-sub">
-              {mode === 'login'
-                ? 'Masuk dengan username dan password kamu'
-                : 'Pilih username dan password'}
-            </p>
+            <h2 className="login-form-title">{TITLES[mode].title}</h2>
+            <p className="login-form-sub">{TITLES[mode].sub}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="login-form">
@@ -120,12 +177,33 @@ export default function Login() {
               )}
             </div>
 
+            {mode === 'forgot' && (
+              <div className="form-group">
+                <label className="form-label">Recovery code</label>
+                <div className="input-prefix-wrap">
+                  <span className="input-prefix-icon"><IconKey size={14} /></span>
+                  <input
+                    className="form-input input-has-prefix login-code-input"
+                    type="text"
+                    placeholder="CV-XXXX-XXXX-XXXX"
+                    value={form.recoveryCode}
+                    onChange={e => setForm(f => ({ ...f, recoveryCode: e.target.value.toUpperCase() }))}
+                    required
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                  />
+                </div>
+                <p className="form-hint">Kode yang kamu simpan waktu daftar. Strip dan spasi boleh diabaikan.</p>
+              </div>
+            )}
+
             <div className="form-group">
-              <label className="form-label">Password</label>
+              <label className="form-label">{mode === 'forgot' ? 'Password baru' : 'Password'}</label>
               <input
                 className="form-input"
                 type="password"
-                placeholder={mode === 'register' ? 'Minimal 6 karakter' : '••••••••'}
+                placeholder={mode === 'login' ? '••••••••' : 'Minimal 6 karakter'}
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 required
@@ -133,7 +211,7 @@ export default function Login() {
               />
             </div>
 
-            {mode === 'register' && (
+            {(mode === 'register' || mode === 'forgot') && (
               <div className="form-group">
                 <label className="form-label">Konfirmasi Password</label>
                 <input
@@ -148,20 +226,34 @@ export default function Login() {
               </div>
             )}
 
+            {mode === 'login' && (
+              <button type="button" className="login-forgot-link" onClick={() => switchMode('forgot')}>
+                Lupa password?
+              </button>
+            )}
+
             {error && <div className="auth-error">{error}</div>}
 
             <button type="submit" className="btn btn-primary btn-block login-submit-btn" disabled={loading}>
-              {loading ? 'Memproses...' : mode === 'login' ? 'Masuk' : 'Buat Akun'}
+              {loading
+                ? 'Memproses...'
+                : mode === 'login' ? 'Masuk'
+                : mode === 'register' ? 'Buat Akun'
+                : 'Reset Password'}
             </button>
           </form>
 
           <p className="login-switch">
             {mode === 'login' ? (
               <>Belum punya akun? <button type="button" onClick={() => switchMode('register')}>Daftar</button></>
-            ) : (
+            ) : mode === 'register' ? (
               <>Sudah punya akun? <button type="button" onClick={() => switchMode('login')}>Masuk</button></>
+            ) : (
+              <>Ingat password kamu? <button type="button" onClick={() => switchMode('login')}>Kembali masuk</button></>
             )}
           </p>
+          </>
+          )}
         </div>
       </div>
 
@@ -281,6 +373,53 @@ export default function Login() {
           pointer-events: none; z-index: 1;
         }
         .input-has-prefix { padding-left: 30px !important; }
+        .input-prefix-icon {
+          position: absolute; left: 11px; top: 50%;
+          transform: translateY(-50%);
+          color: var(--accent); display: flex;
+          pointer-events: none; z-index: 1;
+        }
+        .login-code-input {
+          font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+          letter-spacing: 0.06em;
+        }
+
+        .login-forgot-link {
+          align-self: flex-end;
+          background: none; border: none; padding: 0;
+          margin: -4px 0 14px;
+          color: var(--text-muted); cursor: pointer;
+          font-family: var(--font-sans); font-size: 0.76rem; font-weight: 600;
+          transition: color 0.15s;
+        }
+        .login-forgot-link:hover { color: var(--accent); }
+
+        .login-code-box {
+          background: var(--accent-dim);
+          border: 1px dashed rgba(99,102,241,0.45);
+          border-radius: var(--radius-sm);
+          padding: 16px 12px; text-align: center;
+          margin-bottom: 10px;
+        }
+        .login-code {
+          font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+          font-size: clamp(0.95rem, 4.5vw, 1.3rem);
+          font-weight: 700; letter-spacing: 0.08em;
+          color: var(--text-primary); user-select: all; word-break: break-all;
+        }
+        .login-copy-btn {
+          width: 100%; display: inline-flex; align-items: center;
+          justify-content: center; gap: 6px; margin-bottom: 14px;
+        }
+        .login-warn {
+          display: flex; align-items: flex-start; gap: 8px;
+          background: rgba(245,158,11,0.07);
+          border: 1px solid rgba(245,158,11,0.22);
+          border-radius: var(--radius-sm);
+          padding: 10px 12px; margin-bottom: 14px;
+          font-size: 0.73rem; line-height: 1.55; color: #f59e0b;
+        }
+        .login-warn svg { flex-shrink: 0; margin-top: 2px; }
 
         .form-hint { font-size: 0.7rem; color: var(--text-muted); margin-top: 5px; font-weight: 500; }
 
